@@ -1,0 +1,12 @@
+namespace fb;
+
+table Backup {
+  name:string;
+  seed:string;
+  index:uint32;
+  sk:string;
+  fvk:string;
+  uvk:string;
+  tsk:string;
+  saved:bool;
+}
