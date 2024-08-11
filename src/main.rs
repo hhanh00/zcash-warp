@@ -1,22 +1,19 @@
-use std::time::Instant;
-
 use anyhow::Result;
-use orchard::keys::Scope;
 use rand::rngs::OsRng;
 use tracing::info;
 use tracing_subscriber::FmtSubscriber;
-use zcash_note_encryption::{EphemeralKeyBytes, COMPACT_NOTE_SIZE};
-use zcash_primitives::{
-    consensus::BlockHeight, merkle_tree::MerklePath, sapling::{
-        keys::PreparedIncomingViewingKey, note::ExtractedNoteCommitment, note_encryption::try_sapling_compact_note_decryption, Node
-    }, transaction::components::sapling::CompactOutputDescription
-};
+use zcash_primitives::{merkle_tree::MerklePath, sapling::Node};
 use zcash_warp::{
-    db::{create_new_account, detect_key, get_account_info, get_witnesses_v1, init_db, list_accounts},
+    db::{
+        create_new_account, detect_key, get_account_info, get_witnesses_v1, init_db, list_accounts, store_received_note,
+    },
     generate_random_mnemonic_phrase,
-    lwd::{get_compact_block, get_tree_state},
+    lwd::{get_compact_block_range, get_tree_state},
     types::PoolMask,
-    warp::{hasher::{empty_roots, SaplingHasher}, try_orchard_decrypt, try_sapling_decrypt},
+    warp::{
+        hasher::{empty_roots, OrchardHasher, SaplingHasher},
+        sync::{OrchardSync, SaplingSync},
+    },
     COINS,
 };
 
@@ -65,65 +62,66 @@ pub async fn test_tree_state_root() -> Result<()> {
 pub async fn test_block_decryption() -> Result<()> {
     let mut zec = COINS[0].lock();
     zec.set_db_path("/Users/hanhhuynhhuu/zec.db")?;
-    zec.set_url("https://lwd1.zcash-infra.com:9067");
+    zec.set_url("http://172.16.11.208:9067");
     let mut client = zec.connect_lwd().await?;
 
-    let block = get_compact_block(&mut client, 2217459).await?;
+    let height = 2217459;
+    let end = 2576848;
     let connection = zec.connection()?;
-    let ai = get_account_info(&zec.network, &connection, 1)?;
-    let ivk = ai.sapling.vk.fvk.vk.ivk();
 
-    let outputs = block
-        .vtx
-        .iter()
-        .flat_map(|vtx| {
-            vtx.outputs.iter().map(|o| {
-                (
-                    <[u8; 32]>::try_from(o.epk.clone()).unwrap(),
-                    &o.ciphertext[..],
-                )
-            })
-        })
-        .collect::<Vec<_>>();
+    let (sapling_state, orchard_state) = get_tree_state(&mut client, height - 1).await?;
 
-    let a = Instant::now();
-    try_sapling_decrypt(&[ivk.clone()], &outputs)?;
-    println!("{:?}", a.elapsed());
+    let sap_hasher = SaplingHasher::default();
+    let mut sap_dec = SaplingSync::new(
+        &zec.network,
+        &connection,
+        height,
+        sapling_state.size() as u32,
+        sapling_state.to_edge(&sap_hasher),
+    )?;
 
-    let a = Instant::now();
-    let pvk = PreparedIncomingViewingKey::new(&ivk);
-    for vtx in block.vtx.iter() {
-        for co in vtx.outputs.iter() {
-            let mut cco = CompactOutputDescription {
-                ephemeral_key: EphemeralKeyBytes(co.epk.clone().try_into().unwrap()),
-                cmu: ExtractedNoteCommitment::from_bytes(&co.cmu.clone().try_into().unwrap()).unwrap(),
-                enc_ciphertext: [0u8; COMPACT_NOTE_SIZE],
-            };
-            cco.enc_ciphertext.copy_from_slice(&co.ciphertext);
-            if let Some((note, _pa)) = try_sapling_compact_note_decryption(&zec.network, BlockHeight::from(2217459), &pvk, &cco) {
-                println!("{}", note.value().inner());
-            }
+    let orch_hasher = OrchardHasher::default();
+    let mut orch_dec = OrchardSync::new(
+        &zec.network,
+        &connection,
+        height,
+        orchard_state.size() as u32,
+        orchard_state.to_edge(&orch_hasher),
+    )?;
+
+    // let block = get_compact_block(&mut client, height).await?;
+    let mut blocks = get_compact_block_range(&mut client, height, end).await?;
+    let mut bs = vec![];
+    while let Some(block) = blocks.message().await? {
+        let height = block.height;
+        bs.push(block);
+        if bs.len() == 100000 {
+            info!("Height {}", height);
+            sap_dec.add(&bs)?;
+            orch_dec.add(&bs)?;
+            bs.clear();
         }
     }
-    println!("{:?}", a.elapsed());
+    sap_dec.add(&bs)?;
+    orch_dec.add(&bs)?;
 
-    let block = get_compact_block(&mut client, 2376624).await?;
-    let actions = block
-        .vtx
-        .iter()
-        .flat_map(|vtx| {
-            vtx.actions.iter().map(|a| {
-                (
-                    <[u8; 32]>::try_from(a.ephemeral_key.clone()).unwrap(),
-                    &a.ciphertext[..],
-                )
-            })
-        })
-        .collect::<Vec<_>>();
+    store_received_note(&connection, &*sap_dec.notes)?;
+    store_received_note(&connection, &*orch_dec.notes)?;
 
-    let ivk = ai.orchard.unwrap().vk.to_ivk(Scope::External);
-    try_orchard_decrypt(&[ivk.clone()], &actions)?;
+    let (sap_state, orch_state) = get_tree_state(&mut client, end).await?;
+    let sapling = sap_state.to_edge(&sap_hasher);
+    let root = sapling.root(&sap_hasher);
+    info!("sapling {}", hex::encode(&root));
+    let orchard = orch_state.to_edge(&orch_hasher);
+    let root = orchard.root(&orch_hasher);
+    info!("orchard {}", hex::encode(&root));
 
+    for n in sap_dec.notes.iter() {
+        info!("{}", serde_json::to_string(n).unwrap());
+    }
+    for n in orch_dec.notes.iter() {
+        info!("{}", serde_json::to_string(n).unwrap());
+    }
     Ok(())
 }
 
@@ -132,6 +130,11 @@ pub async fn main() -> Result<()> {
     let subscriber = FmtSubscriber::new();
     tracing::subscriber::set_global_default(subscriber)?;
 
+    test_block_decryption().await?;
+    Ok(())
+}
+
+async fn test_witness_migration() -> Result<()> {
     let hasher = SaplingHasher::default();
     let empty_roots = empty_roots(&hasher);
     let mut zec = COINS[0].lock();
@@ -162,4 +165,3 @@ pub async fn main() -> Result<()> {
     }
     Ok(())
 }
-

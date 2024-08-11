@@ -87,6 +87,7 @@ pub fn get_account_info(
             };
 
             let ai = AccountInfo {
+                account,
                 name,
                 seed,
                 aindex,

@@ -45,6 +45,7 @@ pub struct OrchardAccountInfo {
 
 #[derive(Debug)]
 pub struct AccountInfo {
+    pub account: u32,
     pub name: String,
     pub seed: Option<String>,
     pub aindex: u32,
