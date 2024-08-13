@@ -1,34 +1,69 @@
+use crate::{
+    db::{
+        add_tx_value, get_block_header, mark_shielded_spent, mark_transparent_spent,
+        rewind_checkpoint, store_block, store_received_note, store_utxo, update_tx_timestamp,
+    },
+    lwd::{get_compact_block_range, get_transparent, get_tree_state},
+    warp::{
+        hasher::{OrchardHasher, SaplingHasher},
+        BlockHeader,
+    },
+    CoinDef, Hash,
+};
+use anyhow::Result;
+use header::BlockHeaderStore;
 use serde::Serialize;
-use serde_hex::{SerHexOpt, Strict};
-use crate::Hash;
+use thiserror::Error;
+use tracing::info;
+use transparent::TransparentSync;
 
 use super::Witness;
 
-mod sapling;
+mod header;
 mod orchard;
+mod sapling;
+mod transparent;
 
-#[derive(Serialize, Default, Debug)]
+#[derive(Error, Debug)]
+pub enum SyncError {
+    #[error("Reorganization detected at block {0}")]
+    Reorg(u32),
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+#[derive(Clone, Serialize, Default, Debug)]
 pub struct ReceivedTx {
+    pub account: u32,
+    pub height: u32,
     #[serde(with = "hex")]
     pub txid: Hash,
     pub timestamp: u32,
     pub ivtx: u32,
+    pub value: i64,
+}
+
+#[derive(Serialize, Debug)]
+pub struct TxValueUpdate<IDSpent: std::fmt::Debug> {
+    pub id_tx: u32,
+    pub account: u32,
+    pub height: u32,
+    pub txid: Hash,
+    pub value: i64,
+    pub id_spent: Option<IDSpent>,
 }
 
 #[derive(Serialize, Debug)]
 pub struct ReceivedNote {
+    pub is_new: bool,
     pub id: u32,
     pub account: u32,
     pub position: u32,
     pub height: u32,
-    #[serde(with = "hex")]
     pub diversifier: [u8; 11],
     pub value: u64,
-    #[serde(with = "hex")]
     pub rcm: Hash,
-    #[serde(with = "hex")]
     pub nf: Hash,
-    #[serde(with = "SerHexOpt::<Strict>")]
     pub rho: Option<Hash>,
     pub vout: u32,
     pub tx: ReceivedTx,
@@ -36,5 +71,120 @@ pub struct ReceivedNote {
     pub witness: Witness,
 }
 
-pub use sapling::Synchronizer as SaplingSync;
 pub use orchard::Synchronizer as OrchardSync;
+pub use sapling::Synchronizer as SaplingSync;
+
+pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncError> {
+    let mut connection = coin.connection()?;
+    let mut client = coin.connect_lwd().await?;
+    let (sapling_state, orchard_state) = get_tree_state(&mut client, start).await?;
+
+    let sap_hasher = SaplingHasher::default();
+    let mut sap_dec = SaplingSync::new(
+        &coin.network,
+        &connection,
+        start,
+        sapling_state.size() as u32,
+        sapling_state.to_edge(&sap_hasher),
+    )?;
+
+    let orch_hasher = OrchardHasher::default();
+    let mut orch_dec = OrchardSync::new(
+        &coin.network,
+        &connection,
+        start,
+        orchard_state.size() as u32,
+        orchard_state.to_edge(&orch_hasher),
+    )?;
+
+    let mut trp_dec = TransparentSync::new(&coin.network, &connection, start)?;
+
+    let addresses = trp_dec.addresses.clone();
+    for (account, taddr) in addresses.into_iter() {
+        let txs = get_transparent(&coin.network, &mut client, account, taddr, start, end).await?;
+        trp_dec.process_txs(&txs)?;
+    }
+    let heights = trp_dec.txs.iter().map(|(tx, _, _)| {
+        tx.height
+    }).collect::<Vec<_>>();
+    let mut header_dec = BlockHeaderStore::new();
+    header_dec.add_heights(&heights)?;
+
+    let bh = get_block_header(&connection, start)?;
+    let mut prev_hash = bh.hash;
+    let mut blocks = get_compact_block_range(&mut client, start + 1, end).await?;
+    let mut bs = vec![];
+    let mut bh = BlockHeader::default();
+    let mut c = 0;
+    while let Some(block) = blocks.message().await.map_err(anyhow::Error::new)? {
+        bh = BlockHeader {
+            height: block.height as u32,
+            hash: block.hash.clone().try_into().unwrap(),
+            prev_hash: block.prev_hash.clone().try_into().unwrap(),
+            timestamp: block.time,
+        };
+        if prev_hash != bh.prev_hash {
+            rewind_checkpoint(&connection)?;
+            return Err(SyncError::Reorg(bh.height));
+        }
+        prev_hash = bh.hash;
+
+        header_dec.process(&bh)?;
+        for vtx in block.vtx.iter() {
+            c += vtx.outputs.len();
+            c += vtx.actions.len();
+        }
+
+        let height = block.height;
+        bs.push(block);
+
+        if c >= 1000000 {
+            info!("Height {}", height);
+            sap_dec.add(&bs)?;
+            orch_dec.add(&bs)?;
+            bs.clear();
+            c = 0;
+        }
+    }
+    sap_dec.add(&bs)?;
+    orch_dec.add(&bs)?;
+
+    let (s, o) = get_tree_state(&mut client, bh.height as u32).await?;
+    let r = s.to_edge(&sap_dec.hasher).root(&sap_dec.hasher);
+    info!("s_root {}", hex::encode(&r));
+    let r = o.to_edge(&orch_dec.hasher).root(&orch_dec.hasher);
+    info!("o_root {}", hex::encode(&r));
+
+    if bh.height != 0 {
+        let db_tx = connection.transaction().map_err(anyhow::Error::new)?;
+
+        store_received_note(&db_tx, bh.height, &*sap_dec.notes)?;
+        for s in sap_dec.spends.iter() {
+            add_tx_value(&db_tx, s)?;
+            mark_shielded_spent(&db_tx, s)?;
+        }
+
+        store_received_note(&db_tx, bh.height, &*orch_dec.notes)?;
+        for s in orch_dec.spends.iter() {
+            add_tx_value(&db_tx, s)?;
+            mark_shielded_spent(&db_tx, s)?;
+        }
+
+        for utxo in trp_dec.utxos.iter() {
+            store_utxo(&db_tx, utxo)?;
+        }
+        for s in trp_dec.tx_updates.iter() {
+            add_tx_value(&db_tx, &s)?;
+            if s.id_spent.is_some() {
+                mark_transparent_spent(&db_tx, s)?;
+            }
+        }
+
+        update_tx_timestamp(&db_tx, header_dec.heights.values())?;
+
+        store_block(&db_tx, &bh)?;
+        db_tx.commit().map_err(anyhow::Error::new)?;
+    }
+
+    Ok(())
+}

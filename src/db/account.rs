@@ -1,12 +1,12 @@
 use anyhow::Result;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
-use secp256k1::SecretKey;
+use rusqlite::Connection;
 use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address, AddressCodec as _};
 use zcash_primitives::consensus::{Network, Parameters as _};
 use zcash_primitives::legacy::TransparentAddress;
 
+use crate::keys::import_sk_bip38;
 use crate::types::{AccountInfo, AccountName, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
-use crate::Connection;
 
 pub fn list_accounts(connection: &Connection) -> Result<Vec<AccountName>> {
     let mut s = connection.prepare("SELECT id_account, name FROM accounts ORDER BY id_account")?;
@@ -44,8 +44,7 @@ pub fn get_account_info(
                 None => None,
                 Some(taddr) => {
                     let tsk = r.get::<_, String>("tsk")?;
-                    let tsk = hex::decode(&tsk).unwrap();
-                    let sk = SecretKey::from_slice(&tsk).unwrap();
+                    let sk = import_sk_bip38(&tsk).unwrap();
                     let addr = TransparentAddress::decode(network, &taddr).unwrap();
                     let ti = TransparentAccountInfo { sk, addr };
                     Some(ti)

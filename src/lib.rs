@@ -11,11 +11,10 @@ pub mod types;
 pub mod lwd;
 pub mod db;
 pub mod warp;
+pub mod pay;
 
-pub type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 pub type Client = CompactTxStreamerClient<Channel>;
 pub type Hash = [u8; 32];
 
-pub use coin::COINS;
+pub use coin::{CoinDef, COINS};
 pub use keys::generate_random_mnemonic_phrase;
-

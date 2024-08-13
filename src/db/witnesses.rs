@@ -1,10 +1,11 @@
+use rusqlite::Connection;
 use tracing::info;
 use anyhow::Result;
 use zcash_primitives::{merkle_tree::IncrementalWitness, sapling::Node};
 
 use crate::{
     warp::{AuthPath, Edge, Hasher, Witness, MERKLE_DEPTH},
-    Connection, Hash,
+    Hash,
 };
 
 pub fn get_witnesses_v1(

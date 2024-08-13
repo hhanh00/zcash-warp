@@ -1,12 +1,9 @@
 use orchard::{keys::{Diversifier, Scope}, note::{Nullifier, RandomSeed}, value::NoteValue, Note};
+use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
 use crate::{
-    db::{get_account_info, list_accounts},
-    lwd::rpc::CompactBlock,
-    types::AccountInfo,
-    warp::{hasher::OrchardHasher, try_orchard_decrypt},
-    Connection,
+    db::{get_account_info, list_accounts, list_received_notes}, lwd::rpc::CompactBlock, types::AccountInfo, warp::{hasher::OrchardHasher, try_orchard_decrypt}, Hash
 };
 use anyhow::Result;
 use rayon::prelude::*;
@@ -15,16 +12,16 @@ use zcash_primitives::consensus::Network;
 
 use crate::warp::{Edge, Hasher, MERKLE_DEPTH};
 
-use super::ReceivedNote;
+use super::{ReceivedNote, TxValueUpdate};
 
 #[derive(Debug)]
 pub struct Synchronizer {
     pub hasher: OrchardHasher,
     pub network: Network,
     pub account_infos: Vec<AccountInfo>,
-    pub height: u32,
+    pub start: u32,
     pub notes: Vec<ReceivedNote>,
-    pub spent_notes: Vec<ReceivedNote>,
+    pub spends: Vec<TxValueUpdate<Hash>>,
     pub position: u32,
     pub tree_state: Edge,
 }
@@ -33,7 +30,7 @@ impl Synchronizer {
     pub fn new(
         network: &Network,
         connection: &Connection,
-        height: u32,
+        start: u32,
         position: u32,
         tree_state: Edge,
     ) -> Result<Self> {
@@ -43,14 +40,15 @@ impl Synchronizer {
             let ai = get_account_info(network, connection, a.account)?;
             account_infos.push(ai);
         }
+        let notes = list_received_notes(connection, start, true)?;
 
         Ok(Self {
             hasher: OrchardHasher::default(),
             network: *network,
             account_infos,
-            height,
-            notes: vec![],
-            spent_notes: vec![],
+            start,
+            notes,
+            spends: vec![],
             position,
             tree_state,
         })
@@ -97,7 +95,7 @@ impl Synchronizer {
                     position += tx.actions.len() as u32;
                 }
             }
-            let cb = &blocks[(note.height - self.height) as usize];
+            let cb = &blocks[(note.height - self.start - 1) as usize];
             for (ivtx, tx) in cb.vtx.iter().enumerate() {
                 if ivtx as u32 == note.tx.ivtx {
                     break;
@@ -137,6 +135,7 @@ impl Synchronizer {
         let mut count_cmxs = 0;
 
         for depth in 0..MERKLE_DEPTH {
+            let mut position = self.position >> depth;
             if position % 2 == 1 {
                 cmxs.insert(0, self.tree_state.0[depth].unwrap());
                 position -= 1;
@@ -188,15 +187,16 @@ impl Synchronizer {
                 self.tree_state.0[depth] = None;
             }
 
-            let pairs = cmxs.len() / 2;
+            let pairs = len / 2;
             let mut cmxs2 = self.hasher.parallel_combine(depth as u8, &cmxs, pairs);
-            position /= 2;
             swap(&mut cmxs, &mut cmxs2);
         }
 
+        tracing::info!("Old notes #{}", self.notes.len());
+        tracing::info!("New notes #{}", notes.len());
         self.notes.append(&mut notes);
         self.position += count_cmxs as u32;
-        self.height += blocks.len() as u32;
+        self.start += blocks.len() as u32;
 
         // detect spends
 
@@ -211,6 +211,15 @@ impl Synchronizer {
                     let nf = &*ca.nullifier;
                     if let Some(n) = nfs.get_mut(nf) {
                         n.spent = Some(cb.height as u32);
+                        let tx = TxValueUpdate::<Hash> {
+                            account: n.account,
+                            txid: vtx.hash.clone().try_into().unwrap(),
+                            value: -(n.value as i64),
+                            id_tx: 0,
+                            height: cb.height as u32,
+                            id_spent: Some(n.nf),
+                        };
+                        self.spends.push(tx);
                     }
                 }
             }

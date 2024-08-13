@@ -69,19 +69,24 @@ pub fn try_sapling_decrypt(
             {
                 let cmx = note.cmu();
                 if &cmx.to_bytes() == &*co.cmu {
+                    let value = note.value().inner();
                     let note = ReceivedNote {
+                        is_new: true,
                         id: 0,
                         account: *account,
                         position: 0,
                         height,
                         diversifier: recipient.diversifier().0,
-                        value: note.value().inner(),
+                        value,
                         rcm: note.rcm().to_bytes(),
                         rho: None,
                         tx: ReceivedTx {
+                            account: *account,
+                            height,
                             txid: [0u8; 32],
                             timestamp,
                             ivtx,
+                            value: value as i64,
                         },
                         vout,
                         witness: Witness::default(),
@@ -140,20 +145,25 @@ pub fn try_orchard_decrypt(
                 d.parse_note_plaintext_without_memo_ivk(&pivk, &plaintext)
             {
                 let cmx = ExtractedNoteCommitment::from(note.commitment());
+                let value = note.value().inner();
                 if &cmx.to_bytes() == &*ca.cmx {
                     let note = ReceivedNote {
+                        is_new: true,
                         id: 0,
                         account: *account,
                         position: 0,
                         height,
                         diversifier: recipient.diversifier().as_array().clone(),
-                        value: note.value().inner(),
+                        value,
                         rcm: note.rseed().as_bytes().clone(),
                         rho: Some(rho.to_bytes()),
                         tx: ReceivedTx {
+                            account: *account,
+                            height,
                             txid: [0u8; 32],
                             timestamp,
                             ivtx,
+                            value: value as i64,
                         },
                         vout,
                         witness: Witness::default(),

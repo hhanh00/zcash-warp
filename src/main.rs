@@ -1,20 +1,29 @@
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 use rand::rngs::OsRng;
+use rusqlite::{Connection, DropBehavior};
+use rustyrepl::{Repl, ReplCommandProcessor};
 use tracing::info;
 use tracing_subscriber::FmtSubscriber;
-use zcash_primitives::{merkle_tree::MerklePath, sapling::Node};
+use zcash_primitives::{
+    consensus::{NetworkUpgrade, Parameters},
+    merkle_tree::MerklePath,
+    sapling::Node,
+};
 use zcash_warp::{
     db::{
-        create_new_account, detect_key, get_account_info, get_witnesses_v1, init_db, list_accounts, store_received_note,
+        create_new_account, detect_key, get_account_info, get_sync_height, get_witnesses_v1,
+        init_db, list_accounts, store_block, truncate_scan,
     },
     generate_random_mnemonic_phrase,
-    lwd::{get_compact_block_range, get_tree_state},
+    lwd::{get_compact_block, get_last_height, get_tree_state},
     types::PoolMask,
     warp::{
-        hasher::{empty_roots, OrchardHasher, SaplingHasher},
-        sync::{OrchardSync, SaplingSync},
+        hasher::{empty_roots, SaplingHasher},
+        sync::warp_sync,
+        BlockHeader,
     },
-    COINS,
+    CoinDef, COINS,
 };
 
 pub fn account_tests() -> Result<()> {
@@ -37,8 +46,10 @@ pub fn account_tests() -> Result<()> {
         println!("{:?}", ai.to_address(&zec.network, PoolMask(7)));
     }
 
+    let seed = dotenv::var("SEED").unwrap();
     // Test new account
-    let phrase = generate_random_mnemonic_phrase(OsRng);
+    // let phrase = generate_random_mnemonic_phrase(OsRng);
+    let phrase = seed;
     let k = detect_key(&zec.network, &phrase, 0, 0)?;
     let account = create_new_account(&zec.network, &connection, "Test", &phrase, k)?;
 
@@ -59,82 +70,75 @@ pub async fn test_tree_state_root() -> Result<()> {
     Ok(())
 }
 
-pub async fn test_block_decryption() -> Result<()> {
-    let mut zec = COINS[0].lock();
-    zec.set_db_path("/Users/hanhhuynhhuu/zec.db")?;
-    zec.set_url("http://172.16.11.208:9067");
-    let mut client = zec.connect_lwd().await?;
+pub fn drop_tables(connection: &Connection) -> Result<()> {
+    connection.execute("DROP TABLE IF EXISTS txs", [])?;
+    connection.execute("DROP TABLE IF EXISTS notes", [])?;
+    connection.execute("DROP TABLE IF EXISTS witnesses", [])?;
+    connection.execute("DROP TABLE IF EXISTS utxos", [])?;
+    connection.execute("DROP TABLE IF EXISTS blcks", [])?;
 
-    let height = 2217459;
-    let end = 2576848;
-    let connection = zec.connection()?;
-
-    let (sapling_state, orchard_state) = get_tree_state(&mut client, height - 1).await?;
-
-    let sap_hasher = SaplingHasher::default();
-    let mut sap_dec = SaplingSync::new(
-        &zec.network,
-        &connection,
-        height,
-        sapling_state.size() as u32,
-        sapling_state.to_edge(&sap_hasher),
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS blcks(
+        height INTEGER PRIMARY KEY,
+        hash BLOB NOT NULL,
+        prev_hash BLOB NOT NULL,
+        timestamp INTEGER NOT NULL)",
+        [],
     )?;
-
-    let orch_hasher = OrchardHasher::default();
-    let mut orch_dec = OrchardSync::new(
-        &zec.network,
-        &connection,
-        height,
-        orchard_state.size() as u32,
-        orchard_state.to_edge(&orch_hasher),
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS txs(
+        id_tx INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        txid BLOB NOT NULL,
+        height INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        value INTEGER NOT NULL,
+        UNIQUE (account, txid))",
+        [],
     )?;
-
-    // let block = get_compact_block(&mut client, height).await?;
-    let mut blocks = get_compact_block_range(&mut client, height, end).await?;
-    let mut bs = vec![];
-    while let Some(block) = blocks.message().await? {
-        let height = block.height;
-        bs.push(block);
-        if bs.len() == 100000 {
-            info!("Height {}", height);
-            sap_dec.add(&bs)?;
-            orch_dec.add(&bs)?;
-            bs.clear();
-        }
-    }
-    sap_dec.add(&bs)?;
-    orch_dec.add(&bs)?;
-
-    store_received_note(&connection, &*sap_dec.notes)?;
-    store_received_note(&connection, &*orch_dec.notes)?;
-
-    let (sap_state, orch_state) = get_tree_state(&mut client, end).await?;
-    let sapling = sap_state.to_edge(&sap_hasher);
-    let root = sapling.root(&sap_hasher);
-    info!("sapling {}", hex::encode(&root));
-    let orchard = orch_state.to_edge(&orch_hasher);
-    let root = orchard.root(&orch_hasher);
-    info!("orchard {}", hex::encode(&root));
-
-    for n in sap_dec.notes.iter() {
-        info!("{}", serde_json::to_string(n).unwrap());
-    }
-    for n in orch_dec.notes.iter() {
-        info!("{}", serde_json::to_string(n).unwrap());
-    }
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS notes(
+        id_note INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        position INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        tx INTEGER NULL,
+        output_index INTEGER NOT NULL,
+        diversifier BLOB NOT NULL,
+        value INTEGER NOT NULL,
+        rcm BLOB NOT NULL,
+        nf BLOB NOT NULL UNIQUE,
+        rho BLOB,
+        spent INTEGER,
+        orchard BOOL NOT NULL,
+        UNIQUE (position, orchard))",
+        [],
+    )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS witnesses(
+        id_witness INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        note INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        witness BLOB NOT NULL)",
+        [],
+    )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS utxos(
+        id_utxo INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        txid BLOB NOT NULL,
+        vout INTEGER NULL,
+        value INTEGER NOT NULL,
+        spent INTEGER,
+        UNIQUE (txid, vout))",
+        [],
+    )?;
     Ok(())
 }
 
-#[tokio::main]
-pub async fn main() -> Result<()> {
-    let subscriber = FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber)?;
-
-    test_block_decryption().await?;
-    Ok(())
-}
-
-async fn test_witness_migration() -> Result<()> {
+async fn _test_witness_migration() -> Result<()> {
     let hasher = SaplingHasher::default();
     let empty_roots = empty_roots(&hasher);
     let mut zec = COINS[0].lock();
@@ -163,5 +167,111 @@ async fn test_witness_migration() -> Result<()> {
         let root = mp.root(Node::new(w.value));
         info!("root {}", hex::encode(&root.repr));
     }
+    Ok(())
+}
+
+/// The enum of sub-commands supported by the CLI
+#[derive(Subcommand, Clone, Debug)]
+pub enum Command {
+    LastHeight,
+    SyncHeight,
+    Reset { height: Option<u32> },
+    Sync { end_height: Option<u32> },
+}
+
+/// The general CLI, essentially a wrapper for the sub-commands [Commands]
+#[derive(Parser, Clone, Debug)]
+pub struct Cli {
+    #[clap(subcommand)]
+    command: Command,
+}
+
+#[derive(Debug)]
+pub struct CliProcessor {
+    zec: CoinDef,
+}
+
+impl CliProcessor {
+    pub fn new() -> Self {
+        let mut zec = CoinDef::from_network(zcash_primitives::consensus::Network::MainNetwork);
+        zec.set_db_path(dotenv::var("DB_PATH").unwrap()).unwrap();
+        zec.set_url(&dotenv::var("LWD_URL").unwrap());
+        drop_tables(&zec.connection().unwrap()).unwrap();
+        Self { zec }
+    }
+}
+
+#[async_trait::async_trait]
+impl ReplCommandProcessor<Cli> for CliProcessor {
+    fn is_quit(&self, command: &str) -> bool {
+        matches!(command, "quit" | "exit")
+    }
+
+    async fn process_command(&self, command: Cli) -> Result<()> {
+        match command.command {
+            Command::LastHeight => {
+                let mut client = self.zec.connect_lwd().await?;
+                let height = get_last_height(&mut client).await?;
+                println!("{height}");
+            }
+            Command::SyncHeight => {
+                let connection = self.zec.connection()?;
+                let height = get_sync_height(&connection)?;
+                println!("{height:?}");
+            }
+            Command::Reset { height } => {
+                let connection = self.zec.connection()?;
+                truncate_scan(&connection)?;
+                let activation: u32 = self
+                    .zec
+                    .network
+                    .activation_height(NetworkUpgrade::Sapling)
+                    .unwrap()
+                    .into();
+                let height = height.unwrap_or(activation);
+                let mut client = self.zec.connect_lwd().await?;
+                let block = get_compact_block(&mut client, height).await?;
+                let mut connection = self.zec.connection()?;
+                let mut transaction = connection.transaction()?;
+                transaction.set_drop_behavior(DropBehavior::Commit);
+                store_block(&transaction, &BlockHeader::from(&block))?;
+            }
+            Command::Sync { end_height } => loop {
+                let connection = self.zec.connection()?;
+                let mut client = self.zec.connect_lwd().await?;
+                let last_height = get_last_height(&mut client).await?;
+                let end_height = end_height.unwrap_or(last_height);
+                let start_height = get_sync_height(&connection)?.expect("no sync data");
+                if start_height >= end_height {
+                    break;
+                }
+                let end_height = (start_height + 100_000).min(end_height);
+                warp_sync(&self.zec, start_height, end_height).await?;
+            },
+        }
+        Ok(())
+    }
+}
+
+async fn cli_main() -> Result<()> {
+    let processor: Box<dyn ReplCommandProcessor<Cli>> = Box::new(CliProcessor::new());
+    let mut repl = Repl::<Cli>::new(processor, None, Some(">> ".to_string()))?;
+    repl.process().await?;
+
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    dotenv::dotenv()?;
+    let subscriber = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .compact()
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)?;
+
+    // account_tests()?;
+    cli_main().await?;
+
     Ok(())
 }

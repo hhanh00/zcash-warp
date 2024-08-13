@@ -4,6 +4,7 @@ use crate::Hash;
 
 use super::{Hasher, Edge, MERKLE_DEPTH};
 
+#[derive(Default, Debug)]
 pub struct CommitmentTreeFrontier {
     pub left: Option<Hash>,
     pub right: Option<Hash>,

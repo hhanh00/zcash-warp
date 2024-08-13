@@ -12,8 +12,11 @@ use lazy_static::lazy_static;
 
 use zcash_primitives::consensus::Network;
 
-use crate::{lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client, Connection};
+use crate::{lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client};
 
+type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
+
+#[derive(Debug)]
 pub struct CoinDef {
     pub network: Network,
     pub url: String,

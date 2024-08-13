@@ -1,6 +1,6 @@
 use anyhow::Result;
 use bip39::{Mnemonic, Seed};
-use rusqlite::params;
+use rusqlite::{params, Connection};
 use secp256k1::SecretKey;
 use zcash_client_backend::{
     encoding::{decode_extended_full_viewing_key, decode_extended_spending_key, encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address, AddressCodec},
@@ -11,7 +11,7 @@ use zcash_primitives::{
     zip32::{ExtendedFullViewingKey, ExtendedSpendingKey},
 };
 
-use crate::{keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38}, types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo}, Connection};
+use crate::{keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38}, types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo}};
 
 pub fn parse_seed_phrase(phrase: &str) -> Result<Seed> {
     let words = phrase.split_whitespace().collect::<Vec<_>>();
