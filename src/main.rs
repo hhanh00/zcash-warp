@@ -4,19 +4,19 @@ use rand::rngs::OsRng;
 use rusqlite::{Connection, DropBehavior};
 use rustyrepl::{Repl, ReplCommandProcessor};
 use tracing::info;
-use tracing_subscriber::FmtSubscriber;
 use zcash_primitives::{
-    consensus::{NetworkUpgrade, Parameters},
+    memo::MemoBytes,
     merkle_tree::MerklePath,
     sapling::Node,
+    transaction::{components::{amount::BalanceError, Amount}, Transaction},
 };
 use zcash_warp::{
     db::{
         create_new_account, detect_key, get_account_info, get_sync_height, get_witnesses_v1,
         init_db, list_accounts, store_block, truncate_scan,
     },
-    generate_random_mnemonic_phrase,
-    lwd::{get_compact_block, get_last_height, get_tree_state},
+    lwd::{broadcast, get_compact_block, get_last_height, get_tree_state},
+    pay::{Payment, PaymentBuilder, PaymentItem, UnsignedTransaction},
     types::PoolMask,
     warp::{
         hasher::{empty_roots, SaplingHasher},
@@ -196,7 +196,9 @@ impl CliProcessor {
         let mut zec = CoinDef::from_network(zcash_primitives::consensus::Network::MainNetwork);
         zec.set_db_path(dotenv::var("DB_PATH").unwrap()).unwrap();
         zec.set_url(&dotenv::var("LWD_URL").unwrap());
-        drop_tables(&zec.connection().unwrap()).unwrap();
+        let connection = zec.connection().unwrap();
+        init_db(&connection).unwrap();
+        drop_tables(&connection).unwrap();
         Self { zec }
     }
 }
@@ -222,13 +224,8 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
             Command::Reset { height } => {
                 let connection = self.zec.connection()?;
                 truncate_scan(&connection)?;
-                let activation: u32 = self
-                    .zec
-                    .network
-                    .activation_height(NetworkUpgrade::Sapling)
-                    .unwrap()
-                    .into();
-                let height = height.unwrap_or(activation);
+                let birth_height = str::parse::<u32>(&dotenv::var("BIRTH").unwrap())?;
+                let height = height.unwrap_or(birth_height);
                 let mut client = self.zec.connect_lwd().await?;
                 let block = get_compact_block(&mut client, height).await?;
                 let mut connection = self.zec.connection()?;
@@ -261,6 +258,68 @@ async fn cli_main() -> Result<()> {
     Ok(())
 }
 
+pub async fn test_payment() -> Result<Vec<u8>> {
+    let mut zec = CoinDef::from_network(zcash_primitives::consensus::Network::MainNetwork);
+    zec.set_db_path(dotenv::var("DB_PATH").unwrap()).unwrap();
+    zec.set_url(&dotenv::var("LWD_URL").unwrap());
+
+    let connection = zec.connection()?;
+    let db_height = get_sync_height(&connection)?.unwrap();
+    let mut client = zec.connect_lwd().await?;
+    let p = PaymentBuilder::new(
+        &zec.network,
+        &connection,
+        &mut client,
+        1,
+        db_height,
+        Payment {
+            src_pools: PoolMask(0),
+            recipients: vec![PaymentItem {
+                address: "t1MgrHHPgt246ZRBnu93G9nEMxYvttEYAVU".to_string(),
+                amount: 4665000,
+                memo: MemoBytes::empty(),
+            }],
+        },
+    )
+    .await?;
+    let tx = p.build()?;
+    let tx_ser = bincode::serialize(&tx)?;
+    tracing::info!("Unsigned Tx size {}", tx_ser.len());
+
+    let tx: UnsignedTransaction = bincode::deserialize_from(&*tx_ser)?;
+
+    let txb = tx.build(&zec.network, &connection, OsRng)?;
+
+    let consensus_branch_id = zcash_primitives::consensus::BranchId::Nu5;
+    let tx = Transaction::read(&*txb, consensus_branch_id)?;
+    let tx = tx.into_data();
+    if let Some(t) = tx.transparent_bundle() {
+        println!("t {} {}", t.vin.len(), t.vout.len());        
+    }
+    if let Some(t) = tx.sapling_bundle() {
+        println!("s {} {}", t.shielded_spends().len(), t.shielded_outputs().len());        
+    }
+    if let Some(t) = tx.orchard_bundle() {
+        println!("o {} ", t.actions().len());        
+    }
+
+    let fee = tx.fee_paid(|_| Ok::<_, BalanceError>(Amount::zero())).unwrap();
+    println!("fee {:?}", fee);
+
+    let r = broadcast(&mut client, 2614161, &txb).await?;
+    tracing::info!("{}", r);
+    Ok(txb)
+}
+
+pub async fn broadcast_garbage() -> Result<()> {
+    let mut zec = CoinDef::from_network(zcash_primitives::consensus::Network::MainNetwork);
+    zec.set_url(&dotenv::var("LWD_URL").unwrap());
+    let mut client = zec.connect_lwd().await?;
+    let r = broadcast(&mut client, 2614161, &[1, 2, 3, 4]).await?;
+    println!("{r}");
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv::dotenv()?;
@@ -271,7 +330,8 @@ async fn main() -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)?;
 
     // account_tests()?;
-    cli_main().await?;
-
+    // cli_main().await?;
+    let _tx = test_payment().await?;
+    // broadcast_garbage().await?;
     Ok(())
 }

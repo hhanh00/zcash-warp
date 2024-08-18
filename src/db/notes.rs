@@ -18,7 +18,8 @@ pub fn list_received_notes(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.diversifier,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2",
+        AND orchard = ?2 AND (spent IS NULL OR spent > ?1)
+        ORDER BY n.value DESC",
     )?;
     let rows = s.query_map(params![height, orchard], |r| {
         Ok((
@@ -237,7 +238,7 @@ pub fn store_block(connection: &Transaction, bh: &BlockHeader) -> Result<()> {
 pub fn list_utxos(connection: &Connection, height: u32) -> Result<Vec<UTXO>> {
     let mut s = connection.prepare(
         "SELECT id_utxo, account, height, txid, vout, 
-        value FROM utxos WHERE height <= ?1 AND spent IS NULL",
+        value FROM utxos WHERE height <= ?1 AND (spent IS NULL OR spent > ?1)",
     )?;
     let rows = s.query_map([height], |r| {
         Ok((

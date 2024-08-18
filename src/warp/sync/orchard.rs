@@ -131,7 +131,6 @@ impl Synchronizer {
         }
 
         let mut cmxs = vec![];
-        let mut position = self.position;
         let mut count_cmxs = 0;
 
         for depth in 0..MERKLE_DEPTH {

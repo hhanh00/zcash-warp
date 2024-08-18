@@ -9,6 +9,15 @@ use crate::{data::fb::BackupT, keys::export_sk_bip38};
 #[derive(Debug)]
 pub struct PoolMask(pub u8);
 
+impl PoolMask {
+    pub fn to_pool(&self) -> Option<u8> {
+        if self.0 & 4 != 0 { return Some(2); }
+        if self.0 & 2 != 0 { return Some(1); }
+        if self.0 & 1 != 0 { return Some(0); }
+        None
+    }
+}
+
 #[derive(Debug)]
 pub enum AccountType {
     Seed,

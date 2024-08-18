@@ -11,13 +11,13 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) const MERKLE_DEPTH: usize = 32;
 
-#[derive(Default, Serialize, Deserialize, Debug)]
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Edge(pub [Option<Hash>; MERKLE_DEPTH]);
 
-#[derive(Default, Debug)]
+#[derive(Serialize, Deserialize, Default, Debug)]
 pub struct AuthPath(pub [Hash; MERKLE_DEPTH]);
 
-#[derive(Default, Serialize, Deserialize, Debug)]
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Witness {
     pub value: Hash,
     pub position: u32,

@@ -1,9 +1,14 @@
 use anyhow::Result;
-use rpc::{BlockId, BlockRange, CompactBlock, Empty, TransparentAddressBlockFilter, TreeState};
+use rpc::{
+    BlockId, BlockRange, CompactBlock, Empty, RawTransaction, TransparentAddressBlockFilter,
+    TreeState,
+};
 use tonic::{Request, Streaming};
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_primitives::{
-    consensus::{BlockHeight, BranchId, Network}, legacy::TransparentAddress, transaction::Transaction
+    consensus::{BlockHeight, BranchId, Network},
+    legacy::TransparentAddress,
+    transaction::Transaction,
 };
 
 use crate::{
@@ -179,4 +184,12 @@ pub async fn get_transparent(
     }
 
     Ok(ttxs)
+}
+
+pub async fn broadcast(client: &mut Client, height: u32, tx: &[u8]) -> Result<String> {
+    let res = client.send_transaction(Request::new(RawTransaction {
+        data: tx.to_vec(),
+        height: height as u64,
+    })).await?.into_inner();
+    Ok(res.error_message)
 }
