@@ -1,24 +1,41 @@
-use anyhow::Result;
 use fee::FeeManager;
 use orchard::circuit::ProvingKey;
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    types::PoolMask,
+    types::{AccountInfo, PoolMask},
     warp::{AuthPath, Edge, Witness, UTXO},
     Hash,
 };
 
+pub type Result<T> = std::result::Result<T, Error>;
+
 pub mod builder;
-mod conv;
+pub mod conv;
 mod fee;
 pub mod prepare;
+pub mod sweep;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Not Enough Funds, {0} more needed")]
+    NotEnoughFunds(u64),
+    #[error("Amount/Fee {0} too high to be paid by the recipient")]
+    FeesTooHighForRecipient(u64),
+    #[error("Transaction has no recipient")]
+    NoRecipient,
+    #[error("Transaction has no change output")]
+    NoChangeOutput,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+#[derive(Clone, Debug)]
 pub struct PaymentItem {
     pub address: String,
     pub amount: u64,
@@ -26,11 +43,10 @@ pub struct PaymentItem {
 }
 
 pub struct Payment {
-    pub src_pools: PoolMask,
     pub recipients: Vec<PaymentItem>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ExtendedPayment {
     pub payment: PaymentItem,
     pub amount: u64,
@@ -76,6 +92,7 @@ pub enum InputNote {
     Transparent {
         txid: Hash,
         vout: u32,
+        address: String,
     },
     Sapling {
         diversifier: [u8; 11],
@@ -117,25 +134,38 @@ pub struct TxOutput {
     pub note: OutputNote,
 }
 
+#[derive(Clone, Default, Debug)]
+pub struct ChangeOutput {
+    pub pools: PoolMask,
+    pub value: i64,
+    pub note: Option<OutputNote>,
+}
+
 pub struct PaymentBuilder {
     pub network: Network,
     pub height: u32,
     pub account: u32,
-    pub account_name: String,
-    pub account_id: Hash,
+    pub ai: AccountInfo,
     pub inputs: [Vec<TxInput>; 3],
     pub outputs: Vec<ExtendedPayment>,
+    pub account_pools: PoolMask,
+    pub src_pools: PoolMask,
 
     pub fee_manager: FeeManager,
     pub fee: u64,
 
     pub available: [u64; 3],
-    pub change_pool: u8,
-    pub change_address: String,
-    pub change_note: OutputNote,
+    pub change: ChangeOutput,
 
     pub s_edge: Edge,
     pub o_edge: Edge,
+}
+
+#[derive(Debug)]
+pub struct AdjustableUnsignedTransaction {
+    pub tx_notes: Vec<TxInput>,
+    pub tx_outputs: Vec<TxOutput>,
+    pub change: ChangeOutput,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -144,10 +174,10 @@ pub struct UnsignedTransaction {
     pub account_name: String,
     pub account_id: Hash,
     pub height: u32,
-    pub edges: [AuthPath; 2],
-    pub roots: [Hash; 2],
     pub tx_notes: Vec<TxInput>,
     pub tx_outputs: Vec<TxOutput>,
+    pub roots: [Hash; 2],
+    pub edges: [AuthPath; 2],
 }
 
 const EXPIRATION_HEIGHT: u32 = 50;

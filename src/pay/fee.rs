@@ -20,15 +20,22 @@ impl FeeManager {
     pub fn fee(&self) -> u64 {
         let t = self.num_inputs[0].max(self.num_outputs[0]);
         let s = {
-            let o = if self.num_inputs[1] > 0 { // if any input
+            let o = if self.num_inputs[1] > 0 {
+                // if any input
                 self.num_outputs[1].max(2) // min 2 outputs
             } else {
                 self.num_outputs[1]
             };
             self.num_inputs[1].max(o)
         };
-        let o = self.num_inputs[2].max(self.num_outputs[2]).max(2); // padding min 2 actions
+        let o = if self.num_inputs[2] > 0 || self.num_outputs[2] > 0 {
+            // padding min 2 actions
+            self.num_inputs[2].max(self.num_outputs[2]).max(2)
+        } else {
+            0
+        };
         let f = t + s + o;
+        tracing::info!("fee: {t} {s} {o}");
         f as u64 * 5_000
     }
 

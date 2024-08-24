@@ -1,18 +1,22 @@
 use anyhow::Result;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
-use rusqlite::Connection;
-use zcash_client_backend::encoding::{decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address, AddressCodec as _};
+use rusqlite::{params, Connection};
+use zcash_client_backend::encoding::{
+    decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address,
+    AddressCodec as _,
+};
 use zcash_primitives::consensus::{Network, Parameters as _};
 use zcash_primitives::legacy::TransparentAddress;
 
 use crate::keys::import_sk_bip38;
-use crate::types::{AccountInfo, AccountName, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
+use crate::types::{
+    AccountInfo, AccountName, Balance, OrchardAccountInfo, SaplingAccountInfo,
+    TransparentAccountInfo,
+};
 
 pub fn list_accounts(connection: &Connection) -> Result<Vec<AccountName>> {
     let mut s = connection.prepare("SELECT id_account, name FROM accounts ORDER BY id_account")?;
-    let rows = s.query_map([], |r| {
-        Ok((r.get::<_, u32>(0)?, r.get::<_, String>(1)?))
-    })?;
+    let rows = s.query_map([], |r| Ok((r.get::<_, u32>(0)?, r.get::<_, String>(1)?)))?;
     let mut accounts = vec![];
     for r in rows {
         let (account, name) = r?;
@@ -99,4 +103,39 @@ pub fn get_account_info(
         },
     )?;
     Ok(ai)
+}
+
+pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result<Balance> {
+    let transparent = connection
+        .query_row(
+            "SELECT SUM(value) FROM utxos
+        WHERE account = ?1 AND height <= ?2 AND spent IS NULL",
+            params![account, height],
+            |r| r.get::<_, Option<u64>>(0),
+        )?
+        .unwrap_or_default();
+    let sapling = connection
+        .query_row(
+            "SELECT SUM(value) FROM notes
+        WHERE account = ?1 AND height <= ?2 AND orchard = 0
+        AND spent IS NULL",
+            params![account, height],
+            |r| r.get::<_, Option<u64>>(0),
+        )?
+        .unwrap_or_default();
+    let orchard = connection
+        .query_row(
+            "SELECT SUM(value) FROM notes
+        WHERE account = ?1 AND height <= ?2 AND orchard = 1
+        AND spent IS NULL",
+            params![account, height],
+            |r| r.get::<_, Option<u64>>(0),
+        )?
+        .unwrap_or_default();
+    let b = Balance {
+        transparent,
+        sapling,
+        orchard,
+    };
+    Ok(b)
 }

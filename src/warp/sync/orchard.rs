@@ -1,9 +1,18 @@
-use orchard::{keys::{Diversifier, Scope}, note::{Nullifier, RandomSeed}, value::NoteValue, Note};
+use orchard::{
+    keys::{Diversifier, Scope},
+    note::{Nullifier, RandomSeed},
+    value::NoteValue,
+    Note,
+};
 use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
 use crate::{
-    db::{get_account_info, list_accounts, list_received_notes}, lwd::rpc::CompactBlock, types::AccountInfo, warp::{hasher::OrchardHasher, try_orchard_decrypt}, Hash
+    db::{get_account_info, list_accounts, list_received_notes},
+    lwd::rpc::CompactBlock,
+    types::AccountInfo,
+    warp::{hasher::OrchardHasher, try_orchard_decrypt},
+    Hash,
 };
 use anyhow::Result;
 use rayon::prelude::*;
@@ -58,12 +67,20 @@ impl Synchronizer {
         let ivks = self
             .account_infos
             .iter()
-            .map(|ai| (ai.account, ai.orchard.as_ref().unwrap().vk.to_ivk(Scope::External)))
+            .map(|ai| {
+                (
+                    ai.account,
+                    ai.orchard.as_ref().unwrap().vk.to_ivk(Scope::External),
+                )
+            })
             .collect::<Vec<_>>();
 
         let actions = blocks.into_par_iter().flat_map_iter(|b| {
             b.vtx.iter().enumerate().flat_map(move |(ivtx, vtx)| {
-                vtx.actions.iter().enumerate().map(move |(vout, a)| (b.height, b.time, ivtx, vout, a))
+                vtx.actions
+                    .iter()
+                    .enumerate()
+                    .map(move |(vout, a)| (b.height, b.time, ivtx, vout, a))
             })
         });
 
@@ -119,7 +136,8 @@ impl Synchronizer {
                 NoteValue::from_raw(note.value),
                 rho,
                 RandomSeed::from_bytes(note.rcm, &rho).unwrap(),
-            ).unwrap();
+            )
+            .unwrap();
             let nf = n.nullifier(&vk);
             note.nf = nf.to_bytes();
             note.tx.txid = cb.vtx[note.tx.ivtx as usize]

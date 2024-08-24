@@ -1,8 +1,9 @@
 use anyhow::Result;
 use rpc::{
     BlockId, BlockRange, CompactBlock, Empty, RawTransaction, TransparentAddressBlockFilter,
-    TreeState,
+    TreeState, TxFilter,
 };
+use tokio::runtime::Handle;
 use tonic::{Request, Streaming};
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_primitives::{
@@ -12,7 +13,8 @@ use zcash_primitives::{
 };
 
 use crate::{
-    warp::{legacy::CommitmentTreeFrontier, TransparentTx},
+    coin::connect_lwd,
+    warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2},
     Client,
 };
 
@@ -187,9 +189,66 @@ pub async fn get_transparent(
 }
 
 pub async fn broadcast(client: &mut Client, height: u32, tx: &[u8]) -> Result<String> {
-    let res = client.send_transaction(Request::new(RawTransaction {
-        data: tx.to_vec(),
-        height: height as u64,
-    })).await?.into_inner();
+    let res = client
+        .send_transaction(Request::new(RawTransaction {
+            data: tx.to_vec(),
+            height: height as u64,
+        }))
+        .await?
+        .into_inner();
     Ok(res.error_message)
+}
+
+pub fn get_txin_coins(network: Network, url: String, ops: Vec<OutPoint>) -> Result<Vec<TxOut2>> {
+    tokio::task::block_in_place(move || {
+        Handle::current().block_on(async move {
+            let mut client = connect_lwd(&url).await?;
+            let mut txouts = vec![];
+            for op in ops {
+                let tx = client
+                    .get_transaction(Request::new(TxFilter {
+                        block: None,
+                        index: 0,
+                        hash: op.txid.to_vec(),
+                    }))
+                    .await?
+                    .into_inner();
+                let data = &*tx.data;
+                let tx = Transaction::read(data, BranchId::Nu5)?;
+                let tx_data = tx.into_data();
+                let b = tx_data
+                    .transparent_bundle()
+                    .ok_or(anyhow::anyhow!("No T bundle"))?;
+                let txout = &b.vout[op.vout as usize];
+                let txout = TxOut2 {
+                    address: txout.recipient_address().map(|o| o.encode(&network)),
+                    value: txout.value.into(),
+                    vout: op.vout,
+                };
+                txouts.push(txout);
+            }
+            Ok(txouts)
+        })
+    })
+}
+
+pub async fn get_transaction(
+    network: &Network,
+    client: &mut Client,
+    txid: &[u8],
+) -> Result<(u32, Transaction)> {
+    let tx = client
+        .get_transaction(Request::new(TxFilter {
+            block: None,
+            index: 0,
+            hash: txid.to_vec(),
+        }))
+        .await?
+        .into_inner();
+    let height = tx.height as u32;
+    let tx = Transaction::read(
+        &*tx.data,
+        BranchId::for_height(network, BlockHeight::from_u32(height)),
+    )?;
+    Ok((height, tx))
 }

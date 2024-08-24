@@ -12,7 +12,8 @@ use crate::{
 };
 use anyhow::Result;
 use header::BlockHeaderStore;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use thiserror::Error;
 use tracing::info;
 use transparent::TransparentSync;
@@ -32,7 +33,7 @@ pub enum SyncError {
     Other(#[from] anyhow::Error),
 }
 
-#[derive(Clone, Serialize, Default, Debug)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct ReceivedTx {
     pub account: u32,
     pub height: u32,
@@ -53,7 +54,19 @@ pub struct TxValueUpdate<IDSpent: std::fmt::Debug> {
     pub id_spent: Option<IDSpent>,
 }
 
-#[derive(Serialize, Debug)]
+#[serde_as]
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PlainNote {
+    #[serde(with = "serde_bytes")]
+    pub diversifier: [u8; 11],
+    pub value: u64,
+    #[serde(with = "serde_bytes")]
+    pub rcm: Hash,
+    #[serde(with = "serde_bytes")]
+    pub rho: Option<Hash>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct ReceivedNote {
     pub is_new: bool,
     pub id: u32,
@@ -104,9 +117,11 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
         let txs = get_transparent(&coin.network, &mut client, account, taddr, start, end).await?;
         trp_dec.process_txs(&txs)?;
     }
-    let heights = trp_dec.txs.iter().map(|(tx, _, _)| {
-        tx.height
-    }).collect::<Vec<_>>();
+    let heights = trp_dec
+        .txs
+        .iter()
+        .map(|(tx, _, _)| tx.height)
+        .collect::<Vec<_>>();
     let mut header_dec = BlockHeaderStore::new();
     header_dec.add_heights(&heights)?;
 

@@ -45,6 +45,10 @@ clap = "4.5.15"
 async-trait = "0.1.81"
 dotenv = "0.15.0"
 serde_bytes = "0.11.15"
+serde_with = "3.9.0"
+futures = "0.3.30"
+flate2 = "1.0.32"
+serde_cbor = "0.11.2"
 
 [features]
 sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]

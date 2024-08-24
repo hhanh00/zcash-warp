@@ -1,9 +1,9 @@
+use group::{ff::PrimeField as _, Curve as _, GroupEncoding as _};
 use jubjub::{AffinePoint, ExtendedNielsPoint, ExtendedPoint, Fr, SubgroupPoint};
 use lazy_static::lazy_static;
-use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
-use std::io::Read;
-use group::{GroupEncoding as _, Curve as _, ff::PrimeField as _};
 use rayon::prelude::*;
+use std::io::Read;
+use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 
 lazy_static! {
     pub static ref GENERATORS_EXP: Vec<ExtendedNielsPoint> = read_generators_bin();

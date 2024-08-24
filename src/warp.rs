@@ -49,8 +49,9 @@ pub trait Hasher: std::fmt::Debug + Default {
     fn parallel_combine(&self, depth: u8, layer: &[Hash], pairs: usize) -> Vec<Hash>;
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
 pub struct OutPoint {
+    #[serde(with = "serde_bytes")]
     pub txid: Hash,
     pub vout: u32,
 }
@@ -58,6 +59,13 @@ pub struct OutPoint {
 #[derive(Default, Debug)]
 pub struct TxOut {
     pub address: Option<TransparentAddress>,
+    pub value: u64,
+    pub vout: u32,
+}
+
+#[derive(Default, Serialize, Deserialize, Debug)]
+pub struct TxOut2 {
+    pub address: Option<String>,
     pub value: u64,
     pub vout: u32,
 }
@@ -72,7 +80,7 @@ pub struct TransparentTx {
     pub vouts: Vec<TxOut>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct UTXO {
     pub is_new: bool,
     pub id: u32,
@@ -80,6 +88,7 @@ pub struct UTXO {
     pub height: u32,
     pub txid: Hash,
     pub vout: u32,
+    pub address: String,
     pub value: u64,
 }
 

@@ -1,7 +1,17 @@
+use crate::{
+    db::get_account_info,
+    warp::{
+        hasher::{empty_roots, OrchardHasher, SaplingHasher},
+        MERKLE_DEPTH,
+    },
+    TSKStore,
+};
 use anyhow::Result;
-use crate::{db::get_account_info, warp::{hasher::{empty_roots, OrchardHasher, SaplingHasher}, MERKLE_DEPTH}};
+use zcash_client_backend::encoding::AddressCodec as _;
 
-use super::{InputNote, OutputNote, UnsignedTransaction, EXPIRATION_HEIGHT, ORCHARD_PROVER, PROVER};
+use super::{
+    InputNote, OutputNote, UnsignedTransaction, EXPIRATION_HEIGHT, ORCHARD_PROVER, PROVER,
+};
 use jubjub::Fr;
 use orchard::{
     builder::Builder as OrchardBuilder,
@@ -13,6 +23,7 @@ use orchard::{
 };
 use rand::{CryptoRng, RngCore};
 use rusqlite::Connection;
+use zcash_primitives::sapling::prover::TxProver as _;
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, Network},
     legacy::TransparentAddress,
@@ -26,13 +37,13 @@ use zcash_primitives::{
     },
 };
 use zcash_proofs::prover::LocalTxProver;
-use zcash_primitives::sapling::prover::TxProver as _;
 
 impl UnsignedTransaction {
     pub fn build<R: RngCore + CryptoRng>(
         self,
         network: &Network,
         connection: &Connection,
+        tsk_store: &mut TSKStore,
         mut rng: R,
     ) -> Result<Vec<u8>> {
         let ai = get_account_info(network, connection, self.account)?;
@@ -41,6 +52,10 @@ impl UnsignedTransaction {
         }
         let sks = ai.to_secret_keys();
         sks.sapling.ok_or(anyhow::anyhow!("No Secret Keys"))?;
+
+        if let Some(ti) = ai.transparent.as_ref() {
+            tsk_store.0.insert(ti.addr.encode(network), ti.sk.clone());
+        }
 
         let er = [
             empty_roots(&SaplingHasher::default()),
@@ -57,15 +72,22 @@ impl UnsignedTransaction {
 
         for txin in self.tx_notes.iter() {
             match &txin.note {
-                InputNote::Transparent { txid, vout } => {
-                    let taddr = ai.transparent.as_ref().unwrap().addr;
+                InputNote::Transparent {
+                    txid,
+                    vout,
+                    address,
+                } => {
+                    let Some(sk) = tsk_store.0.get(address) else {
+                        anyhow::bail!("No Secret Key for address {}", address);
+                    };
+                    let ta = TransparentAddress::decode(network, address)?;
                     builder
                         .add_transparent_input(
-                            sks.transparent.unwrap(),
+                            sk.clone(),
                             OutPoint::new(txid.clone(), *vout),
                             TxOut {
                                 value: Amount::from_u64(txin.amount).unwrap(),
-                                script_pubkey: taddr.script(),
+                                script_pubkey: ta.script(),
                             },
                         )
                         .map_err(anyhow::Error::msg)?;

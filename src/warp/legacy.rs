@@ -1,8 +1,8 @@
+use crate::Hash;
 use std::io::Read;
 use zcash_encoding::{Optional, Vector};
-use crate::Hash;
 
-use super::{Hasher, Edge, MERKLE_DEPTH};
+use super::{Edge, Hasher, MERKLE_DEPTH};
 
 #[derive(Default, Debug)]
 pub struct CommitmentTreeFrontier {
@@ -64,12 +64,14 @@ impl CommitmentTreeFrontier {
                     carry = Some(h.combine(i as u8, &l, &r));
                 }
             }
-            prev = if i < self.parents.len() { self.parents[i] } else { None };
+            prev = if i < self.parents.len() {
+                self.parents[i]
+            } else {
+                None
+            };
         }
         Edge(edge)
     }
 }
 
-pub struct CommitmentWitness {
-
-}
+pub struct CommitmentWitness {}

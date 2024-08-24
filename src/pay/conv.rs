@@ -1,7 +1,9 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use zcash_client_backend::address::RecipientAddress;
-use zcash_primitives::{consensus::Network, legacy::TransparentAddress, memo::MemoBytes};
+use zcash_client_backend::{address::RecipientAddress, encoding::AddressCodec as _};
+use zcash_primitives::{
+    consensus::Network, legacy::TransparentAddress, memo::MemoBytes, sapling::PaymentAddress,
+};
 
 use crate::warp::sync::ReceivedNote;
 
@@ -16,6 +18,7 @@ impl TxInput {
             note: InputNote::Transparent {
                 txid: utxo.txid,
                 vout: utxo.vout,
+                address: utxo.address.clone(),
             },
         }
     }
@@ -49,6 +52,30 @@ impl TxInput {
 }
 
 impl OutputNote {
+    pub fn to_address(&self, network: &Network) -> String {
+        match self {
+            OutputNote::Transparent { pkh, address } => (if *pkh {
+                TransparentAddress::PublicKey(address.clone())
+            } else {
+                TransparentAddress::Script(address.clone())
+            })
+            .encode(network),
+            OutputNote::Sapling { address, .. } => {
+                PaymentAddress::from_bytes(address).unwrap().encode(network)
+            }
+            OutputNote::Orchard { address, .. } => {
+                let orchard = orchard::Address::from_raw_address_bytes(address).unwrap();
+                let ua = zcash_client_backend::address::UnifiedAddress::from_receivers(
+                    Some(orchard),
+                    None,
+                    None,
+                )
+                .unwrap();
+                ua.encode(network)
+            }
+        }
+    }
+
     pub fn from_address(network: &Network, address: &str, memo: MemoBytes) -> Result<Self> {
         let address = RecipientAddress::decode(network, address).unwrap();
         let note = match address {

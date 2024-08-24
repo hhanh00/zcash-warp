@@ -1,14 +1,11 @@
 use anyhow::Result;
+use lazy_static::lazy_static;
 use parking_lot::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OptionalExtension;
+use std::{path::Path, time::Duration};
 use tonic::transport::{Certificate, ClientTlsConfig};
-use std::{
-    path::Path,
-    time::Duration,
-};
-use lazy_static::lazy_static;
 
 use zcash_primitives::consensus::Network;
 
@@ -70,16 +67,20 @@ impl CoinDef {
     }
 
     pub async fn connect_lwd(&self) -> Result<Client> {
-        let mut channel = tonic::transport::Channel::from_shared(self.url.clone())?;
-        if self.url.starts_with("https") {
-            let pem = include_bytes!("ca.pem");
-            let ca = Certificate::from_pem(pem);
-            let tls = ClientTlsConfig::new().ca_certificate(ca);
-            channel = channel.tls_config(tls)?;
-        }
-        let client = CompactTxStreamerClient::connect(channel).await?;
-        Ok(client)
+        connect_lwd(&self.url).await
     }
+}
+
+pub async fn connect_lwd(url: &str) -> Result<Client> {
+    let mut channel = tonic::transport::Channel::from_shared(url.to_string())?;
+    if url.starts_with("https") {
+        let pem = include_bytes!("ca.pem");
+        let ca = Certificate::from_pem(pem);
+        let tls = ClientTlsConfig::new().ca_certificate(ca);
+        channel = channel.tls_config(tls)?;
+    }
+    let client = CompactTxStreamerClient::connect(channel).await?;
+    Ok(client)
 }
 
 lazy_static! {

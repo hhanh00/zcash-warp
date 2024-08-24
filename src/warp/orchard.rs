@@ -1,8 +1,14 @@
-use halo2_gadgets::sinsemilla::primitives::SINSEMILLA_S;
-use halo2_proofs::{arithmetic::{CurveAffine as _, CurveExt as _}, pasta::{pallas::{self, Affine, Point}, EpAffine, Fp, Fq}};
+use super::{hasher::OrchardHasher, Hash, Hasher};
 use group::{ff::PrimeField as _, prime::PrimeCurveAffine as _, Curve as _};
+use halo2_gadgets::sinsemilla::primitives::SINSEMILLA_S;
+use halo2_proofs::{
+    arithmetic::{CurveAffine as _, CurveExt as _},
+    pasta::{
+        pallas::{self, Affine, Point},
+        EpAffine, Fp, Fq,
+    },
+};
 use rayon::prelude::*;
-use super::{Hash, Hasher, hasher::OrchardHasher};
 
 impl OrchardHasher {
     fn node_combine_inner(&self, depth: u8, left: &Hash, right: &Hash) -> Point {
@@ -48,7 +54,9 @@ impl OrchardHasher {
 
 impl Default for OrchardHasher {
     fn default() -> Self {
-        let q = Point::hash_to_curve(halo2_gadgets::sinsemilla::primitives::Q_PERSONALIZATION)(halo2_gadgets::sinsemilla::merkle::MERKLE_CRH_PERSONALIZATION.as_bytes());
+        let q = Point::hash_to_curve(halo2_gadgets::sinsemilla::primitives::Q_PERSONALIZATION)(
+            halo2_gadgets::sinsemilla::merkle::MERKLE_CRH_PERSONALIZATION.as_bytes(),
+        );
         Self { q }
     }
 }
@@ -71,13 +79,7 @@ impl Hasher for OrchardHasher {
     fn parallel_combine(&self, depth: u8, layer: &[crate::Hash], pairs: usize) -> Vec<crate::Hash> {
         let hash_extended: Vec<_> = (0..pairs)
             .into_par_iter()
-            .map(|i| {
-                self.node_combine_inner(
-                    depth,
-                    &layer[2*i],
-                    &layer[2*i+1],
-                )
-            })
+            .map(|i| self.node_combine_inner(depth, &layer[2 * i], &layer[2 * i + 1]))
             .collect();
         let mut hash_affine = vec![EpAffine::identity(); hash_extended.len()];
         Point::batch_normalize(&hash_extended, &mut hash_affine);

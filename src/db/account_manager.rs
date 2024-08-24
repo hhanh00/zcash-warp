@@ -3,7 +3,11 @@ use bip39::{Mnemonic, Seed};
 use rusqlite::{params, Connection};
 use secp256k1::SecretKey;
 use zcash_client_backend::{
-    encoding::{decode_extended_full_viewing_key, decode_extended_spending_key, encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address, AddressCodec},
+    encoding::{
+        decode_extended_full_viewing_key, decode_extended_spending_key,
+        encode_extended_full_viewing_key, encode_extended_spending_key, encode_payment_address,
+        AddressCodec,
+    },
     keys::UnifiedFullViewingKey,
 };
 use zcash_primitives::{
@@ -11,7 +15,10 @@ use zcash_primitives::{
     zip32::{ExtendedFullViewingKey, ExtendedSpendingKey},
 };
 
-use crate::{keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38}, types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo}};
+use crate::{
+    keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38},
+    types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
+};
 
 pub fn parse_seed_phrase(phrase: &str) -> Result<Seed> {
     let words = phrase.split_whitespace().collect::<Vec<_>>();
@@ -75,10 +82,11 @@ pub fn create_new_account(
     let account = match key {
         KeyType::Seed(seed, acc_index, _addr_index) => {
             let si = derive_zip32(network, &seed, acc_index);
-            let account = create_sapling_account(network, connection, name, Some(key_str), acc_index, &si)?;
+            let account =
+                create_sapling_account(network, connection, name, Some(key_str), acc_index, &si)?;
             // This should have been acc_index / addr_index but ZecWallet Lite derives
             // with an incorrect path that we follow for compatibility reasons
-            let ti = derive_bip32(network, &seed, 0, acc_index);
+            let ti = derive_bip32(network, &seed, 0, acc_index, true);
             create_transparent_account(network, connection, account, &ti)?;
             let oi = derive_orchard_zip32(network, &seed, acc_index);
             create_orchard_account(network, connection, account, &oi)?;
@@ -103,14 +111,25 @@ pub fn create_sapling_account(
     acc_index: u32,
     si: &SaplingAccountInfo,
 ) -> Result<u32> {
-    let sk = si.sk.as_ref().map(|sk| encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), sk));
-    let vk = encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &si.vk);
+    let sk = si
+        .sk
+        .as_ref()
+        .map(|sk| encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), sk));
+    let vk =
+        encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &si.vk);
     let addr = encode_payment_address(network.hrp_sapling_payment_address(), &si.addr);
 
-    connection.execute("INSERT INTO accounts(name, seed, aindex, sk, ivk, address)
+    connection.execute(
+        "INSERT INTO accounts(name, seed, aindex, sk, ivk, address)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-        ON CONFLICT DO NOTHING", params![name, seed, acc_index, sk, vk, addr])?;
-    let account = connection.query_row("SELECT id_account FROM accounts WHERE ivk = ?1", [vk], |r| r.get::<_, u32>(0))?;
+        ON CONFLICT DO NOTHING",
+        params![name, seed, acc_index, sk, vk, addr],
+    )?;
+    let account = connection.query_row(
+        "SELECT id_account FROM accounts WHERE ivk = ?1",
+        [vk],
+        |r| r.get::<_, u32>(0),
+    )?;
     Ok(account)
 }
 
@@ -123,8 +142,11 @@ pub fn create_transparent_account(
     let sk = export_sk_bip38(&ti.sk);
     let addr = ti.addr.encode(network);
 
-    connection.execute("INSERT INTO taddrs(account, sk, address, balance, height)
-        VALUES (?1, ?2, ?3, 0, 0)", params![account, sk, addr])?;
+    connection.execute(
+        "INSERT INTO taddrs(account, sk, address, balance, height)
+        VALUES (?1, ?2, ?3, 0, 0)",
+        params![account, sk, addr],
+    )?;
     Ok(())
 }
 
@@ -137,8 +159,11 @@ pub fn create_orchard_account(
     let sk = oi.sk.as_ref().map(|sk| sk.to_bytes());
     let fvk = &oi.vk.to_bytes();
 
-    connection.execute("INSERT INTO orchard_addrs(account, sk, fvk)
-        VALUES (?1, ?2, ?3)", params![account, sk, fvk])?;
+    connection.execute(
+        "INSERT INTO orchard_addrs(account, sk, fvk)
+        VALUES (?1, ?2, ?3)",
+        params![account, sk, fvk],
+    )?;
     Ok(())
 }
 

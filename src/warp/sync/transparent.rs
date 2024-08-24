@@ -1,5 +1,6 @@
 use anyhow::Result;
 use rusqlite::Connection;
+use zcash_client_backend::encoding::AddressCodec;
 use zcash_primitives::{consensus::Network, legacy::TransparentAddress};
 
 use crate::{
@@ -10,6 +11,7 @@ use crate::{
 use super::{ReceivedTx, TxValueUpdate};
 
 pub struct TransparentSync {
+    pub network: Network,
     pub addresses: Vec<(u32, TransparentAddress)>,
     pub utxos: Vec<UTXO>,
     pub txs: Vec<(ReceivedTx, OutPoint, u64)>,
@@ -30,6 +32,7 @@ impl TransparentSync {
         let utxos = list_utxos(connection, height)?;
 
         Ok(Self {
+            network: network.clone(),
             addresses,
             utxos,
             txs: vec![],
@@ -77,6 +80,12 @@ impl TransparentSync {
                     txout.value,
                 ));
                 // outputs are filtered for our account
+                let (_, ta) = self
+                    .addresses
+                    .iter()
+                    .find(|(account, _)| *account == tx.account)
+                    .unwrap();
+                let address = ta.encode(&self.network);
                 self.utxos.push(UTXO {
                     is_new: true,
                     id: 0,
@@ -84,6 +93,7 @@ impl TransparentSync {
                     height: tx.height,
                     txid: tx.txid,
                     vout: txout.vout,
+                    address,
                     value: txout.value,
                 });
             }

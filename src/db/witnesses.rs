@@ -1,6 +1,6 @@
+use anyhow::Result;
 use rusqlite::Connection;
 use tracing::info;
-use anyhow::Result;
 use zcash_primitives::{merkle_tree::IncrementalWitness, sapling::Node};
 
 use crate::{
