@@ -1,7 +1,3 @@
-// get_diversified_address
-// tex addresses
-// transfer pools
-// sweep private transparent key
 // store contact
 // get messages
 // get txs
@@ -13,3 +9,4 @@
 
 pub mod address;
 pub mod pools;
+pub mod contacts;

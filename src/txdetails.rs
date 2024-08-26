@@ -3,6 +3,7 @@ use std::io::Write;
 use anyhow::{Error, Result};
 use flate2::{write::ZlibEncoder, Compression};
 use orchard::{keys::Scope, note::ExtractedNoteCommitment, note_encryption::OrchardDomain};
+use parking_lot::Mutex;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use zcash_client_backend::encoding::AddressCodec as _;
@@ -13,10 +14,7 @@ use zcash_primitives::{
 };
 
 use crate::{
-    db::{get_account_info, get_note_by_nf},
-    lwd::get_txin_coins,
-    warp::{sync::PlainNote, OutPoint, TxOut2},
-    Hash,
+    coin::connect_lwd, db::{account::get_account_info, notes::{get_note_by_nf, store_tx_details}, tx::list_new_txids}, lwd::{get_transaction, get_txin_coins}, warp::{sync::PlainNote, OutPoint, TxOut2}, Hash, PooledSQLConnection
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -39,6 +37,7 @@ pub struct ShieldedInput {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ShieldedOutput {
+    pub incoming: bool,
     pub note: PlainNote,
     #[serde(with = "serde_bytes")]
     pub cmx: Hash,
@@ -51,6 +50,7 @@ pub struct ShieldedOutput {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Transaction {
     pub height: u32,
+    pub timestamp: u32,
     #[serde(with = "serde_bytes")]
     pub txid: Hash,
     pub tins: Vec<TransparentInput>,
@@ -66,6 +66,7 @@ pub fn analyze_raw_transaction(
     connection: &Connection,
     url: String,
     height: u32,
+    timestamp: u32,
     account: u32,
     tx: ZTransaction,
 ) -> Result<Transaction> {
@@ -113,11 +114,18 @@ pub fn analyze_raw_transaction(
         }
         for sout in b.shielded_outputs() {
             let domain = SaplingDomain::for_height(*network, height.into());
-            let r = try_note_decryption(&domain, &ivk, sout).or_else(|| {
-                try_output_recovery_with_ovk(&domain, ovk, sout, sout.cv(), sout.out_ciphertext())
-            });
+            let r = try_note_decryption(&domain, &ivk, sout)
+                .map(|(n, p, m)| (n, p, m, true))
+                .or_else(|| {
+                    try_output_recovery_with_ovk(
+                        &domain,
+                        ovk,
+                        sout,
+                        sout.cv(),
+                        sout.out_ciphertext()).map(|(n, p, m)| (n, p, m, false))
+                });
             let output = r
-                .map(|(note, address, memo)| {
+                .map(|(note, address, memo, incoming)| {
                     let cmx = note.cmu().to_bytes();
                     let note = PlainNote {
                         diversifier: address.diversifier().0,
@@ -131,6 +139,7 @@ pub fn analyze_raw_transaction(
                     let memo = e.finish().map_err(Error::msg)?;
 
                     Ok::<_, Error>(ShieldedOutput {
+                        incoming,
                         note,
                         cmx,
                         address,
@@ -156,17 +165,18 @@ pub fn analyze_raw_transaction(
             }));
 
             let domain = OrchardDomain::for_nullifier(a.nullifier().clone());
-            let r = try_note_decryption(&domain, &ivk, a).or_else(|| {
+            let r = try_note_decryption(&domain, &ivk, a)
+            .map(|(n, p, m)| (n, p, m, true)).or_else(|| {
                 try_output_recovery_with_ovk(
                     &domain,
                     ovk,
                     a,
                     a.cv_net(),
                     &a.encrypted_note().out_ciphertext,
-                )
+                ).map(|(n, p, m)| (n, p, m, false))
             });
             let output = r
-                .map(|(note, address, memo)| {
+                .map(|(note, address, memo, incoming)| {
                     let cmx = ExtractedNoteCommitment::from(note.commitment());
                     let cmx = cmx.to_bytes();
                     let note = PlainNote {
@@ -181,6 +191,7 @@ pub fn analyze_raw_transaction(
                     let memo = e.finish().map_err(Error::msg)?;
 
                     Ok::<_, Error>(ShieldedOutput {
+                        incoming,
                         note,
                         cmx,
                         address,
@@ -203,6 +214,7 @@ pub fn analyze_raw_transaction(
 
     let tx = Transaction {
         height,
+        timestamp,
         txid,
         tins,
         touts,
@@ -212,4 +224,28 @@ pub fn analyze_raw_transaction(
         oouts,
     };
     Ok(tx)
+}
+
+pub async fn retrieve_tx_details(
+    network: &Network,
+    connection: Mutex<PooledSQLConnection>,
+    url: String,
+) -> Result<()> {
+    let txids = list_new_txids(&connection.lock())?;
+    let mut client = connect_lwd(&url).await?;
+    for (id_tx, account, timestamp, txid) in txids {
+        let (height, tx) = get_transaction(network, &mut client, &txid).await?;
+        let tx_details = analyze_raw_transaction(
+            network,
+            &connection.lock(),
+            url.clone(),
+            height,
+            timestamp,
+            account,
+            tx,
+        )?;
+        let tx_bin = bincode::serialize(&tx_details)?;
+        store_tx_details(&connection.lock(), id_tx, &txid, &tx_bin)?;
+    }
+    Ok(())
 }

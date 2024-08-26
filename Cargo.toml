@@ -49,6 +49,7 @@ serde_with = "3.9.0"
 futures = "0.3.30"
 flate2 = "1.0.32"
 serde_cbor = "0.11.2"
+bech32 = "0.11.0"
 
 [features]
 sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]

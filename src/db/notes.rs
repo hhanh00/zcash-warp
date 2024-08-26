@@ -356,6 +356,8 @@ pub fn truncate_scan(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
+// TODO: Reset rest of the tables
+#[allow(dead_code)]
 pub fn reset_scan(network: &Network, connection: &Connection, height: Option<u32>) -> Result<u32> {
     let activation: u32 = network
         .activation_height(NetworkUpgrade::Sapling)
@@ -388,18 +390,20 @@ pub fn rewind(connection: &Connection, height: u32) -> Result<()> {
     Ok(())
 }
 
-pub fn get_txid(connection: &Connection, id: u32) -> Result<Vec<u8>> {
-    let txid = connection.query_row("SELECT txid FROM txs WHERE id_tx = ?1", [id], |r| {
-        r.get::<_, Vec<u8>>(0)
-    })?;
-    Ok(txid)
+pub fn get_txid(connection: &Connection, id: u32) -> Result<(Vec<u8>, u32)> {
+    let (txid, timestamp) = connection.query_row(
+        "SELECT txid, timestamp FROM txs WHERE id_tx = ?1",
+        [id],
+        |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, u32>(1)?)),
+    )?;
+    Ok((txid, timestamp))
 }
 
-pub fn store_tx_details(connection: &Connection, id: u32, data: &[u8]) -> Result<()> {
+pub fn store_tx_details(connection: &Connection, id: u32, txid: &Hash, data: &[u8]) -> Result<()> {
     connection.execute(
-        "INSERT INTO txdetails(id_tx, data)
-        VALUES (?1, ?2) ON CONFLICT DO NOTHING",
-        params![id, data],
+        "INSERT INTO txdetails(id_tx, txid, data)
+        VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
+        params![id, txid, data],
     )?;
     Ok(())
 }

@@ -11,7 +11,7 @@ use crate::{
     lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter},
     types::{AccountInfo, AccountType, PoolMask},
     warp::{legacy::CommitmentTreeFrontier, UTXO},
-    TSKStore,
+    keys::TSKStore,
 };
 
 pub async fn scan_utxo_by_address(

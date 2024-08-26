@@ -1,9 +1,11 @@
 use anyhow::Result;
+use bech32::{Bech32m, Hrp};
 use orchard::keys::Scope;
 use rusqlite::Connection;
-use zcash_primitives::consensus::Network;
+use zcash_client_backend::encoding::AddressCodec;
+use zcash_primitives::{consensus::Network, legacy::TransparentAddress};
 
-use crate::{db::get_account_info, types::PoolMask};
+use crate::{db::account::get_account_info, types::PoolMask};
 
 pub fn get_diversified_address(
     network: &Network,
@@ -38,6 +40,30 @@ pub fn get_diversified_address(
     Ok(address)
 }
 
+const TEX_HRP: Hrp = Hrp::parse_unchecked("tex");
+
 pub fn convert_tex_address(network: &Network, address: &str, to_tex: bool) -> Result<String> {
-    todo!()
+    if to_tex {
+        let taddr = TransparentAddress::decode(network, address)?;
+        if let TransparentAddress::PublicKey(pkh) = taddr {
+            let tex = bech32::encode::<Bech32m>(TEX_HRP, &pkh)?;
+            Ok(tex)
+        }
+        else {
+            anyhow::bail!("Not a PKH Transparent Address");
+        }
+    }
+    else {
+        let (hrp, data) = bech32::decode(address)?;
+        if hrp != TEX_HRP {
+            anyhow::bail!("Not a TEX address")
+        }
+        if data.len() != 20 {
+            anyhow::bail!("Not a TEX address")
+        }
+        let pkh: [u8; 20] = data.try_into().unwrap();
+        let taddr = TransparentAddress::PublicKey(pkh);
+        let address = taddr.encode(network);
+        Ok(address)
+    }
 }

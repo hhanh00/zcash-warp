@@ -7,7 +7,7 @@ use rusqlite::Connection;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 
 use crate::{
-    db::{get_account_info, list_received_notes, list_utxos},
+    db::{account::get_account_info, notes:: {list_received_notes, list_utxos}},
     types::PoolMask,
     warp::{
         hasher::{OrchardHasher, SaplingHasher},

@@ -1,10 +1,10 @@
 use crate::{
-    db::get_account_info,
+    db::account::get_account_info,
     warp::{
         hasher::{empty_roots, OrchardHasher, SaplingHasher},
         MERKLE_DEPTH,
     },
-    TSKStore,
+    keys::TSKStore,
 };
 use anyhow::Result;
 use zcash_client_backend::encoding::AddressCodec as _;

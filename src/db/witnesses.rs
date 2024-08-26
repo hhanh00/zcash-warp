@@ -8,6 +8,8 @@ use crate::{
     Hash,
 };
 
+// TODO: Use witness migration
+#[allow(dead_code)]
 pub fn get_witnesses_v1(
     connection: &Connection,
     height: u32,

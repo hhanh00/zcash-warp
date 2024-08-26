@@ -17,7 +17,7 @@ use zcash_primitives::{
     zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey},
 };
 
-use crate::{data::fb::BackupT, db::parse_seed_phrase, keys::export_sk_bip38};
+use crate::{data::fb::BackupT, db::account_manager::parse_seed_phrase, keys::export_sk_bip38};
 
 #[derive(Clone, Default, Debug)]
 pub struct PoolMask(pub u8);

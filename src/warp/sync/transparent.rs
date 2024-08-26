@@ -4,7 +4,7 @@ use zcash_client_backend::encoding::AddressCodec;
 use zcash_primitives::{consensus::Network, legacy::TransparentAddress};
 
 use crate::{
-    db::{get_account_info, list_accounts, list_utxos},
+    db::{account::{get_account_info, list_accounts}, notes::list_utxos},
     warp::{OutPoint, TransparentTx, UTXO},
 };
 

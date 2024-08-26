@@ -3,7 +3,7 @@ use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
 use crate::{
-    db::{get_account_info, list_accounts, list_received_notes},
+    db::{account::{get_account_info, list_accounts}, notes::list_received_notes},
     lwd::rpc::CompactBlock,
     types::AccountInfo,
     warp::try_sapling_decrypt,
