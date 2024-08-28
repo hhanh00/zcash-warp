@@ -3,10 +3,11 @@ use rusqlite::Connection;
 
 pub(crate) mod account;
 pub(crate) mod account_manager;
+pub(crate) mod contacts;
 pub(crate) mod migration;
 pub(crate) mod notes;
-pub(crate) mod witnesses;
 pub(crate) mod tx;
+pub(crate) mod witnesses;
 
 // pub use account::{get_account_info, get_balance, list_accounts};
 // pub use account_manager::{create_new_account, delete_account, detect_key, parse_seed_phrase};
@@ -28,6 +29,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute("DROP TABLE IF EXISTS blcks", [])?;
     connection.execute("DROP TABLE IF EXISTS txdetails", [])?;
     connection.execute("DROP TABLE IF EXISTS msgs", [])?;
+    connection.execute("DROP TABLE IF EXISTS contacts", [])?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS blcks(
@@ -108,9 +110,18 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         body TEXT NOT NULL,
         read BOOL NOT NULL,
         UNIQUE (txid, nout))",
-        [])?;
-
+        [],
+    )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS contacts(
+        id_contact INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        address TEXT NOT NULL,
+        dirty BOOL NOT NULL,
+        UNIQUE (account, name))",
+        [],
+    )?;
 
     Ok(())
 }
-

@@ -48,12 +48,10 @@ pub fn convert_tex_address(network: &Network, address: &str, to_tex: bool) -> Re
         if let TransparentAddress::PublicKey(pkh) = taddr {
             let tex = bech32::encode::<Bech32m>(TEX_HRP, &pkh)?;
             Ok(tex)
-        }
-        else {
+        } else {
             anyhow::bail!("Not a PKH Transparent Address");
         }
-    }
-    else {
+    } else {
         let (hrp, data) = bech32::decode(address)?;
         if hrp != TEX_HRP {
             anyhow::bail!("Not a TEX address")

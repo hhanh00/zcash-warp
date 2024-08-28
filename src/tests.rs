@@ -4,12 +4,17 @@ use tracing::info;
 use zcash_primitives::{merkle_tree::MerklePath, sapling::Node};
 
 use crate::{
-    coin::COINS, db::{
+    coin::COINS,
+    db::{
         account::{get_account_info, list_accounts},
         account_manager::{create_new_account, detect_key},
         migration::init_db,
         witnesses::get_witnesses_v1,
-    }, keys::generate_random_mnemonic_phrase, lwd::get_tree_state, types::PoolMask, warp::hasher::{empty_roots, SaplingHasher}
+    },
+    keys::generate_random_mnemonic_phrase,
+    lwd::get_tree_state,
+    types::PoolMask,
+    warp::hasher::{empty_roots, SaplingHasher},
 };
 
 pub fn account_tests() -> Result<()> {

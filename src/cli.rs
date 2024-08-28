@@ -9,12 +9,24 @@ use rustyrepl::{Repl, ReplCommandProcessor};
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    account::address::get_diversified_address, coin::CoinDef, db::{
-        account::{get_account_info, get_balance}, migration::init_db, notes::{get_sync_height, get_txid, store_block, store_tx_details, truncate_scan}, reset_tables, tx::get_tx_details
-    }, keys::TSKStore, lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state}, pay::{
+    account::address::get_diversified_address,
+    coin::CoinDef,
+    db::{
+        account::{get_account_info, get_balance},
+        migration::init_db,
+        notes::{get_sync_height, get_txid, store_block, store_tx_details, truncate_scan},
+        reset_tables,
+        tx::get_tx_details,
+    },
+    keys::TSKStore,
+    lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
+    pay::{
         sweep::{prepare_sweep, scan_utxo_by_seed},
         Payment, PaymentBuilder, PaymentItem,
-    }, txdetails::{analyze_raw_transaction, retrieve_tx_details}, types::PoolMask, warp::{sync::warp_sync, BlockHeader}
+    },
+    txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
+    types::PoolMask,
+    warp::{sync::warp_sync, BlockHeader},
 };
 
 /// The enum of sub-commands supported by the CLI
@@ -78,7 +90,7 @@ impl CliProcessor {
         zec.set_url(&dotenv::var("LWD_URL").unwrap());
         let connection = zec.connection().unwrap();
         init_db(&connection).unwrap();
-        reset_tables(&connection).unwrap();
+        // reset_tables(&connection).unwrap();
         Self { zec }
     }
 }
@@ -235,7 +247,8 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
             }
             Command::GetTxDetails { id } => {
                 let connection = self.zec.connection()?;
-                get_tx_details(network, &connection, id)?;
+                let (account, tx) = get_tx_details(&connection, id)?;
+                decode_tx_details(network, &connection, account, id, &tx)?;
             }
         }
         Ok(())

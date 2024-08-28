@@ -8,10 +8,10 @@ use super::{Payment, PaymentBuilder, PaymentItem, UnsignedTransaction};
 use crate::{
     coin::connect_lwd,
     keys::Bip32KeyIterator,
+    keys::TSKStore,
     lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter},
     types::{AccountInfo, AccountType, PoolMask},
     warp::{legacy::CommitmentTreeFrontier, UTXO},
-    keys::TSKStore,
 };
 
 pub async fn scan_utxo_by_address(

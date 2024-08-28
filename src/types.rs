@@ -5,7 +5,7 @@ use orchard::{
     Address,
 };
 use secp256k1::SecretKey;
-use zcash_client_backend::keys::UnifiedFullViewingKey;
+use zcash_client_backend::{address::RecipientAddress, keys::UnifiedFullViewingKey};
 use zcash_client_backend::{
     address::UnifiedAddress,
     encoding::{encode_extended_full_viewing_key, encode_extended_spending_key, AddressCodec as _},
@@ -248,4 +248,13 @@ pub struct OptionAccountInfo {
     pub transparent: Option<TransparentAccountInfo>,
     pub sapling: Option<SaplingAccountInfo>,
     pub orchard: Option<OrchardAccountInfo>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Contact {
+    pub id: u32,
+    pub account: u32,
+    pub name: String,
+    pub address: RecipientAddress,
+    pub dirty: bool,
 }

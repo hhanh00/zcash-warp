@@ -7,17 +7,17 @@ use tonic::transport::Channel;
 mod data;
 
 pub mod account;
+pub mod cli;
 mod coin;
 pub mod db;
 mod keys;
 pub mod lwd;
+pub mod messages;
 pub mod pay;
 pub mod txdetails;
-pub mod messages;
 pub mod types;
 mod utils;
 pub mod warp;
-pub mod cli;
 
 pub mod tests;
 

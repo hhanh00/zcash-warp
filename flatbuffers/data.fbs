@@ -1,12 +1,24 @@
 namespace fb;
 
 table Backup {
-  name:string;
-  seed:string;
-  index:uint32;
-  sk:string;
-  fvk:string;
-  uvk:string;
-  tsk:string;
-  saved:bool;
+  name: string;
+  seed: string;
+  index: uint32;
+  sk: string;
+  fvk: string;
+  uvk: string;
+  tsk: string;
+  saved: bool;
+}
+
+table TransactionInfo {
+  id: uint32;
+  txid: string;
+  height: uint32;
+  confirmations: uint32;
+  timestamp: uint32;
+  amount: int64;
+  address: string;
+  contact: string;
+  memo: string;
 }

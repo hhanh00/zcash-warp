@@ -1,7 +1,7 @@
-use std::io::Write;
+use std::io::{Read, Write};
 
 use anyhow::{Error, Result};
-use flate2::{write::ZlibEncoder, Compression};
+use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
 use orchard::{keys::Scope, note::ExtractedNoteCommitment, note_encryption::OrchardDomain};
 use parking_lot::Mutex;
 use rusqlite::Connection;
@@ -9,12 +9,25 @@ use serde::{Deserialize, Serialize};
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use zcash_primitives::{
-    consensus::Network, sapling::note_encryption::SaplingDomain,
+    consensus::Network,
+    memo::{Memo, MemoBytes},
+    sapling::{note_encryption::SaplingDomain, PaymentAddress},
     transaction::Transaction as ZTransaction,
 };
 
 use crate::{
-    coin::connect_lwd, db::{account::get_account_info, notes::{get_note_by_nf, store_tx_details}, tx::list_new_txids}, lwd::{get_transaction, get_txin_coins}, warp::{sync::PlainNote, OutPoint, TxOut2}, Hash, PooledSQLConnection
+    account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
+    coin::connect_lwd,
+    db::{
+        account::get_account_info,
+        notes::{get_note_by_nf, store_tx_details},
+        tx::{list_new_txids, store_message},
+    },
+    lwd::{get_transaction, get_txin_coins},
+    messages::ZMessage,
+    types::PoolMask,
+    warp::{sync::PlainNote, OutPoint, TxOut2},
+    Hash, PooledSQLConnection,
 };
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -48,7 +61,7 @@ pub struct ShieldedOutput {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Transaction {
+pub struct TransactionDetails {
     pub height: u32,
     pub timestamp: u32,
     #[serde(with = "serde_bytes")]
@@ -69,7 +82,7 @@ pub fn analyze_raw_transaction(
     timestamp: u32,
     account: u32,
     tx: ZTransaction,
-) -> Result<Transaction> {
+) -> Result<TransactionDetails> {
     let ai = get_account_info(network, connection, account)?;
     let txid: Hash = tx.txid().as_ref().clone();
     let data = tx.into_data();
@@ -122,7 +135,9 @@ pub fn analyze_raw_transaction(
                         ovk,
                         sout,
                         sout.cv(),
-                        sout.out_ciphertext()).map(|(n, p, m)| (n, p, m, false))
+                        sout.out_ciphertext(),
+                    )
+                    .map(|(n, p, m)| (n, p, m, false))
                 });
             let output = r
                 .map(|(note, address, memo, incoming)| {
@@ -166,15 +181,17 @@ pub fn analyze_raw_transaction(
 
             let domain = OrchardDomain::for_nullifier(a.nullifier().clone());
             let r = try_note_decryption(&domain, &ivk, a)
-            .map(|(n, p, m)| (n, p, m, true)).or_else(|| {
-                try_output_recovery_with_ovk(
-                    &domain,
-                    ovk,
-                    a,
-                    a.cv_net(),
-                    &a.encrypted_note().out_ciphertext,
-                ).map(|(n, p, m)| (n, p, m, false))
-            });
+                .map(|(n, p, m)| (n, p, m, true))
+                .or_else(|| {
+                    try_output_recovery_with_ovk(
+                        &domain,
+                        ovk,
+                        a,
+                        a.cv_net(),
+                        &a.encrypted_note().out_ciphertext,
+                    )
+                    .map(|(n, p, m)| (n, p, m, false))
+                });
             let output = r
                 .map(|(note, address, memo, incoming)| {
                     let cmx = ExtractedNoteCommitment::from(note.commitment());
@@ -212,7 +229,7 @@ pub fn analyze_raw_transaction(
         tin.coin = txout;
     }
 
-    let tx = Transaction {
+    let tx = TransactionDetails {
         height,
         timestamp,
         txid,
@@ -248,4 +265,174 @@ pub async fn retrieve_tx_details(
         store_tx_details(&connection.lock(), id_tx, &txid, &tx_bin)?;
     }
     Ok(())
+}
+
+pub fn decode_tx_details(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    id_tx: u32,
+    tx: &TransactionDetails,
+) -> Result<()> {
+    let mut authenticated = false;
+    let ai = get_account_info(network, connection, account)?;
+    let account_address = ai.to_address(network, PoolMask(7)).unwrap();
+    tracing::info!("{:?}", tx);
+    let mut spend_address = None;
+    if let Some(taddr) = ai.transparent.as_ref().map(|ti| ti.addr) {
+        let taddr = taddr.encode(network);
+        for tin in tx.tins.iter() {
+            if let Some(address) = tin.coin.address.as_ref() {
+                spend_address = Some(address.clone());
+                if address == &taddr {
+                    authenticated = true;
+                }
+            }
+        }
+    }
+
+    for input in tx.sins.iter().chain(tx.oins.iter()) {
+        if input.is_some() {
+            authenticated = true;
+        }
+    }
+
+    let mut contact_decoder =
+        ChunkedMemoDecoder::<ChunkedContactV1>::new(tx.souts.len().max(tx.oouts.len()));
+
+    for (nout, output) in tx
+        .souts
+        .iter()
+        .map(|o| (o, false))
+        .chain(tx.oouts.iter().map(|o| (o, true)))
+        .enumerate()
+    {
+        if let (Some(output), orchard) = output {
+            let note_address = if orchard {
+                let a = orchard::Address::from_raw_address_bytes(&output.address).unwrap();
+                let a = zcash_client_backend::address::UnifiedAddress::from_receivers(
+                    Some(a),
+                    None,
+                    None,
+                )
+                .unwrap();
+                a.encode(network)
+            } else {
+                let a = PaymentAddress::from_bytes(&output.address).unwrap();
+                a.encode(network)
+            };
+            let sender = if output.incoming {
+                spend_address.clone()
+            } else {
+                Some(account_address.clone())
+            };
+            let recipient = note_address;
+
+            let memo = decode_shielded_output_memo(output)?;
+            visit_memo(
+                connection,
+                account,
+                id_tx,
+                &tx,
+                nout as u32,
+                output.incoming,
+                authenticated,
+                sender,
+                recipient,
+                &memo,
+            )?;
+            contact_decoder.add_memo(&memo.into())?;
+        }
+    }
+    let contacts = contact_decoder.finalize()?;
+    tracing::info!("Contacts {:?}", contacts);
+    for c in contacts.iter() {
+        add_contact(network, connection, account, &c.name, &c.address)?;
+    }
+    Ok(())
+}
+
+fn decode_shielded_output_memo(output: &ShieldedOutput) -> Result<Memo> {
+    let mut d = ZlibDecoder::new(&*output.memo);
+    let mut memo = vec![];
+    d.read_to_end(&mut memo)?;
+    let memo = MemoBytes::from_bytes(&memo)?;
+    let memo: Memo = memo.try_into()?;
+    Ok(memo)
+}
+
+fn visit_memo(
+    connection: &Connection,
+    account: u32,
+    id_tx: u32,
+    tx: &TransactionDetails,
+    nout: u32,
+    incoming: bool,
+    authenticated: bool,
+    sender: Option<String>,
+    recipient: String,
+    memo: &Memo,
+) -> Result<()> {
+    tracing::info!("{} {:?}", authenticated, memo);
+    match memo {
+        Memo::Text(text) => {
+            let msg = parse_memo_text(
+                id_tx,
+                nout,
+                tx.height,
+                tx.timestamp,
+                incoming,
+                sender,
+                recipient,
+                &*text,
+            )?;
+            store_message(connection, account, &tx, nout, &msg)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn parse_memo_text(
+    id_tx: u32,
+    nout: u32,
+    height: u32,
+    timestamp: u32,
+    incoming: bool,
+    sender: Option<String>,
+    recipient: String,
+    memo: &str,
+) -> Result<ZMessage> {
+    let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
+    let msg = if memo_lines.len() == 4 && memo_lines[0] == "\u{1F6E1}MSG" {
+        ZMessage {
+            id_tx,
+            nout,
+            height,
+            timestamp,
+            incoming,
+            sender: if memo_lines[1].is_empty() {
+                sender
+            } else {
+                Some(memo_lines[1].to_string())
+            },
+            recipient: recipient.to_string(),
+            subject: memo_lines[2].to_string(),
+            body: memo_lines[3].to_string(),
+        }
+    } else {
+        ZMessage {
+            id_tx,
+            height,
+            timestamp,
+            incoming,
+            nout,
+            sender: None,
+            recipient: recipient.to_string(),
+            subject: String::new(),
+            body: memo.to_string(),
+        }
+    };
+    tracing::info!("{:?}", msg);
+    Ok(msg)
 }

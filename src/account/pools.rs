@@ -4,7 +4,10 @@ use rusqlite::Connection;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 
 use crate::{
-    db::account::get_account_info, keys::TSKStore, pay::{Payment, PaymentBuilder, PaymentItem}, warp::legacy::CommitmentTreeFrontier
+    db::account::get_account_info,
+    keys::TSKStore,
+    pay::{Payment, PaymentBuilder, PaymentItem},
+    warp::legacy::CommitmentTreeFrontier,
 };
 
 pub fn transfer_pools<R: RngCore + CryptoRng>(

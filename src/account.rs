@@ -8,5 +8,5 @@
 // vote
 
 pub mod address;
-pub mod pools;
 pub mod contacts;
+pub mod pools;
