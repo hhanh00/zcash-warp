@@ -16,17 +16,20 @@ use zcash_primitives::{
 };
 
 use crate::{
-    account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
+    account::contacts::{add_contact, ua_of_orchard, ChunkedContactV1, ChunkedMemoDecoder},
     coin::connect_lwd,
     db::{
         account::get_account_info,
         notes::{get_note_by_nf, store_tx_details},
-        tx::{list_new_txids, store_message},
+        tx::{get_tx, list_new_txids, store_message, update_tx_primary_address_memo},
     },
     lwd::{get_transaction, get_txin_coins},
     messages::ZMessage,
-    types::PoolMask,
-    warp::{sync::PlainNote, OutPoint, TxOut2},
+    types::{Addresses, PoolMask},
+    warp::{
+        sync::{PlainNote, ReceivedTx},
+        OutPoint, TxOut2,
+    },
     Hash, PooledSQLConnection,
 };
 
@@ -251,8 +254,11 @@ pub async fn retrieve_tx_details(
     let txids = list_new_txids(&connection.lock())?;
     let mut client = connect_lwd(&url).await?;
     for (id_tx, account, timestamp, txid) in txids {
+        let ai = get_account_info(network, &connection.lock(), account)?;
+        let account_addrs = ai.to_addresses(network);
+        let rtx = get_tx(&connection.lock(), id_tx)?;
         let (height, tx) = get_transaction(network, &mut client, &txid).await?;
-        let tx_details = analyze_raw_transaction(
+        let txd = analyze_raw_transaction(
             network,
             &connection.lock(),
             url.clone(),
@@ -261,8 +267,10 @@ pub async fn retrieve_tx_details(
             account,
             tx,
         )?;
-        let tx_bin = bincode::serialize(&tx_details)?;
+        let tx_bin = bincode::serialize(&txd)?;
         store_tx_details(&connection.lock(), id_tx, &txid, &tx_bin)?;
+        let (tx_address, tx_memo) = get_tx_primary_address_memo(network, &account_addrs, &rtx, &txd)?;
+        update_tx_primary_address_memo(&connection.lock(), id_tx, tx_address, tx_memo)?;
     }
     Ok(())
 }
@@ -435,4 +443,70 @@ fn parse_memo_text(
     };
     tracing::info!("{:?}", msg);
     Ok(msg)
+}
+
+pub fn get_tx_primary_address_memo(
+    network: &Network,
+    addrs: &Addresses,
+    tx: &ReceivedTx,
+    txd: &TransactionDetails,
+) -> Result<(Option<String>, Option<String>)> {
+    let mut address = None;
+    let mut memo = None;
+    'once: loop {
+        if tx.value > 0 {
+            // incoming
+            for tin in txd.tins.iter() {
+                address = tin.coin.address.clone();
+                break 'once;
+            }
+        } else {
+            if let Some(taddr) = addrs.transparent.as_ref() {
+                for tout in txd.touts.iter() {
+                    if let Some(tout_addr) = tout.coin.address.as_ref() {
+                        if tout_addr != taddr {
+                            address = Some(tout_addr.clone());
+                            break 'once;
+                        }
+                    }
+                }
+            }
+
+            if let Some(saddr) = addrs.sapling.as_ref() {
+                for sout in txd.souts.iter() {
+                    if let Some(sout) = sout.as_ref() {
+                        let pa = PaymentAddress::from_bytes(&sout.address).unwrap();
+                        let sout_addr = pa.encode(network);
+                        if &sout_addr != saddr {
+                            address = Some(sout_addr.clone());
+                            let m = decode_shielded_output_memo(sout)?;
+                            if let Memo::Text(text) = m {
+                                memo = Some(text.to_string());
+                            }
+                            break 'once;
+                        }
+                    }
+                }
+            }
+
+            if let Some(oaddr) = addrs.orchard.as_ref() {
+                for oout in txd.oouts.iter() {
+                    if let Some(oout) = oout.as_ref() {
+                        let oout_addr = ua_of_orchard(&oout.address).encode(network);
+                        if &oout_addr != oaddr {
+                            address = Some(oout_addr.clone());
+                            let m = decode_shielded_output_memo(oout)?;
+                            if let Memo::Text(text) = m {
+                                memo = Some(text.to_string());
+                            }
+                            break 'once;
+                        }
+                    }
+                }
+            }
+        }
+        break 'once;
+    }
+
+    Ok((address, memo))
 }

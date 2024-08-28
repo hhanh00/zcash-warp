@@ -47,6 +47,8 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         height INTEGER NOT NULL,
         timestamp INTEGER NOT NULL,
         value INTEGER NOT NULL,
+        address TEXT,
+        memo TEXT,
         UNIQUE (account, txid))",
         [],
     )?;

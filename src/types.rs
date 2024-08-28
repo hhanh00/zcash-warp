@@ -195,6 +195,14 @@ impl AccountInfo {
         addr
     }
 
+    pub fn to_addresses(&self, network: &Network) -> Addresses {
+        Addresses {
+            transparent: self.to_address(network, PoolMask(1)),
+            sapling: self.to_address(network, PoolMask(2)),
+            orchard: self.to_address(network, PoolMask(4)),
+        }
+    }
+
     pub fn select_pools(self, pools: PoolMask) -> OptionAccountInfo {
         let pools = pools.0;
         OptionAccountInfo {
@@ -229,6 +237,13 @@ pub struct SecretKeys {
 pub struct ViewKeys {
     pub sapling: Option<ExtendedFullViewingKey>,
     pub orchard: Option<FullViewingKey>,
+}
+
+#[derive(Debug)]
+pub struct Addresses {
+    pub transparent: Option<String>,
+    pub sapling: Option<String>,
+    pub orchard: Option<String>,
 }
 
 #[derive(Debug)]

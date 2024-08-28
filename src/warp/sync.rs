@@ -1,9 +1,9 @@
 use crate::{
     coin::CoinDef,
-    db::notes::{
-        add_tx_value, get_block_header, mark_shielded_spent, mark_transparent_spent,
+    db::{notes::{
+        get_block_header, mark_shielded_spent, mark_transparent_spent,
         rewind_checkpoint, store_block, store_received_note, store_utxo, update_tx_timestamp,
-    },
+    }, tx::add_tx_value},
     lwd::{get_compact_block_range, get_transparent, get_tree_state},
     warp::{
         hasher::{OrchardHasher, SaplingHasher},

@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use rand::rngs::OsRng;
 use rusqlite::DropBehavior;
 use rustyrepl::{Repl, ReplCommandProcessor};
+use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
@@ -69,6 +70,9 @@ pub enum Command {
     GetTxDetails {
         id: u32,
     },
+    DecodeAddress {
+        address: String
+    }
 }
 
 /// The general CLI, essentially a wrapper for the sub-commands [Commands]
@@ -249,6 +253,10 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
                 let connection = self.zec.connection()?;
                 let (account, tx) = get_tx_details(&connection, id)?;
                 decode_tx_details(network, &connection, account, id, &tx)?;
+            }
+            Command::DecodeAddress { address } => {
+                let ra = RecipientAddress::decode(network, &address).ok_or(anyhow::anyhow!("Invalid Address"))?;
+                println!("{:?}", ra);
             }
         }
         Ok(())

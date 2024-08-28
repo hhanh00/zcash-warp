@@ -9,6 +9,8 @@ use anyhow::{Error, Result};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 
+use super::tx::{add_tx_value, store_tx};
+
 pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Option<PlainNote>> {
     let r = connection
         .query_row(
@@ -112,27 +114,6 @@ pub fn list_received_notes(
         notes.push(note);
     }
     Ok(notes)
-}
-
-pub fn store_tx(connection: &Transaction, tx: &ReceivedTx) -> Result<()> {
-    let mut s_tx = connection.prepare_cached(
-        "INSERT INTO txs
-        (account, txid, height, timestamp, value)
-        VAlUES (?1, ?2, ?3, ?4, 0)
-        ON CONFLICT DO NOTHING",
-    )?;
-    s_tx.execute(params![tx.account, tx.txid, tx.height, tx.timestamp,])?;
-    Ok(())
-}
-
-pub fn add_tx_value<IDSpent: std::fmt::Debug>(
-    connection: &Transaction,
-    tx_value: &TxValueUpdate<IDSpent>,
-) -> Result<()> {
-    let mut s_tx =
-        connection.prepare_cached("UPDATE txs SET value = value + ?2 WHERE txid = ?1")?;
-    s_tx.execute(params![tx_value.txid, tx_value.value])?;
-    Ok(())
 }
 
 pub fn mark_shielded_spent(connection: &Transaction, tx_value: &TxValueUpdate<Hash>) -> Result<()> {
