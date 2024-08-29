@@ -19,7 +19,7 @@ use orchard::{
     keys::{Scope, SpendAuthorizingKey},
     note::Nullifier,
     tree::MerkleHashOrchard,
-    Bundle,
+    Address, Bundle,
 };
 use rand::{CryptoRng, RngCore};
 use rusqlite::Connection;
@@ -94,19 +94,12 @@ impl UnsignedTransaction {
                 }
 
                 InputNote::Sapling {
-                    diversifier,
+                    address,
                     rseed,
                     witness,
                 } => {
                     let extsk = ai.sapling.sk.as_ref().unwrap();
-                    let diversifier = zcash_primitives::sapling::Diversifier(diversifier.clone());
-                    let recipient = ai
-                        .sapling
-                        .vk
-                        .fvk
-                        .vk
-                        .to_payment_address(diversifier)
-                        .unwrap();
+                    let recipient = PaymentAddress::from_bytes(address).unwrap();
                     let note = zcash_primitives::sapling::Note::from_parts(
                         recipient,
                         zcash_primitives::sapling::value::NoteValue::from_raw(txin.amount),
@@ -124,12 +117,17 @@ impl UnsignedTransaction {
                         witness.position as u64,
                     );
                     builder
-                        .add_sapling_spend(extsk.clone(), diversifier, note, merkle_path)
+                        .add_sapling_spend(
+                            extsk.clone(),
+                            note.recipient().diversifier().clone(),
+                            note,
+                            merkle_path,
+                        )
                         .map_err(anyhow::Error::msg)?;
                 }
 
                 InputNote::Orchard {
-                    diversifier,
+                    address,
                     rseed,
                     rho,
                     witness,
@@ -139,8 +137,7 @@ impl UnsignedTransaction {
                         .as_ref()
                         .map(|oi| oi.vk.clone())
                         .ok_or(anyhow::anyhow!("No Orchard Account"))?;
-                    let diversifier = orchard::keys::Diversifier::from_bytes(diversifier.clone());
-                    let recipient = vk.address(diversifier, Scope::External);
+                    let recipient = Address::from_raw_address_bytes(address).unwrap();
                     let rho = Nullifier::from_bytes(rho).unwrap();
                     let rseed = orchard::note::RandomSeed::from_bytes(rseed.clone(), &rho).unwrap();
                     let note = orchard::Note::from_parts(

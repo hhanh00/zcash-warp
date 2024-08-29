@@ -22,3 +22,45 @@ table TransactionInfo {
   contact: string;
   memo: string;
 }
+
+table TransactionInfoExtended {
+  height: uint32;
+  timestamp: uint32;
+  txid: [uint8];
+  tins: [InputTransparent];
+  touts: [OutputTransparent];
+  sins: [InputShielded];
+  souts: [OutputShielded];
+  oins: [InputShielded];
+  oouts: [OutputShielded];
+}
+
+table InputTransparent {
+  txid: [uint8];
+  vout: uint32;
+  address: string;
+  value: uint64;
+}
+
+table OutputTransparent {
+  address: string;
+  value: uint64;
+}
+
+table InputShielded {
+  nf: [uint8];
+  address: string;
+  value: uint64;
+  rcm: [uint8];
+  rho: [uint8];
+}
+
+table OutputShielded {
+  incoming: bool;
+  cmx: [uint8];
+  address: string;
+  value: uint64;
+  rcm: [uint8];
+  rho: [uint8];
+  memo: string;
+}

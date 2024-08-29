@@ -95,12 +95,14 @@ pub enum InputNote {
         address: String,
     },
     Sapling {
-        diversifier: [u8; 11],
+        #[serde(with = "serde_bytes")]
+        address: [u8; 43],
         rseed: Hash,
         witness: Witness,
     },
     Orchard {
-        diversifier: [u8; 11],
+        #[serde(with = "serde_bytes")]
+        address: [u8; 43],
         rseed: Hash,
         rho: Hash,
         witness: Witness,

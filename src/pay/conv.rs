@@ -29,7 +29,7 @@ impl TxInput {
             remaining: note.value,
             pool: 1,
             note: InputNote::Sapling {
-                diversifier: note.diversifier,
+                address: note.address,
                 rseed: note.rcm,
                 witness: note.witness.clone(),
             },
@@ -42,7 +42,7 @@ impl TxInput {
             remaining: note.value,
             pool: 2,
             note: InputNote::Orchard {
-                diversifier: note.diversifier,
+                address: note.address,
                 rseed: note.rcm,
                 rho: note.rho.unwrap(),
                 witness: note.witness.clone(),

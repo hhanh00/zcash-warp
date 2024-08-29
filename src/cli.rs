@@ -10,7 +10,7 @@ use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    account::address::get_diversified_address,
+    account::{address::get_diversified_address, txs::get_txs},
     coin::CoinDef,
     db::{
         account::{get_account_info, get_balance},
@@ -71,8 +71,11 @@ pub enum Command {
         id: u32,
     },
     DecodeAddress {
-        address: String
-    }
+        address: String,
+    },
+    ListTxs {
+        account: u32,
+    },
 }
 
 /// The general CLI, essentially a wrapper for the sub-commands [Commands]
@@ -253,10 +256,20 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
                 let connection = self.zec.connection()?;
                 let (account, tx) = get_tx_details(&connection, id)?;
                 decode_tx_details(network, &connection, account, id, &tx)?;
+                let etx = tx.to_transaction_info_ext(network);
+                println!("{:?}", etx);
             }
             Command::DecodeAddress { address } => {
-                let ra = RecipientAddress::decode(network, &address).ok_or(anyhow::anyhow!("Invalid Address"))?;
+                let ra = RecipientAddress::decode(network, &address)
+                    .ok_or(anyhow::anyhow!("Invalid Address"))?;
                 println!("{:?}", ra);
+            }
+            Command::ListTxs { account } => {
+                let connection = self.zec.connection()?;
+                let txs = get_txs(network, &connection, account, bc_height)?;
+                for tx in txs {
+                    println!("{:?}", tx);
+                }
             }
         }
         Ok(())

@@ -1,10 +1,14 @@
 use crate::{
     coin::CoinDef,
-    db::{notes::{
-        get_block_header, mark_shielded_spent, mark_transparent_spent,
-        rewind_checkpoint, store_block, store_received_note, store_utxo, update_tx_timestamp,
-    }, tx::add_tx_value},
+    db::{
+        notes::{
+            get_block_header, mark_shielded_spent, mark_transparent_spent, rewind_checkpoint,
+            store_block, store_received_note, store_utxo, update_tx_timestamp,
+        },
+        tx::add_tx_value,
+    },
     lwd::{get_compact_block_range, get_transparent, get_tree_state},
+    txdetails::CompressedMemo,
     warp::{
         hasher::{OrchardHasher, SaplingHasher},
         BlockHeader,
@@ -36,6 +40,7 @@ pub enum SyncError {
 
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct ReceivedTx {
+    pub id: u32,
     pub account: u32,
     pub height: u32,
     #[serde(with = "hex")]
@@ -43,6 +48,13 @@ pub struct ReceivedTx {
     pub timestamp: u32,
     pub ivtx: u32,
     pub value: i64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
+pub struct ExtendedReceivedTx {
+    pub rtx: ReceivedTx,
+    pub address: Option<String>,
+    pub memo: Option<String>,
 }
 
 #[derive(Serialize, Debug)]
@@ -56,15 +68,22 @@ pub struct TxValueUpdate<IDSpent: std::fmt::Debug> {
 }
 
 #[serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PlainNote {
     #[serde(with = "serde_bytes")]
-    pub diversifier: [u8; 11],
+    pub address: [u8; 43],
     pub value: u64,
     #[serde(with = "serde_bytes")]
     pub rcm: Hash,
     #[serde(with = "serde_bytes")]
     pub rho: Option<Hash>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct FullPlainNote {
+    pub note: PlainNote,
+    pub memo: CompressedMemo,
+    pub incoming: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -74,7 +93,8 @@ pub struct ReceivedNote {
     pub account: u32,
     pub position: u32,
     pub height: u32,
-    pub diversifier: [u8; 11],
+    #[serde(with = "serde_bytes")]
+    pub address: [u8; 43],
     pub value: u64,
     pub rcm: Hash,
     pub nf: Hash,

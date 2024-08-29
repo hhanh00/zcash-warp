@@ -1,8 +1,8 @@
 use orchard::{
-    keys::{Diversifier, Scope},
+    keys::Scope,
     note::{Nullifier, RandomSeed},
     value::NoteValue,
-    Note,
+    Address, Note,
 };
 use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
@@ -130,9 +130,7 @@ impl Synchronizer {
                 .iter()
                 .find(|&ai| ai.account == note.account)
                 .unwrap();
-            let d = Diversifier::from_bytes(note.diversifier);
-            let vk = &ai.orchard.as_ref().unwrap().vk;
-            let recipient = vk.address(d, Scope::External);
+            let recipient = Address::from_raw_address_bytes(&note.address).unwrap();
             let rho = Nullifier::from_bytes(&note.rho.unwrap()).unwrap();
             let n = Note::from_parts(
                 recipient,
@@ -141,6 +139,7 @@ impl Synchronizer {
                 RandomSeed::from_bytes(note.rcm, &rho).unwrap(),
             )
             .unwrap();
+            let vk = &ai.orchard.as_ref().unwrap().vk;
             let nf = n.nullifier(&vk);
             note.nf = nf.to_bytes();
             note.tx.txid = cb.vtx[note.tx.ivtx as usize]

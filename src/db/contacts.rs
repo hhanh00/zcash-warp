@@ -23,6 +23,34 @@ pub fn store_contact(
     Ok(id)
 }
 
+pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<Contact>> {
+    let mut s =
+        connection.prepare("SELECT id_contact, account, name, address, dirty FROM contacts")?;
+    let rows = s.query_map([], |r| {
+        Ok((
+            r.get::<_, u32>(0)?,
+            r.get::<_, u32>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, String>(3)?,
+            r.get::<_, bool>(4)?,
+        ))
+    })?;
+    let mut contacts = vec![];
+    for r in rows {
+        let (id, account, name, address, dirty) = r?;
+        let address = RecipientAddress::decode(network, &address).unwrap();
+        let contact = Contact {
+            id,
+            account,
+            name,
+            address,
+            dirty,
+        };
+        contacts.push(contact);
+    }
+    Ok(contacts)
+}
+
 pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Result<Contact> {
     let mut s = connection.prepare(
         "SELECT account, name, address,

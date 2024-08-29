@@ -14,7 +14,7 @@ use super::tx::{add_tx_value, store_tx};
 pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Option<PlainNote>> {
     let r = connection
         .query_row(
-            "SELECT diversifier, value, rcm, rho FROM notes WHERE nf = ?1",
+            "SELECT address, value, rcm, rho FROM notes WHERE nf = ?1",
             [nullifier],
             |r| {
                 Ok((
@@ -26,9 +26,9 @@ pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Optio
             },
         )
         .optional()?
-        .map(|(diversifier, value, rcm, rho)| {
+        .map(|(address, value, rcm, rho)| {
             Ok::<_, Error>(PlainNote {
-                diversifier: diversifier.try_into().unwrap(),
+                address: address.try_into().unwrap(),
                 value,
                 rcm: rcm.try_into().unwrap(),
                 rho: rho.map(|rho| rho.try_into().unwrap()),
@@ -44,7 +44,7 @@ pub fn list_received_notes(
     orchard: bool,
 ) -> Result<Vec<ReceivedNote>> {
     let mut s = connection.prepare(
-        "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.diversifier,
+        "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
         AND orchard = ?2 AND (spent IS NULL OR spent > ?1)
@@ -57,7 +57,7 @@ pub fn list_received_notes(
             r.get::<_, u32>(2)?,
             r.get::<_, u32>(3)?,
             r.get::<_, u32>(4)?,
-            r.get::<_, [u8; 11]>(5)?,
+            r.get::<_, [u8; 43]>(5)?,
             r.get::<_, u64>(6)?,
             r.get::<_, Hash>(7)?,
             r.get::<_, Hash>(8)?,
@@ -77,7 +77,7 @@ pub fn list_received_notes(
             position,
             height,
             vout,
-            diversifier,
+            address,
             value,
             rcm,
             nf,
@@ -94,13 +94,14 @@ pub fn list_received_notes(
             account,
             position,
             height,
-            diversifier,
+            address,
             value,
             rcm,
             nf,
             rho,
             vout,
             tx: ReceivedTx {
+                id: 0,
                 account,
                 height,
                 txid,
@@ -139,7 +140,7 @@ pub fn store_received_note(
 ) -> Result<()> {
     let mut s_note = connection.prepare_cached(
         "INSERT INTO notes
-    (account, position, height, tx, output_index, diversifier, value, rcm, nf, rho, spent, orchard)
+    (account, position, height, tx, output_index, address, value, rcm, nf, rho, spent, orchard)
     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
     )?;
     for n in notes {
@@ -163,18 +164,8 @@ pub fn store_received_note(
                 |r| r.get::<_, u32>(0),
             )?;
             s_note.execute(params![
-                n.account,
-                n.position,
-                n.height,
-                id_tx,
-                n.vout,
-                n.diversifier,
-                n.value,
-                n.rcm,
-                n.nf,
-                n.rho,
-                n.spent,
-                orchard,
+                n.account, n.position, n.height, id_tx, n.vout, n.address, n.value, n.rcm, n.nf,
+                n.rho, n.spent, orchard,
             ])?;
         }
         let id_note = connection.query_row(

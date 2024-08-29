@@ -1,3 +1,5 @@
+use crate::Hash;
+
 #[macro_export]
 macro_rules! fb_to_bytes {
     ($v: ident) => {{
@@ -6,4 +8,10 @@ macro_rules! fb_to_bytes {
         builder.finish(backup_bytes, None);
         Ok::<_, anyhow::Error>(builder.finished_data().to_vec())
     }};
+}
+
+pub fn to_txid_str(txid: &Hash) -> String {
+    let mut txid = txid.clone();
+    txid.reverse();
+    hex::encode(&txid)
 }

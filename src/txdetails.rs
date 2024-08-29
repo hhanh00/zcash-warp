@@ -1,16 +1,16 @@
 use std::io::{Read, Write};
 
-use anyhow::{Error, Result};
+use anyhow::Result;
 use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
-use orchard::{keys::Scope, note::ExtractedNoteCommitment, note_encryption::OrchardDomain};
+use orchard::{keys::Scope, note_encryption::OrchardDomain};
 use parking_lot::Mutex;
 use rusqlite::Connection;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use zcash_primitives::{
     consensus::Network,
-    memo::{Memo, MemoBytes},
+    memo::Memo,
     sapling::{note_encryption::SaplingDomain, PaymentAddress},
     transaction::Transaction as ZTransaction,
 };
@@ -18,6 +18,10 @@ use zcash_primitives::{
 use crate::{
     account::contacts::{add_contact, ua_of_orchard, ChunkedContactV1, ChunkedMemoDecoder},
     coin::connect_lwd,
+    data::fb::{
+        InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT,
+        TransactionInfoExtendedT,
+    },
     db::{
         account::get_account_info,
         notes::{get_note_by_nf, store_tx_details},
@@ -27,43 +31,87 @@ use crate::{
     messages::ZMessage,
     types::{Addresses, PoolMask},
     warp::{
-        sync::{PlainNote, ReceivedTx},
+        sync::{FullPlainNote, PlainNote, ReceivedTx},
         OutPoint, TxOut2,
     },
     Hash, PooledSQLConnection,
 };
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TransparentInput {
     pub out_point: OutPoint,
     pub coin: TxOut2,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TransparentOutput {
     pub coin: TxOut2,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ShieldedInput {
-    pub note: PlainNote,
     #[serde(with = "serde_bytes")]
     pub nf: Hash,
+    pub note: Option<PlainNote>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ShieldedOutput {
+    #[serde(with = "serde_bytes")]
+    pub cmx: Hash,
+    pub note: Option<FullPlainNote>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ShieldedOutput {
+pub struct ShieldedOutputUncompressed {
     pub incoming: bool,
-    pub note: PlainNote,
+    pub note: Option<PlainNote>,
     #[serde(with = "serde_bytes")]
     pub cmx: Hash,
     #[serde(with = "serde_bytes")]
-    pub address: [u8; 43],
-    #[serde(with = "serde_bytes")]
+    pub address: Option<[u8; 43]>,
     pub memo: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Debug)]
+pub struct CompressedMemo(pub Vec<u8>);
+
+impl ToString for CompressedMemo {
+    fn to_string(&self) -> String {
+        let memo = Memo::from_bytes(&self.0).unwrap();
+        match memo {
+            Memo::Text(txt) => txt.to_string(),
+            _ => String::new(),
+        }
+    }
+}
+
+impl Serialize for CompressedMemo {
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+        e.write_all(self.0.as_slice()).unwrap();
+        let memo = e.finish().unwrap();
+        s.serialize_bytes(&memo)
+    }
+}
+
+impl<'de> Deserialize<'de> for CompressedMemo {
+    fn deserialize<D>(d: D) -> Result<CompressedMemo, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let data = Vec::<u8>::deserialize(d)?;
+        let mut d = ZlibDecoder::new(&*data);
+        let mut memo = vec![];
+        d.read_to_end(&mut memo).unwrap();
+        Ok(CompressedMemo(memo))
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TransactionDetails {
     pub height: u32,
     pub timestamp: u32,
@@ -71,10 +119,10 @@ pub struct TransactionDetails {
     pub txid: Hash,
     pub tins: Vec<TransparentInput>,
     pub touts: Vec<TransparentOutput>,
-    pub sins: Vec<Option<ShieldedInput>>,
-    pub souts: Vec<Option<ShieldedOutput>>,
-    pub oins: Vec<Option<ShieldedInput>>,
-    pub oouts: Vec<Option<ShieldedOutput>>,
+    pub sins: Vec<ShieldedInput>,
+    pub souts: Vec<ShieldedOutput>,
+    pub oins: Vec<ShieldedInput>,
+    pub oouts: Vec<ShieldedOutput>,
 }
 
 pub fn analyze_raw_transaction(
@@ -123,14 +171,14 @@ pub fn analyze_raw_transaction(
         let ovk = &ai.sapling.vk.fvk.ovk;
         for sin in b.shielded_spends() {
             let spend = get_note_by_nf(connection, &sin.nullifier.0)?;
-            sins.push(spend.map(|pn| ShieldedInput {
-                note: pn,
+            sins.push(ShieldedInput {
+                note: spend,
                 nf: sin.nullifier.0.clone(),
-            }));
+            });
         }
         for sout in b.shielded_outputs() {
             let domain = SaplingDomain::for_height(*network, height.into());
-            let r = try_note_decryption(&domain, &ivk, sout)
+            let fnote = try_note_decryption(&domain, &ivk, sout)
                 .map(|(n, p, m)| (n, p, m, true))
                 .or_else(|| {
                     try_output_recovery_with_ovk(
@@ -141,30 +189,19 @@ pub fn analyze_raw_transaction(
                         sout.out_ciphertext(),
                     )
                     .map(|(n, p, m)| (n, p, m, false))
-                });
-            let output = r
-                .map(|(note, address, memo, incoming)| {
-                    let cmx = note.cmu().to_bytes();
-                    let note = PlainNote {
-                        diversifier: address.diversifier().0,
-                        value: note.value.inner(),
-                        rcm: note.rcm().to_bytes(),
-                        rho: None,
-                    };
-                    let address = address.to_bytes();
-                    let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
-                    e.write_all(memo.as_slice())?;
-                    let memo = e.finish().map_err(Error::msg)?;
-
-                    Ok::<_, Error>(ShieldedOutput {
-                        incoming,
-                        note,
-                        cmx,
-                        address,
-                        memo,
-                    })
                 })
-                .transpose()?;
+                .map(|(n, p, m, incoming)| FullPlainNote {
+                    note: PlainNote {
+                        address: p.to_bytes(),
+                        value: n.value().inner(),
+                        rcm: n.rcm().to_bytes(),
+                        rho: None,
+                    },
+                    memo: CompressedMemo(m.as_slice().to_vec()),
+                    incoming,
+                });
+            let cmx = sout.cmu().to_bytes();
+            let output = ShieldedOutput { cmx, note: fnote };
             souts.push(output);
         }
     }
@@ -177,14 +214,14 @@ pub fn analyze_raw_transaction(
         let ovk = &orchard.vk.to_ovk(Scope::External);
         for a in b.actions() {
             let spend = get_note_by_nf(connection, &a.nullifier().to_bytes())?;
-            oins.push(spend.map(|pn| ShieldedInput {
-                note: pn,
+            oins.push(ShieldedInput {
+                note: spend,
                 nf: a.nullifier().to_bytes(),
-            }));
+            });
 
             let domain = OrchardDomain::for_nullifier(a.nullifier().clone());
-            let r = try_note_decryption(&domain, &ivk, a)
-                .map(|(n, p, m)| (n, p, m, true))
+            let fnote = try_note_decryption(&domain, &ivk, a)
+                .map(|(n, a, m)| (n, a, m, true))
                 .or_else(|| {
                     try_output_recovery_with_ovk(
                         &domain,
@@ -193,32 +230,21 @@ pub fn analyze_raw_transaction(
                         a.cv_net(),
                         &a.encrypted_note().out_ciphertext,
                     )
-                    .map(|(n, p, m)| (n, p, m, false))
-                });
-            let output = r
-                .map(|(note, address, memo, incoming)| {
-                    let cmx = ExtractedNoteCommitment::from(note.commitment());
-                    let cmx = cmx.to_bytes();
-                    let note = PlainNote {
-                        diversifier: address.diversifier().as_array().clone(),
-                        value: note.value().inner(),
-                        rcm: note.rseed().as_bytes().clone(),
-                        rho: Some(a.nullifier().to_bytes()),
-                    };
-                    let address = address.to_raw_address_bytes();
-                    let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
-                    e.write_all(memo.as_slice())?;
-                    let memo = e.finish().map_err(Error::msg)?;
-
-                    Ok::<_, Error>(ShieldedOutput {
-                        incoming,
-                        note,
-                        cmx,
-                        address,
-                        memo,
-                    })
+                    .map(|(n, a, m)| (n, a, m, false))
                 })
-                .transpose()?;
+                .map(|(n, addr, m, incoming)| FullPlainNote {
+                    note: PlainNote {
+                        address: addr.to_raw_address_bytes(),
+                        value: n.value().inner(),
+                        rcm: n.rseed().as_bytes().clone(),
+                        rho: Some(a.nullifier().to_bytes()),
+                    },
+                    memo: CompressedMemo(m.to_vec()),
+                    incoming,
+                });
+            let cmx = a.cmx();
+            let cmx = cmx.to_bytes();
+            let output = ShieldedOutput { cmx, note: fnote };
             oouts.push(output);
         }
     }
@@ -269,7 +295,8 @@ pub async fn retrieve_tx_details(
         )?;
         let tx_bin = bincode::serialize(&txd)?;
         store_tx_details(&connection.lock(), id_tx, &txid, &tx_bin)?;
-        let (tx_address, tx_memo) = get_tx_primary_address_memo(network, &account_addrs, &rtx, &txd)?;
+        let (tx_address, tx_memo) =
+            get_tx_primary_address_memo(network, &account_addrs, &rtx, &txd)?;
         update_tx_primary_address_memo(&connection.lock(), id_tx, tx_address, tx_memo)?;
     }
     Ok(())
@@ -285,7 +312,6 @@ pub fn decode_tx_details(
     let mut authenticated = false;
     let ai = get_account_info(network, connection, account)?;
     let account_address = ai.to_address(network, PoolMask(7)).unwrap();
-    tracing::info!("{:?}", tx);
     let mut spend_address = None;
     if let Some(taddr) = ai.transparent.as_ref().map(|ti| ti.addr) {
         let taddr = taddr.encode(network);
@@ -300,7 +326,7 @@ pub fn decode_tx_details(
     }
 
     for input in tx.sins.iter().chain(tx.oins.iter()) {
-        if input.is_some() {
+        if input.note.is_some() {
             authenticated = true;
         }
     }
@@ -315,35 +341,34 @@ pub fn decode_tx_details(
         .chain(tx.oouts.iter().map(|o| (o, true)))
         .enumerate()
     {
-        if let (Some(output), orchard) = output {
+        if let (
+            ShieldedOutput {
+                note: Some(fnote), ..
+            },
+            orchard,
+        ) = output
+        {
             let note_address = if orchard {
-                let a = orchard::Address::from_raw_address_bytes(&output.address).unwrap();
-                let a = zcash_client_backend::address::UnifiedAddress::from_receivers(
-                    Some(a),
-                    None,
-                    None,
-                )
-                .unwrap();
-                a.encode(network)
+                ua_of_orchard(&fnote.note.address).encode(network)
             } else {
-                let a = PaymentAddress::from_bytes(&output.address).unwrap();
+                let a = PaymentAddress::from_bytes(&fnote.note.address).unwrap();
                 a.encode(network)
             };
-            let sender = if output.incoming {
+            let sender = if fnote.incoming {
                 spend_address.clone()
             } else {
                 Some(account_address.clone())
             };
             let recipient = note_address;
 
-            let memo = decode_shielded_output_memo(output)?;
+            let memo = Memo::from_bytes(&fnote.memo.0)?;
             visit_memo(
                 connection,
                 account,
                 id_tx,
                 &tx,
                 nout as u32,
-                output.incoming,
+                fnote.incoming,
                 authenticated,
                 sender,
                 recipient,
@@ -358,15 +383,6 @@ pub fn decode_tx_details(
         add_contact(network, connection, account, &c.name, &c.address)?;
     }
     Ok(())
-}
-
-fn decode_shielded_output_memo(output: &ShieldedOutput) -> Result<Memo> {
-    let mut d = ZlibDecoder::new(&*output.memo);
-    let mut memo = vec![];
-    d.read_to_end(&mut memo)?;
-    let memo = MemoBytes::from_bytes(&memo)?;
-    let memo: Memo = memo.try_into()?;
-    Ok(memo)
 }
 
 fn visit_memo(
@@ -474,12 +490,12 @@ pub fn get_tx_primary_address_memo(
 
             if let Some(saddr) = addrs.sapling.as_ref() {
                 for sout in txd.souts.iter() {
-                    if let Some(sout) = sout.as_ref() {
-                        let pa = PaymentAddress::from_bytes(&sout.address).unwrap();
+                    if let Some(sout) = &sout.note {
+                        let pa = PaymentAddress::from_bytes(&sout.note.address).unwrap();
                         let sout_addr = pa.encode(network);
                         if &sout_addr != saddr {
                             address = Some(sout_addr.clone());
-                            let m = decode_shielded_output_memo(sout)?;
+                            let m = Memo::from_bytes(&sout.memo.0)?;
                             if let Memo::Text(text) = m {
                                 memo = Some(text.to_string());
                             }
@@ -491,11 +507,11 @@ pub fn get_tx_primary_address_memo(
 
             if let Some(oaddr) = addrs.orchard.as_ref() {
                 for oout in txd.oouts.iter() {
-                    if let Some(oout) = oout.as_ref() {
-                        let oout_addr = ua_of_orchard(&oout.address).encode(network);
+                    if let Some(oout) = &oout.note {
+                        let oout_addr = ua_of_orchard(&oout.note.address).encode(network);
                         if &oout_addr != oaddr {
                             address = Some(oout_addr.clone());
-                            let m = decode_shielded_output_memo(oout)?;
+                            let m = Memo::from_bytes(&oout.memo.0)?;
                             if let Memo::Text(text) = m {
                                 memo = Some(text.to_string());
                             }
@@ -509,4 +525,108 @@ pub fn get_tx_primary_address_memo(
     }
 
     Ok((address, memo))
+}
+
+impl TransactionDetails {
+    pub fn to_transaction_info_ext(self, network: &Network) -> TransactionInfoExtendedT {
+        let tins = self
+            .tins
+            .into_iter()
+            .map(|tin| InputTransparentT {
+                txid: Some(tin.out_point.txid.to_vec()),
+                vout: tin.out_point.vout,
+                address: tin.coin.address,
+                value: tin.coin.value,
+            })
+            .collect::<Vec<_>>();
+        let touts = self
+            .touts
+            .into_iter()
+            .map(|tout| OutputTransparentT {
+                address: tout.coin.address,
+                value: tout.coin.value,
+            })
+            .collect::<Vec<_>>();
+        let sins = self
+            .sins
+            .into_iter()
+            .map(|sin| {
+                let note = sin.note.as_ref();
+                InputShieldedT {
+                    nf: Some(sin.nf.to_vec()),
+                    address: note.map(|n| {
+                        PaymentAddress::from_bytes(&n.address)
+                            .unwrap()
+                            .encode(network)
+                    }),
+                    value: note.map(|n| n.value).unwrap_or_default(),
+                    rcm: note.map(|n| n.rcm.to_vec()),
+                    rho: None,
+                }
+            })
+            .collect::<Vec<_>>();
+        let souts = self
+            .souts
+            .into_iter()
+            .map(|sout| {
+                let note = sout.note.as_ref();
+                OutputShieldedT {
+                    cmx: Some(sout.cmx.to_vec()),
+                    incoming: note.map(|n| n.incoming).unwrap_or_default(),
+                    address: note.map(|n| {
+                        PaymentAddress::from_bytes(&n.note.address)
+                            .unwrap()
+                            .encode(network)
+                    }),
+                    value: note.map(|n| n.note.value).unwrap_or_default(),
+                    rcm: note.map(|n| n.note.rcm.to_vec()),
+                    rho: note.map(|n| n.note.rho.map(|r| r.to_vec()).unwrap_or_default()),
+                    memo: note.map(|n| n.memo.to_string()),
+                }
+            })
+            .collect::<Vec<_>>();
+        let oins = self
+            .oins
+            .into_iter()
+            .map(|sin| {
+                let note = sin.note.as_ref();
+                InputShieldedT {
+                    nf: Some(sin.nf.to_vec()),
+                    address: note.map(|n| ua_of_orchard(&n.address).encode(network)),
+                    value: note.map(|n| n.value).unwrap_or_default(),
+                    rcm: note.map(|n| n.rcm.to_vec()),
+                    rho: note.and_then(|n| n.rho.map(|r| r.to_vec())),
+                }
+            })
+            .collect::<Vec<_>>();
+        let oouts = self
+            .oouts
+            .into_iter()
+            .map(|sout| {
+                let note = sout.note.as_ref();
+                OutputShieldedT {
+                    cmx: Some(sout.cmx.to_vec()),
+                    incoming: note.map(|n| n.incoming).unwrap_or_default(),
+                    address: note.map(|n| ua_of_orchard(&n.note.address).encode(network)),
+                    value: note.map(|n| n.note.value).unwrap_or_default(),
+                    rcm: note.map(|n| n.note.rcm.to_vec()),
+                    rho: note.map(|n| n.note.rho.map(|r| r.to_vec()).unwrap_or_default()),
+                    memo: note.map(|n| n.memo.to_string()),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let etx = TransactionInfoExtendedT {
+            height: self.height,
+            timestamp: self.timestamp,
+            txid: Some(self.txid.to_vec()),
+            tins: Some(tins),
+            touts: Some(touts),
+            sins: Some(sins),
+            souts: Some(souts),
+            oins: Some(oins),
+            oouts: Some(oouts),
+        };
+        etx
+    }
 }

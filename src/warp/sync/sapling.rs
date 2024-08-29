@@ -17,7 +17,7 @@ use rayon::prelude::*;
 use tracing::info;
 use zcash_primitives::{
     consensus::Network,
-    sapling::{value::NoteValue, Diversifier, Note, Rseed},
+    sapling::{value::NoteValue, Note, PaymentAddress, Rseed},
 };
 
 use crate::warp::{hasher::SaplingHasher, Edge, Hasher, MERKLE_DEPTH};
@@ -123,9 +123,8 @@ impl Synchronizer {
                 .iter()
                 .find(|&ai| ai.account == note.account)
                 .unwrap();
-            let d = Diversifier(note.diversifier);
+            let recipient = PaymentAddress::from_bytes(&note.address).unwrap();
             let vk = &ai.sapling.vk.fvk.vk;
-            let recipient = vk.to_payment_address(d).unwrap();
             let n = Note::from_parts(
                 recipient,
                 NoteValue::from_raw(note.value),

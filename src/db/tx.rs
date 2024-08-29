@@ -1,7 +1,7 @@
 use crate::{
     messages::ZMessage,
     txdetails::TransactionDetails,
-    warp::sync::{ReceivedTx, TxValueUpdate},
+    warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate},
     Hash,
 };
 use anyhow::Result;
@@ -29,6 +29,40 @@ pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Has
     Ok(res)
 }
 
+pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedReceivedTx>> {
+    let mut s = connection.prepare(
+        "SELECT id_tx, txid, height, timestamp, value, address, memo FROM txs
+        WHERE account = ?1",
+    )?;
+    let rows = s.query_map([account], |r| {
+        Ok((
+            r.get::<_, u32>(0)?,
+            r.get::<_, Vec<u8>>(1)?,
+            r.get::<_, u32>(2)?,
+            r.get::<_, u32>(3)?,
+            r.get::<_, i64>(4)?,
+            r.get::<_, Option<String>>(5)?,
+            r.get::<_, Option<String>>(6)?,
+        ))
+    })?;
+    let mut txs = vec![];
+    for r in rows {
+        let (id_tx, txid, height, timestamp, value, address, memo) = r?;
+        let rtx = ReceivedTx {
+            id: id_tx,
+            account,
+            height,
+            txid: txid.try_into().unwrap(),
+            timestamp,
+            value,
+            ivtx: 0,
+        };
+        let ertx = ExtendedReceivedTx { rtx, address, memo };
+        txs.push(ertx);
+    }
+    Ok(txs)
+}
+
 pub fn get_tx(connection: &Connection, id_tx: u32) -> Result<ReceivedTx> {
     let (account, txid, height, timestamp, value) = connection.query_row(
         "SELECT account, txid, height, timestamp, value
@@ -45,6 +79,7 @@ pub fn get_tx(connection: &Connection, id_tx: u32) -> Result<ReceivedTx> {
         },
     )?;
     let tx = ReceivedTx {
+        id: id_tx,
         account,
         height,
         txid: txid.try_into().unwrap(),
@@ -116,10 +151,15 @@ pub fn store_message(
     Ok(())
 }
 
-pub fn update_tx_primary_address_memo(connection: &Connection, id_tx: u32,
-    address: Option<String>, memo: Option<String>) -> Result<()> {
+pub fn update_tx_primary_address_memo(
+    connection: &Connection,
+    id_tx: u32,
+    address: Option<String>,
+    memo: Option<String>,
+) -> Result<()> {
     connection.execute(
         "UPDATE txs SET address = ?2, memo = ?3 WHERE id_tx = ?1",
-    params![id_tx, address, memo])?;
+        params![id_tx, address, memo],
+    )?;
     Ok(())
 }

@@ -67,6 +67,7 @@ impl TransparentSync {
             }
             for txout in tx.vouts.iter() {
                 let rtx = ReceivedTx {
+                    id: 0,
                     account: tx.account,
                     height: tx.height,
                     txid: tx.txid,

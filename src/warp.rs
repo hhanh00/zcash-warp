@@ -63,7 +63,7 @@ pub struct TxOut {
     pub vout: u32,
 }
 
-#[derive(Default, Serialize, Deserialize, Debug)]
+#[derive(Clone, Default, Serialize, Deserialize, Debug)]
 pub struct TxOut2 {
     pub address: Option<String>,
     pub value: u64,

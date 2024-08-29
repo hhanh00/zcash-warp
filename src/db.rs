@@ -60,7 +60,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         height INTEGER NOT NULL,
         tx INTEGER NULL,
         output_index INTEGER NOT NULL,
-        diversifier BLOB NOT NULL,
+        address BLOB NOT NULL,
         value INTEGER NOT NULL,
         rcm BLOB NOT NULL,
         nf BLOB NOT NULL UNIQUE,
