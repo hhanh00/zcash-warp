@@ -1,8 +1,5 @@
 use crate::{
-    messages::ZMessage,
-    txdetails::TransactionDetails,
-    warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate},
-    Hash,
+    data::fb::ShieldedMessageT, txdetails::TransactionDetails, warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate}, Hash
 };
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
@@ -128,7 +125,7 @@ pub fn store_message(
     account: u32,
     tx: &TransactionDetails,
     nout: u32,
-    message: &ZMessage,
+    message: &ShieldedMessageT,
 ) -> Result<()> {
     let mut s = connection.prepare_cached(
         "INSERT INTO msgs

@@ -17,6 +17,7 @@ type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 pub struct CoinDef {
     pub network: Network,
     pub url: String,
+    pub warp: String,
     pub pool: Option<Pool<SqliteConnectionManager>>,
     pub db_password: Option<String>,
 }
@@ -26,6 +27,7 @@ impl CoinDef {
         Self {
             network,
             url: "".to_string(),
+            warp: "".to_string(),
             pool: None,
             db_password: None,
         }
@@ -44,6 +46,10 @@ impl CoinDef {
 
     pub fn set_url(&mut self, url: &str) {
         self.url = url.to_string();
+    }
+
+    pub fn set_warp(&mut self, warp: &str) {
+        self.warp = warp.to_string();
     }
 
     pub fn connection(&self) -> Result<Connection> {

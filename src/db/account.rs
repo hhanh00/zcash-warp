@@ -32,14 +32,13 @@ pub fn get_account_info(
     account: u32,
 ) -> Result<AccountInfo> {
     let ai = connection.query_row(
-        "SELECT a.name, a.seed, a.aindex, a.sk as ssk, a.ivk as svk, a.address as saddr,
-        t.sk as tsk, t.address as taddr, t.balance as tbal, t.height,
-        o.sk as osk, o.fvk as ovk,
-        a2.saved
+        "SELECT a.name, a.seed, a.aindex, a.sk as ssk, a.vk as svk, a.address as saddr,
+        t.sk as tsk, t.address as taddr,
+        o.sk as osk, o.vk as ovk,
+        a.saved
         FROM accounts a
-        LEFT JOIN taddrs t ON t.account = a.id_account
-        LEFT JOIN orchard_addrs o ON o.account = a.id_account
-        LEFT JOIN accounts2 a2 ON a2.account = a.id_account
+        LEFT JOIN t_accounts t ON t.account = a.id_account
+        LEFT JOIN o_accounts o ON o.account = a.id_account
         WHERE id_account = ?1",
         [account],
         |r| {

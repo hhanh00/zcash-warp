@@ -104,8 +104,8 @@ pub async fn get_compact_block_range(
     start: u32,
     end: u32,
 ) -> Result<Streaming<CompactBlock>> {
-    let blocks = client
-        .get_block_range(Request::new(BlockRange {
+    let req = || {
+        Request::new(BlockRange {
             start: Some(BlockId {
                 height: start as u64,
                 hash: vec![],
@@ -115,9 +115,9 @@ pub async fn get_compact_block_range(
                 hash: vec![],
             }),
             spam_filter_threshold: 0,
-        }))
-        .await?
-        .into_inner();
+        })
+    };
+    let blocks = client.get_block_range(req()).await?.into_inner();
     Ok(blocks)
 }
 
@@ -251,4 +251,24 @@ pub async fn get_transaction(
         BranchId::for_height(network, BlockHeight::from_u32(height)),
     )?;
     Ok((height, tx))
+}
+
+pub async fn filter_stats(client: &mut Client, start: u32, end: u32) -> Result<()> {
+    let mut blocks = get_compact_block_range(client, start, end).await?;
+    let mut total = 0;
+    let mut n = 0;
+    while let Some(block) = blocks.message().await? {
+        if block.height % 100_000 == 0 {
+            tracing::info!("{}", block.height);
+            tracing::info!("{} {} {}", n, total, (total - n) as f64 / total as f64);
+        }
+        for tx in block.vtx.iter() {
+            total += tx.outputs.len() + tx.actions.len();
+            if tx.outputs.len() >= 50 || tx.actions.len() >= 50 {
+                continue;
+            }
+            n += tx.outputs.len() + tx.actions.len();
+        }
+    }
+    Ok(())
 }

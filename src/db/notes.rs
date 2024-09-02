@@ -1,4 +1,5 @@
 use crate::{
+    data::fb::ShieldedNoteT,
     warp::{
         sync::{PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
         BlockHeader, OutPoint, Witness, UTXO,
@@ -232,7 +233,7 @@ pub fn store_block(connection: &Transaction, bh: &BlockHeader) -> Result<()> {
 pub fn list_utxos(connection: &Connection, height: u32) -> Result<Vec<UTXO>> {
     let mut s = connection.prepare(
         "SELECT u.id_utxo, u.account, u.height, u.txid, u.vout, t.address,
-        u.value FROM utxos u, taddrs t WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
+        u.value FROM utxos u, t_accounts t WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
         AND u.account = t.account",
     )?;
     let rows = s.query_map([height], |r| {
@@ -275,8 +276,9 @@ pub fn store_utxo(
     if utxo.is_new {
         let mut s = connection.prepare_cached(
             "INSERT INTO utxos
-        (account, height, txid, vout, value, spent)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (account, height, txid, vout, value, spent)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            ON CONFLICT DO NOTHING",
         )?;
         s.execute(params![
             utxo.account,
@@ -310,6 +312,32 @@ pub fn update_tx_timestamp<'a, I: IntoIterator<Item = &'a Option<BlockHeader>>>(
         }
     }
     Ok(())
+}
+
+pub fn get_unspent_notes(connection: &Connection, account: u32, bc_height: u32) -> Result<Vec<ShieldedNoteT>> {
+    let mut s = connection.prepare(
+        "SELECT n.height, t.timestamp, n.value, n.orchard
+        FROM notes n JOIN txs t ON n.tx = t.id_tx
+        WHERE n.account = ?1 AND spent IS NULL")?;
+    let rows = s.query_map([account], |r| Ok((
+        r.get::<_, u32>(0)?,
+        r.get::<_, u32>(1)?,
+        r.get::<_, u64>(2)?,
+        r.get::<_, bool>(3)?,
+    )))?;
+    let mut notes = vec![];
+    for r in rows {
+        let (height, timestamp, value, orchard) = r?;
+        let note = ShieldedNoteT {
+            height,
+            confirmations: bc_height - height + 1,
+            timestamp,
+            value,
+            orchard,
+        };
+        notes.push(note);
+    }
+    Ok(notes)
 }
 
 pub fn get_sync_height(connection: &Connection) -> Result<Option<u32>> {

@@ -38,7 +38,7 @@ pub fn parse_seed_phrase(phrase: &str) -> Result<Seed> {
 }
 
 pub enum KeyType {
-    Seed(Seed, u32, u32),
+    Seed(String, Seed, u32, u32),
     SaplingSK(ExtendedSpendingKey),
     SaplingVK(ExtendedFullViewingKey),
     UnifiedVK(UnifiedFullViewingKey),
@@ -52,7 +52,7 @@ pub fn detect_key(
     addr_index: u32,
 ) -> Result<KeyType> {
     if let Ok(seed) = parse_seed_phrase(key) {
-        return Ok(KeyType::Seed(seed, acc_index, addr_index));
+        return Ok(KeyType::Seed(key.to_string(), seed, acc_index, addr_index));
     }
     if let Ok(ssk) = decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
     {
@@ -76,14 +76,13 @@ pub fn create_new_account(
     network: &Network,
     connection: &Connection,
     name: &str,
-    key_str: &str,
     key: KeyType,
 ) -> Result<u32> {
     let account = match key {
-        KeyType::Seed(seed, acc_index, _addr_index) => {
+        KeyType::Seed(seed_str, seed, acc_index, _addr_index) => {
             let si = derive_zip32(network, &seed, acc_index);
             let account =
-                create_sapling_account(network, connection, name, Some(key_str), acc_index, &si)?;
+                create_sapling_account(network, connection, name, Some(&seed_str), acc_index, &si)?;
             // This should have been acc_index / addr_index but ZecWallet Lite derives
             // with an incorrect path that we follow for compatibility reasons
             let ti = derive_bip32(network, &seed, 0, acc_index, true);
@@ -120,16 +119,15 @@ pub fn create_sapling_account(
     let addr = encode_payment_address(network.hrp_sapling_payment_address(), &si.addr);
 
     connection.execute(
-        "INSERT INTO accounts(name, seed, aindex, sk, ivk, address)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        "INSERT INTO accounts(name, seed, aindex, sk, vk, address, saved)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, FALSE)
         ON CONFLICT DO NOTHING",
         params![name, seed, acc_index, sk, vk, addr],
     )?;
-    let account = connection.query_row(
-        "SELECT id_account FROM accounts WHERE ivk = ?1",
-        [vk],
-        |r| r.get::<_, u32>(0),
-    )?;
+    let account =
+        connection.query_row("SELECT id_account FROM accounts WHERE vk = ?1", [vk], |r| {
+            r.get::<_, u32>(0)
+        })?;
     Ok(account)
 }
 
@@ -143,8 +141,8 @@ pub fn create_transparent_account(
     let addr = ti.addr.encode(network);
 
     connection.execute(
-        "INSERT INTO taddrs(account, sk, address, balance, height)
-        VALUES (?1, ?2, ?3, 0, 0)",
+        "INSERT INTO t_accounts(account, sk, address)
+        VALUES (?1, ?2, ?3)",
         params![account, sk, addr],
     )?;
     Ok(())
@@ -160,7 +158,7 @@ pub fn create_orchard_account(
     let fvk = &oi.vk.to_bytes();
 
     connection.execute(
-        "INSERT INTO orchard_addrs(account, sk, fvk)
+        "INSERT INTO o_accounts(account, sk, vk)
         VALUES (?1, ?2, ?3)",
         params![account, sk, fvk],
     )?;
@@ -168,32 +166,20 @@ pub fn create_orchard_account(
 }
 
 pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
-    connection.execute(
-        "DELETE FROM received_notes WHERE account = ?1",
-        params![account],
-    )?;
-    connection.execute(
-        "DELETE FROM transactions WHERE account = ?1",
-        params![account],
-    )?;
-    connection.execute(
-        "DELETE FROM diversifiers WHERE account = ?1",
-        params![account],
-    )?;
-    connection.execute("DELETE FROM accounts2 WHERE account = ?1", params![account])?;
+    connection.execute("DELETE FROM notes WHERE account = ?1", params![account])?;
+    connection.execute("DELETE FROM txs WHERE account = ?1", params![account])?;
     connection.execute(
         "DELETE FROM accounts WHERE id_account = ?1",
         params![account],
     )?;
-    connection.execute("DELETE FROM taddrs WHERE account = ?1", params![account])?;
     connection.execute(
-        "DELETE FROM orchard_addrs WHERE account = ?1",
+        "DELETE FROM t_accounts WHERE account = ?1",
+        params![account],
+    )?;
+    connection.execute(
+        "DELETE FROM o_accounts WHERE account = ?1",
         params![account],
     )?;
     connection.execute("DELETE FROM messages WHERE account = ?1", params![account])?;
-    connection.execute(
-        "DELETE FROM hw_wallets WHERE account = ?1",
-        params![account],
-    )?;
     Ok(())
 }

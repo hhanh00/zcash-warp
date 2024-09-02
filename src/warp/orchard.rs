@@ -5,7 +5,7 @@ use halo2_proofs::{
     arithmetic::{CurveAffine as _, CurveExt as _},
     pasta::{
         pallas::{self, Affine, Point},
-        EpAffine, Fp, Fq,
+        Ep, EpAffine, Fp, Fq,
     },
 };
 use rayon::prelude::*;
@@ -92,5 +92,38 @@ impl Hasher for OrchardHasher {
                     .to_repr()
             })
             .collect()
+    }
+
+    fn parallel_combine_opt(
+        &self,
+        depth: u8,
+        layer: &[Option<Hash>],
+        pairs: usize,
+    ) -> Vec<Option<Hash>> {
+        let hash_extended: Vec<Ep> = (0..pairs)
+            .into_par_iter()
+            .filter_map(|i| match (&layer[2 * i], &layer[2 * i + 1]) {
+                (Some(l), Some(r)) => Some(self.node_combine_inner(depth, l, r)),
+                (None, None) => None,
+                _ => unreachable!(),
+            })
+            .collect();
+        let mut hash_affine = vec![EpAffine::identity(); hash_extended.len()];
+        Point::batch_normalize(&hash_extended, &mut hash_affine);
+        let mut h_cursor = hash_affine.iter();
+        layer
+            .iter()
+            .map(|n| {
+                n.map(|_| {
+                    h_cursor
+                        .next()
+                        .unwrap()
+                        .coordinates()
+                        .map(|c| *c.x())
+                        .unwrap_or_else(pallas::Base::zero)
+                        .to_repr()
+                })
+            })
+            .collect::<Vec<_>>()
     }
 }

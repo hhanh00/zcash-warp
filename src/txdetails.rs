@@ -19,8 +19,7 @@ use crate::{
     account::contacts::{add_contact, ua_of_orchard, ChunkedContactV1, ChunkedMemoDecoder},
     coin::connect_lwd,
     data::fb::{
-        InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT,
-        TransactionInfoExtendedT,
+        InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT, ShieldedMessageT, TransactionInfoExtendedT
     },
     db::{
         account::get_account_info,
@@ -28,7 +27,6 @@ use crate::{
         tx::{get_tx, list_new_txids, store_message, update_tx_primary_address_memo},
     },
     lwd::{get_transaction, get_txin_coins},
-    messages::ZMessage,
     types::{Addresses, PoolMask},
     warp::{
         sync::{FullPlainNote, PlainNote, ReceivedTx},
@@ -298,6 +296,7 @@ pub async fn retrieve_tx_details(
         let (tx_address, tx_memo) =
             get_tx_primary_address_memo(network, &account_addrs, &rtx, &txd)?;
         update_tx_primary_address_memo(&connection.lock(), id_tx, tx_address, tx_memo)?;
+        decode_tx_details(network, &connection.lock(), account, id_tx, &txd)?;
     }
     Ok(())
 }
@@ -426,10 +425,10 @@ fn parse_memo_text(
     sender: Option<String>,
     recipient: String,
     memo: &str,
-) -> Result<ZMessage> {
+) -> Result<ShieldedMessageT> {
     let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
     let msg = if memo_lines.len() == 4 && memo_lines[0] == "\u{1F6E1}MSG" {
-        ZMessage {
+        ShieldedMessageT {
             id_tx,
             nout,
             height,
@@ -440,21 +439,21 @@ fn parse_memo_text(
             } else {
                 Some(memo_lines[1].to_string())
             },
-            recipient: recipient.to_string(),
-            subject: memo_lines[2].to_string(),
-            body: memo_lines[3].to_string(),
+            recipient: Some(recipient.to_string()),
+            subject: Some(memo_lines[2].to_string()),
+            body: Some(memo_lines[3].to_string()),
         }
     } else {
-        ZMessage {
+        ShieldedMessageT {
             id_tx,
             height,
             timestamp,
             incoming,
             nout,
             sender: None,
-            recipient: recipient.to_string(),
-            subject: String::new(),
-            body: memo.to_string(),
+            recipient: Some(recipient.to_string()),
+            subject: Some(String::new()),
+            body: Some(memo.to_string()),
         }
     };
     tracing::info!("{:?}", msg);

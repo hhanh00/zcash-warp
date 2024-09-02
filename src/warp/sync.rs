@@ -1,5 +1,5 @@
 use crate::{
-    coin::CoinDef,
+    coin::{connect_lwd, CoinDef},
     db::{
         notes::{
             get_block_header, mark_shielded_spent, mark_transparent_spent, rewind_checkpoint,
@@ -29,6 +29,7 @@ mod header;
 mod orchard;
 mod sapling;
 mod transparent;
+pub mod builder;
 
 #[derive(Error, Debug)]
 pub enum SyncError {
@@ -109,6 +110,7 @@ pub use orchard::Synchronizer as OrchardSync;
 pub use sapling::Synchronizer as SaplingSync;
 
 pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncError> {
+    tracing::info!("{}-{}", start, end);
     let mut connection = coin.connection()?;
     let mut client = coin.connect_lwd().await?;
     let (sapling_state, orchard_state) = get_tree_state(&mut client, start).await?;
@@ -148,11 +150,14 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
 
     let bh = get_block_header(&connection, start)?;
     let mut prev_hash = bh.hash;
-    let mut blocks = get_compact_block_range(&mut client, start + 1, end).await?;
+
+    let mut block_client = connect_lwd(&coin.warp).await?;
+    let mut blocks = get_compact_block_range(&mut block_client, start + 1, end).await?;
     let mut bs = vec![];
     let mut bh = BlockHeader::default();
     let mut c = 0;
     while let Some(block) = blocks.message().await.map_err(anyhow::Error::new)? {
+        tracing::info!("{}", block.height);
         bh = BlockHeader {
             height: block.height as u32,
             hash: block.hash.clone().try_into().unwrap(),
@@ -169,6 +174,11 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
         for vtx in block.vtx.iter() {
             c += vtx.outputs.len();
             c += vtx.actions.len();
+            for b in [&vtx.sapling_bridge, &vtx.orchard_bridge] {
+                if let Some(b) = b {
+                    c += b.len as usize;
+                }
+            }
         }
 
         let height = block.height;
@@ -177,13 +187,13 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
         if c >= 1000000 {
             info!("Height {}", height);
             sap_dec.add(&bs)?;
-            orch_dec.add(&bs)?;
+            // orch_dec.add(&bs)?;
             bs.clear();
             c = 0;
         }
     }
     sap_dec.add(&bs)?;
-    orch_dec.add(&bs)?;
+    // orch_dec.add(&bs)?;
 
     let (s, o) = get_tree_state(&mut client, bh.height as u32).await?;
     let r = s.to_edge(&sap_dec.hasher).root(&sap_dec.hasher);

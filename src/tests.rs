@@ -43,7 +43,7 @@ pub fn account_tests() -> Result<()> {
     // let phrase = generate_random_mnemonic_phrase(OsRng);
     let phrase = seed;
     let k = detect_key(&zec.network, &phrase, 0, 0)?;
-    let account = create_new_account(&zec.network, &connection, "Test", &phrase, k)?;
+    let account = create_new_account(&zec.network, &connection, "Test", k)?;
 
     println!("account {}", account);
 

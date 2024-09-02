@@ -40,6 +40,26 @@ message CompactTx {
     repeated CompactSaplingSpend spends = 4;   // inputs
     repeated CompactSaplingOutput outputs = 5; // outputs
     repeated CompactOrchardAction actions = 6;
+
+    Bridge saplingBridge = 101;
+    Bridge orchardBridge = 102;
+}
+
+message Bridge {
+    uint32 len = 1;
+    repeated BridgeLevel levels = 2;
+}
+
+message BridgeLevel {
+    Either head = 1;
+    Either tail = 2;
+}
+
+message Either {
+    oneof side {
+        bytes left = 1;
+        bytes right = 2;
+    }
 }
 
 // CompactSaplingSpend is a Sapling Spend Description as described in 7.3 of the Zcash

@@ -8,7 +8,7 @@ mod data;
 
 pub mod account;
 pub mod cli;
-mod coin;
+pub mod coin;
 pub mod db;
 mod keys;
 pub mod lwd;

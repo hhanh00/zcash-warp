@@ -47,6 +47,7 @@ pub trait Hasher: std::fmt::Debug + Default {
     fn empty(&self) -> Hash;
     fn combine(&self, depth: u8, l: &Hash, r: &Hash) -> Hash;
     fn parallel_combine(&self, depth: u8, layer: &[Hash], pairs: usize) -> Vec<Hash>;
+    fn parallel_combine_opt(&self, depth: u8, layer: &[Option<Hash>], pairs: usize) -> Vec<Option<Hash>>;
 }
 
 #[derive(Clone, Default, Serialize, Deserialize, Debug)]

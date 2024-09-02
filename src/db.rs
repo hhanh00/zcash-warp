@@ -9,18 +9,6 @@ pub(crate) mod notes;
 pub(crate) mod tx;
 pub(crate) mod witnesses;
 
-// pub use account::{get_account_info, get_balance, list_accounts};
-// pub use account_manager::{create_new_account, delete_account, detect_key, parse_seed_phrase};
-// pub use migration::init_db;
-// pub use notes::{
-//     add_tx_value, get_block_header, get_note_by_nf, get_sync_height, get_txid, list_received_notes,
-//     list_utxos, mark_shielded_spent, mark_transparent_spent, reset_scan, rewind_checkpoint,
-//     store_block, store_received_note, store_tx, store_tx_details, store_utxo, truncate_scan,
-//     update_tx_timestamp,
-// };
-// pub use witnesses::get_witnesses_v1;
-// pub use tx::{list_new_txids, get_tx_details};
-
 pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute("DROP TABLE IF EXISTS txs", [])?;
     connection.execute("DROP TABLE IF EXISTS notes", [])?;
@@ -30,6 +18,35 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute("DROP TABLE IF EXISTS txdetails", [])?;
     connection.execute("DROP TABLE IF EXISTS msgs", [])?;
     connection.execute("DROP TABLE IF EXISTS contacts", [])?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS accounts(
+        id_account INTEGER PRIMARY KEY,
+        name TEXT NOT NULL,
+        seed TEXT,
+        aindex INTEGER NOT NULL,
+        sk TEXT,
+        vk TEXT NOT NULL,
+        address TEXT NOT NULL,
+        saved BOOL NOT NULL)",
+        [],
+    )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS t_accounts(
+        account INTEGER PRIMARY KEY,
+        sk TEXT NOT NULL,
+        address TEXT NOT NULL)",
+        [],
+    )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS o_accounts(
+        account INTEGER PRIMARY KEY,
+        sk BLOB NOT NULL,
+        vk BLOB NOT NULL)",
+        [],
+    )?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS blcks(

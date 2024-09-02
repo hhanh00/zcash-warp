@@ -2,6 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use parking_lot::Mutex;
 use rand::rngs::OsRng;
 use rusqlite::DropBehavior;
@@ -12,27 +13,37 @@ use zcash_primitives::memo::MemoBytes;
 use crate::{
     account::{address::get_diversified_address, txs::get_txs},
     coin::CoinDef,
+    data::fb::{ShieldedNote, TransactionInfo},
     db::{
         account::{get_account_info, get_balance},
+        account_manager::{create_new_account, detect_key},
         migration::init_db,
-        notes::{get_sync_height, get_txid, store_block, store_tx_details, truncate_scan},
+        notes::{
+            get_sync_height, get_txid, get_unspent_notes, store_block, store_tx_details,
+            truncate_scan,
+        },
         reset_tables,
         tx::get_tx_details,
     },
+    fb_vec_to_bytes,
     keys::TSKStore,
-    lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
+    lwd::{
+        broadcast, filter_stats, get_compact_block, get_last_height, get_transaction,
+        get_tree_state,
+    },
     pay::{
         sweep::{prepare_sweep, scan_utxo_by_seed},
         Payment, PaymentBuilder, PaymentItem,
     },
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::PoolMask,
-    warp::{sync::warp_sync, BlockHeader},
+    warp::{sync::{builder::test_compact_block, warp_sync}, BlockHeader},
 };
 
 /// The enum of sub-commands supported by the CLI
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
+    CreateAccount,
     LastHeight,
     SyncHeight,
     Reset {
@@ -76,6 +87,10 @@ pub enum Command {
     ListTxs {
         account: u32,
     },
+    ListNotes {
+        account: u32,
+    },
+    TestFilter,
 }
 
 /// The general CLI, essentially a wrapper for the sub-commands [Commands]
@@ -95,10 +110,17 @@ impl CliProcessor {
         let mut zec = CoinDef::from_network(zcash_primitives::consensus::Network::MainNetwork);
         zec.set_db_path(dotenv::var("DB_PATH").unwrap()).unwrap();
         zec.set_url(&dotenv::var("LWD_URL").unwrap());
+        zec.set_warp(&dotenv::var("WARP_URL").unwrap());
         let connection = zec.connection().unwrap();
-        init_db(&connection).unwrap();
+        // init_db(&connection).unwrap();
         // reset_tables(&connection).unwrap();
         Self { zec }
+    }
+
+    async fn start(&self) -> Result<()> {
+        // let mut client = self.zec.connect_lwd().await?;
+        // test_compact_block(&mut client).await?;
+        Ok(())
     }
 }
 
@@ -114,6 +136,12 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
         let bc_height = get_last_height(&mut client).await?;
         let (s_tree, o_tree) = get_tree_state(&mut client, bc_height).await?;
         match command.command {
+            Command::CreateAccount => {
+                let connection = self.zec.connection()?;
+                let seed = dotenv::var("SEED").unwrap();
+                let kt = detect_key(network, &seed, 0, 0)?;
+                create_new_account(network, &connection, "Test", kt)?;
+            }
             Command::LastHeight => {
                 println!("{bc_height}");
             }
@@ -267,9 +295,20 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
             Command::ListTxs { account } => {
                 let connection = self.zec.connection()?;
                 let txs = get_txs(network, &connection, account, bc_height)?;
-                for tx in txs {
-                    println!("{:?}", tx);
-                }
+
+                let data = fb_vec_to_bytes!(txs, TransactionInfo)?;
+                println!("{}", hex::encode(data));
+            }
+            Command::ListNotes { account } => {
+                let connection = self.zec.connection()?;
+                let notes = get_unspent_notes(&connection, account, bc_height)?;
+
+                let data = fb_vec_to_bytes!(notes, ShieldedNote)?;
+                println!("{}", hex::encode(data));
+            }
+            Command::TestFilter => {
+                let mut client = self.zec.connect_lwd().await?;
+                test_compact_block(&mut client).await?;
             }
         }
         Ok(())
@@ -277,7 +316,9 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
 }
 
 pub async fn cli_main() -> Result<()> {
-    let processor: Box<dyn ReplCommandProcessor<Cli>> = Box::new(CliProcessor::new());
+    let cli = CliProcessor::new();
+    cli.start().await?;
+    let processor: Box<dyn ReplCommandProcessor<Cli>> = Box::new(cli);
     let mut repl = Repl::<Cli>::new(processor, None, Some(">> ".to_string()))?;
     repl.process().await?;
 

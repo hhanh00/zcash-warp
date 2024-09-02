@@ -64,3 +64,23 @@ table OutputShielded {
   rho: [uint8];
   memo: string;
 }
+
+table ShieldedNote {
+  height: uint32;
+  confirmations: uint32;
+  timestamp: uint32;
+  value: uint64;
+  orchard: bool;
+}
+
+table ShieldedMessage {
+  id_tx: uint32;
+  height: uint32;
+  timestamp: uint32;
+  incoming: bool;
+  nout: uint32;
+  sender: string;
+  recipient: string;
+  subject: string;
+  body: string;
+}
