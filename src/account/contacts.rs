@@ -4,25 +4,22 @@ use anyhow::Result;
 use orchard::Address;
 use prost::bytes::Buf as _;
 use rusqlite::Connection;
+use sapling_crypto::PaymentAddress;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use zcash_client_backend::address::{RecipientAddress, UnifiedAddress};
+use zcash_client_backend::address::UnifiedAddress;
+use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{
-    consensus::Network,
-    legacy::TransparentAddress,
-    memo::{Memo, MemoBytes},
-    sapling::PaymentAddress,
+    legacy::TransparentAddress, memo::{Memo, MemoBytes}
 };
 
-use crate::{db::contacts::store_contact, types::Contact};
+use crate::db::contacts::store_contact;
 
 pub fn add_contact(
-    network: &Network,
     connection: &Connection,
     account: u32,
     name: &str,
     address: &str,
 ) -> Result<()> {
-    let a = RecipientAddress::decode(network, address).ok_or(anyhow::anyhow!("Invalid Address"))?;
     store_contact(connection, account, name, address, true)?;
     Ok(())
 }
@@ -34,8 +31,6 @@ pub fn ua_of_orchard(address: &[u8; 43]) -> UnifiedAddress {
             .unwrap();
     ua
 }
-
-const CONTACT_COOKIE_v2: u32 = 0x434E5441;
 
 pub trait ChunkedMemoData {
     const COOKIE: u32;
@@ -134,13 +129,16 @@ pub fn decompose_recipient(
         RecipientAddress::Transparent(ta) => {
             t = Some(ta.clone());
         }
-        RecipientAddress::Shielded(sa) => {
+        RecipientAddress::Sapling(sa) => {
             s = Some(sa.clone());
         }
         RecipientAddress::Unified(ua) => {
             t = ua.transparent().cloned();
             s = ua.sapling().cloned();
             o = ua.orchard().cloned();
+        }
+        RecipientAddress::Tex(ta) => {
+            t = Some(TransparentAddress::PublicKeyHash(ta.clone()));
         }
     }
     Ok((t, s, o))

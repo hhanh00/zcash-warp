@@ -9,13 +9,13 @@ pub mod sync;
 use crate::{lwd::rpc::CompactBlock, Hash};
 use serde::{Deserialize, Serialize};
 
-pub(crate) const MERKLE_DEPTH: usize = 32;
+pub(crate) const MERKLE_DEPTH: u8 = 32;
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Debug)]
-pub struct Edge(pub [Option<Hash>; MERKLE_DEPTH]);
+pub struct Edge(pub [Option<Hash>; MERKLE_DEPTH as usize]);
 
 #[derive(Serialize, Deserialize, Default, Debug)]
-pub struct AuthPath(pub [Hash; MERKLE_DEPTH]);
+pub struct AuthPath(pub [Hash; MERKLE_DEPTH as usize]);
 
 #[derive(Clone, Default, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Witness {

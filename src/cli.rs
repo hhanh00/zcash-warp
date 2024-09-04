@@ -7,8 +7,8 @@ use parking_lot::Mutex;
 use rand::rngs::OsRng;
 use rusqlite::DropBehavior;
 use rustyrepl::{Repl, ReplCommandProcessor};
-use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::memo::MemoBytes;
+use zcash_keys::address::Address as RecipientAddress;
 
 use crate::{
     account::{address::get_diversified_address, txs::get_txs},
@@ -17,7 +17,6 @@ use crate::{
     db::{
         account::{get_account_info, get_balance},
         account_manager::{create_new_account, detect_key},
-        migration::init_db,
         notes::{
             get_sync_height, get_txid, get_unspent_notes, store_block, store_tx_details,
             truncate_scan,
@@ -28,7 +27,7 @@ use crate::{
     fb_vec_to_bytes,
     keys::TSKStore,
     lwd::{
-        broadcast, filter_stats, get_compact_block, get_last_height, get_transaction,
+        broadcast, get_compact_block, get_last_height, get_transaction,
         get_tree_state,
     },
     pay::{
@@ -309,7 +308,6 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
                 println!("{}", hex::encode(data));
             }
             Command::TestFilter => {
-                let mut client = self.zec.connect_lwd().await?;
             }
         }
         Ok(())

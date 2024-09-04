@@ -2,9 +2,9 @@ use fee::FeeManager;
 use orchard::circuit::ProvingKey;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use zcash_client_backend::address::RecipientAddress;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 use zcash_proofs::prover::LocalTxProver;
+use zcash_keys::address::Address as RecipientAddress;
 
 use self::conv::MemoBytesProxy;
 use crate::{
@@ -62,7 +62,8 @@ impl ExtendedPayment {
         let ua = RecipientAddress::decode(network, &payment.address)
             .ok_or(anyhow::anyhow!("Invalid Address"))?;
         let pool = match ua {
-            RecipientAddress::Shielded(_) => 1,
+            RecipientAddress::Sapling(_) => 1,
+            RecipientAddress::Tex(_) => 0,
             RecipientAddress::Transparent(_) => 0,
             RecipientAddress::Unified(ua) => {
                 let s = if ua.sapling().is_some() { 1 } else { 0 };

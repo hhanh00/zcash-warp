@@ -18,17 +18,15 @@ use group::{ff::PrimeField as _, Curve as _, GroupEncoding};
 use halo2_proofs::pasta::{pallas::Point, Fq};
 use orchard::{
     keys::IncomingViewingKey,
-    note::{ExtractedNoteCommitment, Nullifier},
+    note::{ExtractedNoteCommitment, Rho},
     note_encryption::OrchardDomain,
 };
-use zcash_note_encryption::COMPACT_NOTE_SIZE;
-use zcash_primitives::{
-    consensus::Network,
-    sapling::{
-        note_encryption::{plaintext_version_is_valid, SaplingDomain, KDF_SAPLING_PERSONALIZATION},
-        SaplingIvk,
-    },
+use sapling_crypto::{
+    note_encryption::{plaintext_version_is_valid, SaplingDomain, KDF_SAPLING_PERSONALIZATION},
+    SaplingIvk,
 };
+use zcash_note_encryption::COMPACT_NOTE_SIZE;
+use zcash_primitives::{consensus::Network, transaction::components::sapling::zip212_enforcement};
 
 pub fn try_sapling_decrypt(
     network: &Network,
@@ -44,6 +42,7 @@ pub fn try_sapling_decrypt(
     let epk = jubjub::AffinePoint::from_bytes(epkb.try_into().unwrap()).unwrap();
     let enc = &co.ciphertext;
     let epk = epk.mul_by_cofactor().to_niels();
+    let zip212_enforcement = zip212_enforcement(network, height.into());
     for (account, ivk) in ivks {
         let ka = epk.multiply_bits(&ivk.to_repr()).to_affine();
         let key = Params::new()
@@ -59,11 +58,11 @@ pub fn try_sapling_decrypt(
         keystream.seek(64);
         keystream.apply_keystream(&mut plaintext);
         if (plaintext[0] == 0x01 || plaintext[0] == 0x02)
-            && plaintext_version_is_valid(network, height.into(), plaintext[0])
+            && plaintext_version_is_valid(zip212_enforcement, plaintext[0])
         {
             use zcash_note_encryption::Domain;
-            let pivk = zcash_primitives::sapling::keys::PreparedIncomingViewingKey::new(&ivk);
-            let d = SaplingDomain::for_height(*network, height.into());
+            let pivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(&ivk);
+            let d = SaplingDomain::new(zip212_enforcement);
             if let Some((note, recipient)) =
                 d.parse_note_plaintext_without_memo_ivk(&pivk, &plaintext)
             {
@@ -114,6 +113,7 @@ pub fn try_orchard_decrypt(
     ca: &CompactOrchardAction,
     sender: &mut Sender<ReceivedNote>,
 ) -> Result<()> {
+    let zip212_enforcement = zip212_enforcement(network, height.into());
     for (account, ivk) in ivks {
         let bb = ivk.to_bytes();
         let ivk_fq = Fq::from_repr(bb[32..64].try_into().unwrap()).unwrap();
@@ -136,12 +136,12 @@ pub fn try_orchard_decrypt(
         keystream.apply_keystream(&mut plaintext);
 
         if (plaintext[0] == 0x01 || plaintext[0] == 0x02)
-            && plaintext_version_is_valid(network, height.into(), plaintext[0])
+            && plaintext_version_is_valid(zip212_enforcement, plaintext[0])
         {
             use zcash_note_encryption::Domain;
             let pivk = orchard::keys::PreparedIncomingViewingKey::new(&ivk);
-            let rho = Nullifier::from_bytes(&ca.nullifier.clone().try_into().unwrap()).unwrap();
-            let d = OrchardDomain::for_nullifier(rho);
+            let rho = Rho::from_bytes(&ca.nullifier.clone().try_into().unwrap()).unwrap();
+            let d = OrchardDomain::for_rho(&rho);
             if let Some((note, recipient)) =
                 d.parse_note_plaintext_without_memo_ivk(&pivk, &plaintext)
             {

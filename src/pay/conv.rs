@@ -1,9 +1,9 @@
 use anyhow::Result;
+use sapling_crypto::PaymentAddress;
 use serde::{Deserialize, Serialize};
-use zcash_client_backend::{address::RecipientAddress, encoding::AddressCodec as _};
-use zcash_primitives::{
-    consensus::Network, legacy::TransparentAddress, memo::MemoBytes, sapling::PaymentAddress,
-};
+use zcash_client_backend::encoding::AddressCodec as _;
+use zcash_keys::address::Address as RecipientAddress;
+use zcash_primitives::{consensus::Network, legacy::TransparentAddress, memo::MemoBytes};
 
 use crate::warp::sync::ReceivedNote;
 
@@ -55,9 +55,9 @@ impl OutputNote {
     pub fn to_address(&self, network: &Network) -> String {
         match self {
             OutputNote::Transparent { pkh, address } => (if *pkh {
-                TransparentAddress::PublicKey(address.clone())
+                TransparentAddress::PublicKeyHash(address.clone())
             } else {
-                TransparentAddress::Script(address.clone())
+                TransparentAddress::ScriptHash(address.clone())
             })
             .encode(network),
             OutputNote::Sapling { address, .. } => {
@@ -80,16 +80,16 @@ impl OutputNote {
         let address = RecipientAddress::decode(network, address).unwrap();
         let note = match address {
             RecipientAddress::Transparent(t) => match t {
-                TransparentAddress::PublicKey(pkh) => OutputNote::Transparent {
+                TransparentAddress::PublicKeyHash(pkh) => OutputNote::Transparent {
                     pkh: true,
                     address: pkh,
                 },
-                TransparentAddress::Script(h) => OutputNote::Transparent {
+                TransparentAddress::ScriptHash(h) => OutputNote::Transparent {
                     pkh: false,
                     address: h,
                 },
             },
-            RecipientAddress::Shielded(s) => OutputNote::Sapling {
+            RecipientAddress::Sapling(s) => OutputNote::Sapling {
                 address: s.to_bytes(),
                 memo,
             },
@@ -100,6 +100,10 @@ impl OutputNote {
                     memo,
                 }
             }
+            RecipientAddress::Tex(pkh) => OutputNote::Transparent {
+                pkh: true,
+                address: pkh,
+            },
         };
         Ok(note)
     }

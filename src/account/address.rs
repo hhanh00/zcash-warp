@@ -22,7 +22,7 @@ pub fn get_diversified_address(
         .map(|si| {
             let mut di = [0u8; 11];
             di[4..8].copy_from_slice(&time.to_le_bytes());
-            let di = zcash_primitives::zip32::DiversifierIndex(di);
+            let di = zcash_primitives::zip32::DiversifierIndex::from(di);
             let (_, saddr) = si
                 .vk
                 .find_address(di)
@@ -45,7 +45,7 @@ const TEX_HRP: Hrp = Hrp::parse_unchecked("tex");
 pub fn convert_tex_address(network: &Network, address: &str, to_tex: bool) -> Result<String> {
     if to_tex {
         let taddr = TransparentAddress::decode(network, address)?;
-        if let TransparentAddress::PublicKey(pkh) = taddr {
+        if let TransparentAddress::PublicKeyHash(pkh) = taddr {
             let tex = bech32::encode::<Bech32m>(TEX_HRP, &pkh)?;
             Ok(tex)
         } else {
@@ -60,7 +60,7 @@ pub fn convert_tex_address(network: &Network, address: &str, to_tex: bool) -> Re
             anyhow::bail!("Not a TEX address")
         }
         let pkh: [u8; 20] = data.try_into().unwrap();
-        let taddr = TransparentAddress::PublicKey(pkh);
+        let taddr = TransparentAddress::PublicKeyHash(pkh);
         let address = taddr.encode(network);
         Ok(address)
     }

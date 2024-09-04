@@ -4,7 +4,6 @@ use rusqlite::Connection;
 pub(crate) mod account;
 pub(crate) mod account_manager;
 pub(crate) mod contacts;
-pub(crate) mod migration;
 pub(crate) mod notes;
 pub(crate) mod tx;
 pub(crate) mod witnesses;

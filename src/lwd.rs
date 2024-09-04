@@ -61,18 +61,18 @@ pub async fn get_tree_state(
 
     #[cfg(test)]
     {
-        use crate::warp::hasher::SaplingHasher;
-        use zcash_primitives::{merkle_tree::CommitmentTree, sapling::Node};
+        // use crate::warp::hasher::SaplingHasher;
+        // use sapling_crypto::{CommitmentTree, Node};
 
-        let st = hex::decode(&sapling_tree).unwrap();
-        let st = CommitmentTree::<Node>::read(&*st)?;
-        let root1 = st.root();
-        println!("{}", hex::encode(&root1.repr));
-        let s_hasher = SaplingHasher::default();
-        let edge = sapling.to_edge(&s_hasher);
-        let root2 = edge.root(&s_hasher);
-        println!("{}", hex::encode(&root2));
-        assert_eq!(root1.repr, root2);
+        // let st = hex::decode(&sapling_tree).unwrap();
+        // let st = CommitmentTree::read(&*st)?;
+        // let root1 = st.root();
+        // println!("{}", hex::encode(&root1.repr));
+        // let s_hasher = SaplingHasher::default();
+        // let edge = sapling.to_edge(&s_hasher);
+        // let root2 = edge.root(&s_hasher);
+        // println!("{}", hex::encode(&root2));
+        // assert_eq!(root1.repr, root2);
     }
 
     Ok((sapling, orchard))

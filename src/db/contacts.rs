@@ -1,6 +1,6 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
-use zcash_client_backend::address::RecipientAddress;
+use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::consensus::Network;
 
 use crate::types::Contact;

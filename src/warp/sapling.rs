@@ -2,8 +2,8 @@ use group::{ff::PrimeField as _, Curve as _, GroupEncoding as _};
 use jubjub::{AffinePoint, ExtendedNielsPoint, ExtendedPoint, Fr, SubgroupPoint};
 use lazy_static::lazy_static;
 use rayon::prelude::*;
+use sapling_crypto::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 use std::io::Read;
-use zcash_primitives::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 use crate::Hash;
 
 lazy_static! {

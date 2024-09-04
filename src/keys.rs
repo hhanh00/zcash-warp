@@ -9,13 +9,15 @@ use ripemd::{Digest as _, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::Sha256;
+use zcash_protocol::consensus::NetworkConstants as _;
 use std::str::FromStr;
 use tiny_hderive::bip32::ExtendedPrivKey;
 use zcash_primitives::{
-    consensus::{Network, Parameters as _},
+    consensus::Network,
     legacy::TransparentAddress,
-    zip32::{ChildIndex, ExtendedSpendingKey},
 };
+use sapling_crypto::zip32::ExtendedSpendingKey;
+use zip32::ChildIndex;
 
 use crate::types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 
@@ -28,7 +30,7 @@ pub fn generate_random_mnemonic_phrase<R: RngCore + CryptoRng>(mut rng: R) -> St
 }
 
 pub fn export_sk_bip38(sk: &SecretKey) -> String {
-    let mut v = sk.serialize_secret().to_vec();
+    let mut v = sk.as_ref().to_vec();
     v.push(0x01);
     v.to_base58check(0x80)
 }
@@ -45,9 +47,9 @@ pub fn import_sk_bip38(key: &str) -> Result<SecretKey> {
 pub fn derive_zip32(network: &Network, seed: &Seed, acc_index: u32) -> SaplingAccountInfo {
     let master = ExtendedSpendingKey::master(seed.as_bytes());
     let path = [
-        ChildIndex::Hardened(32),
-        ChildIndex::Hardened(network.coin_type()),
-        ChildIndex::Hardened(acc_index),
+        ChildIndex::hardened(32),
+        ChildIndex::hardened(network.coin_type()),
+        ChildIndex::hardened(acc_index),
     ];
     let sk = ExtendedSpendingKey::from_path(&master, &path);
     #[allow(deprecated)]
@@ -84,12 +86,12 @@ pub fn derive_bip32(
         pub_key.serialize_uncompressed().to_vec()
     };
     let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
-    let addr = TransparentAddress::PublicKey(pub_key.into());
+    let addr = TransparentAddress::PublicKeyHash(pub_key.into());
     TransparentAccountInfo { sk, addr }
 }
 
 pub fn derive_orchard_zip32(network: &Network, seed: &Seed, acc_index: u32) -> OrchardAccountInfo {
-    let sk = SpendingKey::from_zip32_seed(seed.as_bytes(), network.coin_type(), acc_index).unwrap();
+    let sk = SpendingKey::from_zip32_seed(seed.as_bytes(), network.coin_type(), acc_index.try_into().unwrap()).unwrap();
     let vk = FullViewingKey::from(&sk);
     let addr = vk.address_at(0u64, Scope::External);
 

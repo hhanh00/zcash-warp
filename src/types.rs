@@ -4,17 +4,20 @@ use orchard::{
     keys::{FullViewingKey, SpendingKey},
     Address,
 };
+use sapling_crypto::{
+    zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey},
+    PaymentAddress,
+};
 use secp256k1::SecretKey;
-use zcash_client_backend::{address::RecipientAddress, keys::UnifiedFullViewingKey};
+use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_client_backend::{
     address::UnifiedAddress,
     encoding::{encode_extended_full_viewing_key, encode_extended_spending_key, AddressCodec as _},
 };
+use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{
-    consensus::{Network, Parameters as _},
+    consensus::{Network, NetworkConstants as _},
     legacy::TransparentAddress,
-    sapling::PaymentAddress,
-    zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey},
 };
 
 use crate::{data::fb::BackupT, db::account_manager::parse_seed_phrase, keys::export_sk_bip38};
@@ -108,8 +111,7 @@ impl AccountInfo {
         }
         if let Some(ovk) = self.orchard.as_ref().map(|oi| &oi.vk) {
             let svk = self.sapling.vk.to_diversifiable_full_viewing_key();
-            let uvk = UnifiedFullViewingKey::new(None, Some(svk), Some(ovk.clone()))
-                .ok_or(anyhow::anyhow!("Failed to compute UFVK"))?;
+            let uvk = UnifiedFullViewingKey::new(None, Some(svk), Some(ovk.clone()))?;
             return Ok(AccountType::UnifiedVK(uvk));
         }
         let svk = &self.sapling.vk;

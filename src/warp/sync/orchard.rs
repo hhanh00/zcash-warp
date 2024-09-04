@@ -1,6 +1,6 @@
 use orchard::{
     keys::Scope,
-    note::{Nullifier, RandomSeed},
+    note::{RandomSeed, Rho},
     value::NoteValue,
     Address, Note,
 };
@@ -148,7 +148,7 @@ impl Synchronizer {
                 .find(|&ai| ai.account == note.account)
                 .unwrap();
             let recipient = Address::from_raw_address_bytes(&note.address).unwrap();
-            let rho = Nullifier::from_bytes(&note.rho.unwrap()).unwrap();
+            let rho = Rho::from_bytes(&note.rho.unwrap()).unwrap();
             let n = Note::from_parts(
                 recipient,
                 NoteValue::from_raw(note.value),
@@ -187,7 +187,7 @@ impl Synchronizer {
         let mut cmxs = vec![];
         let mut count_cmxs = 0;
 
-        for depth in 0..MERKLE_DEPTH {
+        for depth in 0..MERKLE_DEPTH as usize {
             let mut position = self.position >> depth;
             // preprend previous trailing node (if resuming a half pair)
             if position % 2 == 1 {

@@ -7,33 +7,32 @@ use crate::{
     },
 };
 use anyhow::Result;
+use sapling_crypto::{note_encryption::Zip212Enforcement, PaymentAddress};
 use zcash_client_backend::encoding::AddressCodec as _;
+use zcash_protocol::value::Zatoshis;
 
 use super::{
     InputNote, OutputNote, UnsignedTransaction, EXPIRATION_HEIGHT, ORCHARD_PROVER, PROVER,
 };
 use jubjub::Fr;
 use orchard::{
-    builder::Builder as OrchardBuilder,
+    builder::{Builder as OrchardBuilder, BundleType},
     bundle::Flags,
     keys::{Scope, SpendAuthorizingKey},
-    note::Nullifier,
+    note::Rho,
     tree::MerkleHashOrchard,
-    Address, Bundle,
+    Address,
 };
 use rand::{CryptoRng, RngCore};
 use rusqlite::Connection;
-use zcash_primitives::sapling::prover::TxProver as _;
 use zcash_primitives::{
     consensus::{BlockHeight, BranchId, Network},
     legacy::TransparentAddress,
-    sapling::{Node, PaymentAddress},
     transaction::{
-        builder::Builder,
-        components::{Amount, OutPoint, TxOut},
+        components::{transparent::builder::TransparentBuilder, OutPoint, TxOut},
         sighash::{signature_hash, SignableInput},
         txid::TxIdDigester,
-        Transaction, TransactionData, TxVersion,
+        TransactionData, TxVersion,
     },
 };
 use zcash_proofs::prover::LocalTxProver;
@@ -62,11 +61,21 @@ impl UnsignedTransaction {
             empty_roots(&OrchardHasher::default()),
         ];
 
-        let mut builder =
-            Builder::new_with_rng(*network, BlockHeight::from_u32(self.height), &mut rng);
-
+        let mut transparent_builder = TransparentBuilder::empty();
+        let mut sapling_builder = sapling_crypto::builder::Builder::new(
+            Zip212Enforcement::On,
+            sapling_crypto::builder::BundleType::Transactional {
+                bundle_required: false,
+            },
+            sapling_crypto::Anchor::from_bytes(self.roots[0].clone())
+                .unwrap()
+                .into(),
+        );
         let mut orchard_builder = OrchardBuilder::new(
-            Flags::from_parts(true, true),
+            BundleType::Transactional {
+                flags: Flags::from_byte(3).unwrap(),
+                bundle_required: false,
+            },
             orchard::Anchor::from_bytes(self.roots[1].clone()).unwrap(),
         );
 
@@ -81,12 +90,12 @@ impl UnsignedTransaction {
                         anyhow::bail!("No Secret Key for address {}", address);
                     };
                     let ta = TransparentAddress::decode(network, address)?;
-                    builder
-                        .add_transparent_input(
+                    transparent_builder
+                        .add_input(
                             sk.clone(),
                             OutPoint::new(txid.clone(), *vout),
                             TxOut {
-                                value: Amount::from_u64(txin.amount).unwrap(),
+                                value: Zatoshis::from_u64(txin.amount).unwrap(),
                                 script_pubkey: ta.script(),
                             },
                         )
@@ -100,29 +109,23 @@ impl UnsignedTransaction {
                 } => {
                     let extsk = ai.sapling.sk.as_ref().unwrap();
                     let recipient = PaymentAddress::from_bytes(address).unwrap();
-                    let note = zcash_primitives::sapling::Note::from_parts(
+                    let note = sapling_crypto::Note::from_parts(
                         recipient,
-                        zcash_primitives::sapling::value::NoteValue::from_raw(txin.amount),
-                        zcash_primitives::sapling::Rseed::BeforeZip212(
-                            Fr::from_bytes(&rseed).unwrap(),
-                        ),
+                        sapling_crypto::value::NoteValue::from_raw(txin.amount),
+                        sapling_crypto::Rseed::BeforeZip212(Fr::from_bytes(&rseed).unwrap()),
                     );
                     let auth_path = witness.build_auth_path(&self.edges[0], &er[0]);
                     let mut mp = vec![];
-                    for i in 0..MERKLE_DEPTH {
-                        mp.push((Node::new(auth_path.0[i]), (witness.position >> i) % 2 == 1));
+                    for i in 0..MERKLE_DEPTH as usize {
+                        mp.push(sapling_crypto::Node::from_bytes(auth_path.0[i]).unwrap());
                     }
-                    let merkle_path = zcash_primitives::merkle_tree::MerklePath::<Node>::from_path(
+                    let merkle_path = sapling_crypto::MerklePath::from_parts(
                         mp,
-                        witness.position as u64,
-                    );
-                    builder
-                        .add_sapling_spend(
-                            extsk.clone(),
-                            note.recipient().diversifier().clone(),
-                            note,
-                            merkle_path,
-                        )
+                        (witness.position as u64).into(),
+                    )
+                    .unwrap();
+                    sapling_builder
+                        .add_spend(extsk, note, merkle_path)
                         .map_err(anyhow::Error::msg)?;
                 }
 
@@ -138,7 +141,7 @@ impl UnsignedTransaction {
                         .map(|oi| oi.vk.clone())
                         .ok_or(anyhow::anyhow!("No Orchard Account"))?;
                     let recipient = Address::from_raw_address_bytes(address).unwrap();
-                    let rho = Nullifier::from_bytes(rho).unwrap();
+                    let rho = Rho::from_bytes(rho).unwrap();
                     let rseed = orchard::note::RandomSeed::from_bytes(rseed.clone(), &rho).unwrap();
                     let note = orchard::Note::from_parts(
                         recipient,
@@ -153,7 +156,7 @@ impl UnsignedTransaction {
                         .iter()
                         .map(|a| MerkleHashOrchard::from_bytes(a).unwrap())
                         .collect::<Vec<_>>();
-                    let auth_path: [MerkleHashOrchard; MERKLE_DEPTH] =
+                    let auth_path: [MerkleHashOrchard; MERKLE_DEPTH as usize] =
                         auth_path.try_into().unwrap();
                     let merkle_path =
                         orchard::tree::MerklePath::from_parts(witness.position as u32, auth_path);
@@ -169,24 +172,24 @@ impl UnsignedTransaction {
             match &txout.note {
                 OutputNote::Transparent { pkh, address } => {
                     let taddr = if *pkh {
-                        TransparentAddress::PublicKey(address.clone())
+                        TransparentAddress::PublicKeyHash(address.clone())
                     } else {
-                        TransparentAddress::Script(address.clone())
+                        TransparentAddress::ScriptHash(address.clone())
                     };
-                    builder
-                        .add_transparent_output(&taddr, Amount::from_u64(txout.value).unwrap())
+                    transparent_builder
+                        .add_output(&taddr, Zatoshis::from_u64(txout.value).unwrap())
                         .map_err(anyhow::Error::msg)?;
                 }
                 OutputNote::Sapling { address, memo } => {
                     let vk = &ai.sapling.vk;
                     let ovk = vk.fvk.ovk;
                     let recipient = PaymentAddress::from_bytes(address).unwrap();
-                    builder
-                        .add_sapling_output(
+                    sapling_builder
+                        .add_output(
                             Some(ovk),
                             recipient,
-                            Amount::from_u64(txout.value).unwrap(),
-                            memo.clone(),
+                            sapling_crypto::value::NoteValue::from_raw(txout.value),
+                            Some(memo.as_array().clone()),
                         )
                         .map_err(anyhow::Error::msg)?;
                 }
@@ -196,7 +199,7 @@ impl UnsignedTransaction {
                     let ovk = vk.to_ovk(Scope::External);
                     let recipient = orchard::Address::from_raw_address_bytes(address).unwrap();
                     orchard_builder
-                        .add_recipient(
+                        .add_output(
                             Some(ovk),
                             recipient,
                             orchard::value::NoteValue::from_raw(txout.value),
@@ -207,19 +210,14 @@ impl UnsignedTransaction {
             }
         }
 
-        let transparent_bundle = builder.transparent_builder.build();
+        let transparent_bundle = transparent_builder.build();
         let prover: &LocalTxProver = &PROVER;
-        let mut ctx = prover.new_sapling_proving_context();
-        let sapling_bundle = builder
-            .sapling_builder
-            .build(
-                prover,
-                &mut ctx,
-                &mut rng,
-                BlockHeight::from_u32(self.height),
-                None,
-            )
-            .unwrap();
+        let sapling_bundle = sapling_builder
+            .build::<LocalTxProver, LocalTxProver, _, _>(&mut rng)
+            .unwrap()
+            .map(|pair| pair.0);
+        let sapling_bundle =
+            sapling_bundle.map(|sb| sb.create_proofs(prover, prover, &mut rng, ()));
 
         let has_orchard = self.tx_notes.iter().any(|n| match n.note {
             InputNote::Orchard { .. } => true,
@@ -229,9 +227,9 @@ impl UnsignedTransaction {
             _ => false,
         });
 
-        let mut orchard_bundle: Option<Bundle<_, Amount>> = None;
+        let mut orchard_bundle = None;
         if has_orchard {
-            orchard_bundle = Some(orchard_builder.build(&mut rng).unwrap());
+            orchard_bundle = orchard_builder.build(&mut rng).unwrap().map(|pair| pair.0);
         }
 
         let consensus_branch_id = BranchId::for_height(network, BlockHeight::from_u32(self.height));
@@ -257,11 +255,11 @@ impl UnsignedTransaction {
             .transparent_bundle()
             .map(|tb| tb.clone().apply_signatures(&unauthed_tx, &txid_parts));
 
+        let ask = &ai.sapling.sk.as_ref().unwrap().expsk.ask;
         let sapling_bundle = unauthed_tx.sapling_bundle().map(|sb| {
             sb.clone()
-                .apply_signatures(prover, &mut ctx, &mut rng, &sig_hash)
+                .apply_signatures(&mut rng, sig_hash, std::slice::from_ref(ask))
                 .unwrap()
-                .0
         });
 
         let orchard_bundle = unauthed_tx.orchard_bundle().map(|ob| {
@@ -284,7 +282,7 @@ impl UnsignedTransaction {
                 sapling_bundle,
                 orchard_bundle,
             );
-        let tx = Transaction::from_data(tx_data).unwrap();
+        let tx = tx_data.freeze().unwrap();
 
         let mut tx_bytes = vec![];
         tx.write(&mut tx_bytes).unwrap();

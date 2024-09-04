@@ -90,8 +90,8 @@ pub async fn connect_lwd(url: &str) -> Result<Client> {
 }
 
 lazy_static! {
-    pub static ref COINS: [Mutex<CoinDef>; 2] = [
+    pub static ref COINS: [Mutex<CoinDef>; 1] = [
         Mutex::new(CoinDef::from_network(Network::MainNetwork)),
-        Mutex::new(CoinDef::from_network(Network::YCashMainNetwork)),
+        // Mutex::new(CoinDef::from_network(Network::YCashMainNetwork)),
     ];
 }

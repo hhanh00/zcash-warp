@@ -1,7 +1,8 @@
-use anyhow::Result;
-use rusqlite::Connection;
-use tracing::info;
-use zcash_primitives::{merkle_tree::IncrementalWitness, sapling::Node};
+// use anyhow::Result;
+// use incrementalmerkletree::witness::IncrementalWitness;
+// use rusqlite::Connection;
+// use sapling_crypto::Node;
+// use tracing::info;
 
 use crate::{
     warp::{AuthPath, Edge, Hasher, Witness, MERKLE_DEPTH},
@@ -9,63 +10,64 @@ use crate::{
 };
 
 // TODO: Use witness migration
-#[allow(dead_code)]
-pub fn get_witnesses_v1(
-    connection: &Connection,
-    height: u32,
-    pool: &'static str,
-) -> Result<Vec<Witness>> {
-    let mut s = connection.prepare(&format!(
-        "SELECT note, witness FROM {pool}_witnesses WHERE height = ?1"
-    ))?;
-    let rows = s.query_map([height], |r| {
-        Ok((r.get::<_, u32>(0)?, r.get::<_, Vec<u8>>(1)?))
-    })?;
-    let mut ws = vec![];
-    for r in rows {
-        let (_note, witness) = r?;
-        let w = IncrementalWitness::<Node>::read(&*witness)?; // reading as sapling is ok
-        info!("wroot {}", hex::encode(&w.root().repr));
-        let position = w.position() as u32;
-        let a = &w.tree;
-        let b = &w.filled;
-        let mut bit = b.iter().fuse();
-        let mut ommers = Edge::default();
-        let mut p = position;
-        for i in 0..MERKLE_DEPTH {
-            if p & 1 == 1 {
-                ommers.0[i] = if i == 0 {
-                    a.left.map(|n| n.repr)
-                } else {
-                    a.parents[i - 1].map(|n| n.repr)
-                };
-            } else {
-                ommers.0[i] = bit.next().map(|n| n.repr);
-            }
-            p /= 2;
-        }
-        let value = if position & 1 == 0 {
-            a.left.unwrap()
-        } else {
-            a.right.unwrap()
-        };
-        let w = Witness {
-            value: value.repr,
-            position,
-            ommers,
-        };
-        ws.push(w);
-    }
+// Read is no longer in librustzcash
+// #[allow(dead_code)]
+// pub fn get_witnesses_v1(
+//     connection: &Connection,
+//     height: u32,
+//     pool: &'static str,
+// ) -> Result<Vec<Witness>> {
+//     let mut s = connection.prepare(&format!(
+//         "SELECT note, witness FROM {pool}_witnesses WHERE height = ?1"
+//     ))?;
+//     let rows = s.query_map([height], |r| {
+//         Ok((r.get::<_, u32>(0)?, r.get::<_, Vec<u8>>(1)?))
+//     })?;
+//     let mut ws = vec![];
+//     for r in rows {
+//         let (_note, witness) = r?;
+//         let w = IncrementalWitness::<Node, MERKLE_DEPTH>::from_tree(&*witness)?; // reading as sapling is ok
+//         info!("wroot {}", hex::encode(&w.root().repr));
+//         let position = w.position() as u32;
+//         let a = &w.tree;
+//         let b = &w.filled;
+//         let mut bit = b.iter().fuse();
+//         let mut ommers = Edge::default();
+//         let mut p = position;
+//         for i in 0..MERKLE_DEPTH {
+//             if p & 1 == 1 {
+//                 ommers.0[i] = if i == 0 {
+//                     a.left.map(|n| n.repr)
+//                 } else {
+//                     a.parents[i - 1].map(|n| n.repr)
+//                 };
+//             } else {
+//                 ommers.0[i] = bit.next().map(|n| n.repr);
+//             }
+//             p /= 2;
+//         }
+//         let value = if position & 1 == 0 {
+//             a.left.unwrap()
+//         } else {
+//             a.right.unwrap()
+//         };
+//         let w = Witness {
+//             value: value.repr,
+//             position,
+//             ommers,
+//         };
+//         ws.push(w);
+//     }
 
-    Ok(ws)
-}
+//     Ok(ws)
+// }
 
 impl Witness {
     pub fn build_auth_path(&self, edge: &AuthPath, empty_roots: &AuthPath) -> AuthPath {
         let mut path = AuthPath::default();
         let mut p = self.position;
         let mut edge_used = false;
-        for i in 0..MERKLE_DEPTH {
+        for i in 0..MERKLE_DEPTH as usize {
             let ommer = self.ommers.0[i];
             path.0[i] = match ommer {
                 Some(o) => o,
@@ -89,7 +91,7 @@ impl Witness {
         let mut p = self.position;
         let mut empty = h.empty();
         let mut edge_used = false;
-        for i in 0..MERKLE_DEPTH {
+        for i in 0..MERKLE_DEPTH as usize {
             let ommer = self.ommers.0[i];
             hash = match ommer {
                 Some(o) => {

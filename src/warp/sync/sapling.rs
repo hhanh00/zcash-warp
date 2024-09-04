@@ -15,10 +15,8 @@ use crate::{
 use anyhow::Result;
 use rayon::prelude::*;
 use tracing::info;
-use zcash_primitives::{
-    consensus::Network,
-    sapling::{value::NoteValue, Note, PaymentAddress, Rseed},
-};
+use zcash_primitives::consensus::Network;
+use sapling_crypto::{value::NoteValue, Note, PaymentAddress, Rseed};
 
 use crate::warp::{hasher::SaplingHasher, Edge, Hasher, MERKLE_DEPTH};
 
@@ -177,7 +175,7 @@ impl Synchronizer {
         let mut cmxs = vec![];
         let mut count_cmxs = 0;
 
-        for depth in 0..MERKLE_DEPTH {
+        for depth in 0..MERKLE_DEPTH as usize {
             let mut position = self.position >> depth;
             // preprend previous trailing node (if resuming a half pair)
             if position % 2 == 1 {

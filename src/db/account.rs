@@ -5,7 +5,7 @@ use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address,
     AddressCodec as _,
 };
-use zcash_primitives::consensus::{Network, Parameters as _};
+use zcash_primitives::consensus::{Network, NetworkConstants as _};
 use zcash_primitives::legacy::TransparentAddress;
 
 use crate::keys::import_sk_bip38;

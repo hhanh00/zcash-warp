@@ -47,10 +47,10 @@ impl CommitmentTreeFrontier {
     }
 
     pub fn to_edge<H: Hasher>(&self, h: &H) -> Edge {
-        let mut edge = [None; MERKLE_DEPTH];
+        let mut edge = [None; MERKLE_DEPTH as usize];
         let mut prev = self.left;
         let mut carry = self.right;
-        for i in 0..MERKLE_DEPTH {
+        for i in 0..MERKLE_DEPTH as usize {
             match (prev, carry) {
                 (_, None) => {
                     edge[i] = prev;

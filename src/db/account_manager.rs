@@ -10,10 +10,8 @@ use zcash_client_backend::{
     },
     keys::UnifiedFullViewingKey,
 };
-use zcash_primitives::{
-    consensus::{Network, Parameters},
-    zip32::{ExtendedFullViewingKey, ExtendedSpendingKey},
-};
+use zcash_primitives::consensus::{Network, NetworkConstants as _};
+use sapling_crypto::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 
 use crate::{
     keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38},

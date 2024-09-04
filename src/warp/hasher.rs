@@ -32,7 +32,7 @@ pub struct OrchardHasher {
 pub fn empty_roots<H: Hasher>(h: &H) -> AuthPath {
     let mut empty = h.empty();
     let mut empty_roots = AuthPath::default();
-    for i in 0..MERKLE_DEPTH {
+    for i in 0..MERKLE_DEPTH as usize {
         empty_roots.0[i] = empty;
         empty = h.combine(i as u8, &empty, &empty);
     }

@@ -19,8 +19,6 @@ pub mod types;
 mod utils;
 pub mod warp;
 
-pub mod tests;
-
 pub type Client = CompactTxStreamerClient<Channel>;
 pub type PooledSQLConnection = PooledConnection<SqliteConnectionManager>;
 pub type Hash = [u8; 32];

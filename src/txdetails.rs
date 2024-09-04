@@ -5,14 +5,15 @@ use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
 use orchard::{keys::Scope, note_encryption::OrchardDomain};
 use parking_lot::Mutex;
 use rusqlite::Connection;
+use sapling_crypto::{note_encryption::SaplingDomain, PaymentAddress};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use zcash_primitives::{
     consensus::Network,
     memo::Memo,
-    sapling::{note_encryption::SaplingDomain, PaymentAddress},
-    transaction::Transaction as ZTransaction,
+//    sapling::{note_encryption::SaplingDomain, PaymentAddress},
+    transaction::{components::sapling::zip212_enforcement, Transaction as ZTransaction},
 };
 
 use crate::{
@@ -135,6 +136,7 @@ pub fn analyze_raw_transaction(
     let ai = get_account_info(network, connection, account)?;
     let txid: Hash = tx.txid().as_ref().clone();
     let data = tx.into_data();
+    let zip212_enforcement = zip212_enforcement(network, height.into());
     let mut tins = vec![];
     let mut touts = vec![];
     if let Some(b) = data.transparent_bundle() {
@@ -163,19 +165,19 @@ pub fn analyze_raw_transaction(
     let mut sins = vec![];
     let mut souts = vec![];
     if let Some(b) = data.sapling_bundle() {
-        let ivk = zcash_primitives::sapling::keys::PreparedIncomingViewingKey::new(
+        let ivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(
             &ai.sapling.vk.fvk.vk.ivk(),
         );
         let ovk = &ai.sapling.vk.fvk.ovk;
         for sin in b.shielded_spends() {
-            let spend = get_note_by_nf(connection, &sin.nullifier.0)?;
+            let spend = get_note_by_nf(connection, &sin.nullifier().0)?;
             sins.push(ShieldedInput {
                 note: spend,
-                nf: sin.nullifier.0.clone(),
+                nf: sin.nullifier().0.clone(),
             });
         }
         for sout in b.shielded_outputs() {
-            let domain = SaplingDomain::for_height(*network, height.into());
+            let domain = SaplingDomain::new(zip212_enforcement);
             let fnote = try_note_decryption(&domain, &ivk, sout)
                 .map(|(n, p, m)| (n, p, m, true))
                 .or_else(|| {
@@ -217,7 +219,7 @@ pub fn analyze_raw_transaction(
                 nf: a.nullifier().to_bytes(),
             });
 
-            let domain = OrchardDomain::for_nullifier(a.nullifier().clone());
+            let domain = OrchardDomain::for_rho(&a.rho());
             let fnote = try_note_decryption(&domain, &ivk, a)
                 .map(|(n, a, m)| (n, a, m, true))
                 .or_else(|| {
@@ -379,7 +381,7 @@ pub fn decode_tx_details(
     let contacts = contact_decoder.finalize()?;
     tracing::info!("Contacts {:?}", contacts);
     for c in contacts.iter() {
-        add_contact(network, connection, account, &c.name, &c.address)?;
+        add_contact(connection, account, &c.name, &c.address)?;
     }
     Ok(())
 }
