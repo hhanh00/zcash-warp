@@ -25,11 +25,11 @@ use transparent::TransparentSync;
 
 use super::Witness;
 
+pub mod builder;
 mod header;
 mod orchard;
 mod sapling;
 mod transparent;
-pub mod builder;
 
 #[derive(Error, Debug)]
 pub enum SyncError {
@@ -109,6 +109,12 @@ pub struct ReceivedNote {
 pub use orchard::Synchronizer as OrchardSync;
 pub use sapling::Synchronizer as SaplingSync;
 
+fn warp_end_height() -> Result<u32> {
+    let height = dotenv::var("WARP_END_HEIGHT")?;
+    let height = str::parse::<u32>(&height)?;
+    Ok(height)
+}
+
 pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncError> {
     tracing::info!("{}-{}", start, end);
     let mut connection = coin.connection()?;
@@ -151,13 +157,13 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
     let bh = get_block_header(&connection, start)?;
     let mut prev_hash = bh.hash;
 
-    let mut block_client = connect_lwd(&coin.warp).await?;
+    let block_url = if end < warp_end_height()? { &coin.warp } else { &coin.url };
+    let mut block_client = connect_lwd(block_url).await?;
     let mut blocks = get_compact_block_range(&mut block_client, start + 1, end).await?;
     let mut bs = vec![];
     let mut bh = BlockHeader::default();
     let mut c = 0;
     while let Some(block) = blocks.message().await.map_err(anyhow::Error::new)? {
-        tracing::info!("{}", block.height);
         bh = BlockHeader {
             height: block.height as u32,
             hash: block.hash.clone().try_into().unwrap(),
@@ -187,18 +193,22 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
         if c >= 1000000 {
             info!("Height {}", height);
             sap_dec.add(&bs)?;
-            // orch_dec.add(&bs)?;
+            orch_dec.add(&bs)?;
             bs.clear();
             c = 0;
         }
     }
     sap_dec.add(&bs)?;
-    // orch_dec.add(&bs)?;
+    orch_dec.add(&bs)?;
 
     let (s, o) = get_tree_state(&mut client, bh.height as u32).await?;
     let r = s.to_edge(&sap_dec.hasher).root(&sap_dec.hasher);
+    let r2 = sap_dec.tree_state.root(&sap_dec.hasher);
     info!("s_root {}", hex::encode(&r));
+    assert_eq!(r, r2);
     let r = o.to_edge(&orch_dec.hasher).root(&orch_dec.hasher);
+    let r2 = orch_dec.tree_state.root(&orch_dec.hasher);
+    assert_eq!(r, r2);
     info!("o_root {}", hex::encode(&r));
 
     if bh.height != 0 {

@@ -132,8 +132,7 @@ pub fn parallel_hash_opt(depth: u8, layer: &[Option<Hash>], pairs: usize) -> Vec
             let r = &layer[2 * i + 1];
             match (l, r) {
                 (Some(l), Some(r)) => Some(hash_combine_inner(depth, l, r)),
-                (None, None) => None,
-                _ => unreachable!(),
+                _ => None,
             }
             
         })

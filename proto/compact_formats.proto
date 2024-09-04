@@ -47,12 +47,16 @@ message CompactTx {
 
 message Bridge {
     uint32 len = 1;
-    repeated BridgeLevel levels = 2;
+    Edge start = 2;
+    Edge end = 3;
 }
 
-message BridgeLevel {
-    Either head = 1;
-    Either tail = 2;
+message Edge {
+    repeated OptLevel levels = 1;
+}
+
+message OptLevel {
+    bytes hash = 1;
 }
 
 message Either {

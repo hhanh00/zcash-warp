@@ -64,16 +64,22 @@ pub struct CompactTx {
 pub struct Bridge {
     #[prost(uint32, tag = "1")]
     pub len: u32,
-    #[prost(message, repeated, tag = "2")]
-    pub levels: ::prost::alloc::vec::Vec<BridgeLevel>,
+    #[prost(message, optional, tag = "2")]
+    pub start: ::core::option::Option<Edge>,
+    #[prost(message, optional, tag = "3")]
+    pub end: ::core::option::Option<Edge>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct BridgeLevel {
-    #[prost(message, optional, tag = "1")]
-    pub head: ::core::option::Option<Either>,
-    #[prost(message, optional, tag = "2")]
-    pub tail: ::core::option::Option<Either>,
+pub struct Edge {
+    #[prost(message, repeated, tag = "1")]
+    pub levels: ::prost::alloc::vec::Vec<OptLevel>,
+}
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct OptLevel {
+    #[prost(bytes = "vec", tag = "1")]
+    pub hash: ::prost::alloc::vec::Vec<u8>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

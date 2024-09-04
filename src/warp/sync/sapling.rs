@@ -36,6 +36,7 @@ pub struct Synchronizer {
     pub tree_state: Edge,
 }
 
+#[derive(Debug)]
 struct BridgeExt<'a> {
     b: &'a Bridge,
     s: i32,
@@ -178,11 +179,13 @@ impl Synchronizer {
 
         for depth in 0..MERKLE_DEPTH {
             let mut position = self.position >> depth;
+            // preprend previous trailing node (if resuming a half pair)
             if position % 2 == 1 {
                 cmxs.insert(0, Some(self.tree_state.0[depth].unwrap()));
                 position -= 1;
             }
 
+            // slightly more efficient than doing it before the insert
             if depth == 0 {
                 for cb in blocks.iter() {
                     for vtx in cb.vtx.iter() {
@@ -200,6 +203,25 @@ impl Synchronizer {
                 }
             }
 
+            // restore bridge start/end nodes
+            let p = position as i32;
+            for be in bridges.iter_mut() {
+                let b = be.b;
+                let h = &b.start.as_ref().unwrap().levels[depth].hash;
+                if !h.is_empty() {
+                    assert!(be.s % 2 == 1); // must have half pair, s must be right
+                    cmxs[(be.s - p) as usize] = Some(h.clone().try_into().unwrap())
+                }
+                let h = &b.end.as_ref().unwrap().levels[depth].hash;
+                if !h.is_empty() {
+                    assert!(be.e % 2 == 0); // must have half pair, e must be left
+                    cmxs[(be.e - p) as usize] = Some(h.clone().try_into().unwrap())
+                }
+                be.s = be.s / 2;
+                be.e = (be.e - 1) / 2;
+            }
+
+            // loop on the *new* notes
             for n in notes.iter_mut() {
                 let npos = n.position >> depth;
                 let nidx = (npos - position) as usize;
@@ -209,70 +231,38 @@ impl Synchronizer {
                     n.witness.value = cmxs[nidx].unwrap();
                 }
 
-                if nidx % 2 == 0 {
-                    if nidx + 1 < cmxs.len() {
+                if nidx % 2 == 0 { // left node
+                    if nidx + 1 < cmxs.len() { // ommer is right node if it exists
+                        assert!(cmxs[nidx + 1].is_some());
                         n.witness.ommers.0[depth] = cmxs[nidx + 1];
                     } else {
                         n.witness.ommers.0[depth] = None;
                     }
-                } else {
-                    n.witness.ommers.0[depth] = cmxs[nidx - 1];
+                } else { // right node
+                    assert!(cmxs[nidx - 1].is_some());
+                    n.witness.ommers.0[depth] = cmxs[nidx - 1]; // ommer is left node
                 }
-            }
-
-            for be in bridges.iter_mut() {
-                let b = be.b;
-                if depth >= b.levels.len() {
-                    continue;
-                }
-                let level = &b.levels[depth];
-
-                let s = ((be.s as u32 - position) & 0xFFFE) as usize; // round to pair
-                if let Some(side) = &level.head {
-                    let side = side.side.as_ref().unwrap();
-                    match side {
-                        crate::lwd::rpc::either::Side::Left(h) => {
-                            cmxs[s] = Some(h.clone().try_into().unwrap());
-                        },
-                        crate::lwd::rpc::either::Side::Right(h) => {
-                            cmxs[s + 1] = Some(h.clone().try_into().unwrap());
-                        }
-                    }
-                }
-
-                let e = ((be.e as u32 - position) & 0xFFFE) as usize; // round to pair
-                if let Some(side) = &level.tail {
-                    let side = side.side.as_ref().unwrap();
-                    match side {
-                        crate::lwd::rpc::either::Side::Left(h) => {
-                            cmxs[e] = Some(h.clone().try_into().unwrap());
-                        },
-                        crate::lwd::rpc::either::Side::Right(h) => {
-                            cmxs[e + 1] = Some(h.clone().try_into().unwrap());
-                        }
-                    }
-
-                }
-
-                be.s = be.s / 2;
-                be.e = (be.e - 1) / 2;
             }
 
             let len = cmxs.len();
             if len >= 2 {
+                // loop on *old notes*
                 for n in self.notes.iter_mut() {
-                    if n.witness.ommers.0[depth].is_none() {
-                        n.witness.ommers.0[depth] = cmxs[1];
+                    if n.witness.ommers.0[depth].is_none() { // fill right ommer if
+                        assert!(cmxs[1].is_some());
+                        n.witness.ommers.0[depth] = cmxs[1]; // we just got it
                     }
                 }
             }
 
+            // save last node if not a full pair
             if len % 2 == 1 {
                 self.tree_state.0[depth] = cmxs[len - 1];
             } else {
                 self.tree_state.0[depth] = None;
             }
 
+            // hash and combine to next depth
             let pairs = len / 2;
             let mut cmxs2 = self.hasher.parallel_combine_opt(depth as u8, &cmxs, pairs);
             swap(&mut cmxs, &mut cmxs2);

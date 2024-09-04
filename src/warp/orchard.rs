@@ -100,18 +100,18 @@ impl Hasher for OrchardHasher {
         layer: &[Option<Hash>],
         pairs: usize,
     ) -> Vec<Option<Hash>> {
-        let hash_extended: Vec<Ep> = (0..pairs)
+        let hash_extended: Vec<Option<Ep>> = (0..pairs)
             .into_par_iter()
-            .filter_map(|i| match (&layer[2 * i], &layer[2 * i + 1]) {
+            .map(|i| match (&layer[2 * i], &layer[2 * i + 1]) {
                 (Some(l), Some(r)) => Some(self.node_combine_inner(depth, l, r)),
-                (None, None) => None,
-                _ => unreachable!(),
+                _ => None,
             })
             .collect();
-        let mut hash_affine = vec![EpAffine::identity(); hash_extended.len()];
-        Point::batch_normalize(&hash_extended, &mut hash_affine);
+        let ext = hash_extended.iter().flatten().cloned().collect::<Vec<_>>();
+        let mut hash_affine = vec![EpAffine::identity(); ext.len()];
+        Point::batch_normalize(&ext, &mut hash_affine);
         let mut h_cursor = hash_affine.iter();
-        layer
+        hash_extended
             .iter()
             .map(|n| {
                 n.map(|_| {

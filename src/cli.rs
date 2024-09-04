@@ -37,12 +37,13 @@ use crate::{
     },
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::PoolMask,
-    warp::{sync::{builder::test_compact_block, warp_sync}, BlockHeader},
+    warp::{sync::warp_sync, BlockHeader},
 };
 
 /// The enum of sub-commands supported by the CLI
 #[derive(Subcommand, Clone, Debug)]
 pub enum Command {
+    CreateDatabase,
     CreateAccount,
     LastHeight,
     SyncHeight,
@@ -111,9 +112,6 @@ impl CliProcessor {
         zec.set_db_path(dotenv::var("DB_PATH").unwrap()).unwrap();
         zec.set_url(&dotenv::var("LWD_URL").unwrap());
         zec.set_warp(&dotenv::var("WARP_URL").unwrap());
-        let connection = zec.connection().unwrap();
-        // init_db(&connection).unwrap();
-        // reset_tables(&connection).unwrap();
         Self { zec }
     }
 
@@ -136,6 +134,10 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
         let bc_height = get_last_height(&mut client).await?;
         let (s_tree, o_tree) = get_tree_state(&mut client, bc_height).await?;
         match command.command {
+            Command::CreateDatabase => {
+                let connection = self.zec.connection().unwrap();
+                reset_tables(&connection)?;
+            }
             Command::CreateAccount => {
                 let connection = self.zec.connection()?;
                 let seed = dotenv::var("SEED").unwrap();
@@ -308,7 +310,6 @@ impl ReplCommandProcessor<Cli> for CliProcessor {
             }
             Command::TestFilter => {
                 let mut client = self.zec.connect_lwd().await?;
-                test_compact_block(&mut client).await?;
             }
         }
         Ok(())
