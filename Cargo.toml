@@ -5,32 +5,35 @@ edition = "2021"
 authors = ["Hanh <hanh425@gmail.com>"]
 
 [dependencies]
+thiserror.workspace = true
+anyhow.workspace = true
+figment.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tokio.workspace = true
+tonic.workspace = true
+prost.workspace = true
+hex.workspace = true
+r2d2.workspace = true
+r2d2_sqlite.workspace = true
+lazy_static.workspace = true
+parking_lot.workspace = true
+rusqlite.workspace = true
+flatbuffers.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde-hex.workspace = true
+serde_cbor.workspace = true
+serde_bytes.workspace = true
+serde_with.workspace = true
+bincode.workspace = true
+rand.workspace = true
+clap.workspace = true
+clap-repl.workspace = true
+console.workspace = true
 
-dotenv = "0.15.0"
-thiserror = "1.0.63"
-anyhow = "1.0.86"
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
-tokio = { version = "1.40", features = ["rt-multi-thread"] }
-tonic = { version = "0.12", features = ["tls", "tls-roots"] }
-prost = "0.13"
-hex = { version = "0.4", features = ["serde"] }
-r2d2 = "0.8.10"
-r2d2_sqlite = "0.22.0"
-lazy_static = "1.5"
-parking_lot = "0.12.3"
-rusqlite = "0.29"
-flatbuffers = "24.3.25"
 tiny-bip39 = "0.8"
 tiny-hderive = "0.3.0"
-rand = "0.8.4"
-serde = "1.0.206"
-serde_json = "1.0.124"
-serde-hex = "0.1.0"
-serde_cbor = "0.11.2"
-serde_bytes = "0.11.15"
-serde_with = "3.9.0"
-bincode = "1.3.3"
 base58check = "0.1.0"
 secp256k1 = "0.27"
 ripemd = "0.1.1"
@@ -43,71 +46,25 @@ blake2b_simd = "1.0.0"
 chacha20 = "0.9.0"
 rayon = "1.5.1"
 sapling-crypto = "0.2.0"
-incrementalmerkletree = "0.6.0"
+incrementalmerkletree = { version = "0.6.0", features = [ "legacy-api" ] }
 halo2_proofs = "0.3.0"
 halo2_gadgets = "0.3.0"
 zip32 = "0.1.1"
 
-rustyrepl = { version = "0.2.0", features = ["async"] }
-clap = "4.5.15"
-async-trait = "0.1.81"
 flate2 = "1.0.32"
 
-#futures = "0.3.30"
+zcash_keys.workspace = true
+zcash_protocol.workspace = true
+zcash_client_backend.workspace = true
+zcash_primitives.workspace = true
+zcash_proofs.workspace = true
+zcash_address.workspace = true
+zcash_encoding.workspace = true
+zcash_note_encryption.workspace = true
 
 #[features]
 #sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
-[dependencies.zcash_keys]
-git = "https://github.com/hhanh00/librustzcash.git"
-rev = "bc5c4b2e"
-features = ["sapling", "orchard", "test-dependencies"]
-
-[dependencies.zcash_protocol]
-git = "https://github.com/hhanh00/librustzcash.git"
-rev = "bc5c4b2e"
-
-[dependencies.zcash_client_backend]
-git = "https://github.com/hhanh00/librustzcash.git"
-rev = "bc5c4b2e"
-#path = "../librustzcash/zcash_client_backend"
-features = [ "transparent-inputs", "orchard" ]
-
-[dependencies.zcash_primitives]
-git = "https://github.com/hhanh00/librustzcash.git"
-rev = "bc5c4b2e"
-#path = "../librustzcash/zcash_primitives"
-features = [ "transparent-inputs" ]
-
-[dependencies.zcash_proofs]
-git = "https://github.com/hhanh00/librustzcash.git"
-rev = "bc5c4b2e"
-#path = "../librustzcash/zcash_proofs"
-
-[dependencies.zcash_address]
-git = "https://github.com/hhanh00/librustzcash.git"
-rev = "bc5c4b2e"
-#path = "../librustzcash/components/zcash_address"
-
-[dependencies.zcash_encoding]
-git = "https://github.com/hhanh00/librustzcash.git"
-rev = "bc5c4b2e"
-#path = "../librustzcash/components/zcash_encoding"
-
-[dependencies.zcash_note_encryption]
-version = "0.4"
-
 [build-dependencies]
 tonic-build = { version = "0.12", features = [ "prost" ] }
 #cbindgen = "0.26.0"
-
-#[patch."https://github.com/hhanh00/librustzcash.git"]
-#zcash_primitives = { git = "https://github.com/hhanh00/librustzcash.git", rev = "4fbdd64c89703053eeaeee51750ea6f5b93a3ec9" }
-#zcash_client_backend = { git = "https://github.com/hhanh00/librustzcash.git", rev = "4fbdd64c89703053eeaeee51750ea6f5b93a3ec9" }
-#zcash_encoding = { git = "https://github.com/hhanh00/librustzcash.git", rev = "4fbdd64c89703053eeaeee51750ea6f5b93a3ec9" }
-
-[patch.crates-io]
-#orchard = { git = "https://github.com/zcash/orchard.git", rev = "2186856809908e004c9a04b9374aa1ba5040f409" }
-#halo2_gadgets  = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
-#halo2_proofs = { git = "https://github.com/zcash/halo2.git", rev = "642924d614305d882cc122739c59144109f4bd3f" }
-#zcash_note_encryption = { git = "https://github.com/hhanh00/librustzcash.git", rev = "e2fe0b8d386fad99e00d6135c5caf3cc04045646" }

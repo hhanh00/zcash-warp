@@ -1,19 +1,14 @@
 use crate::{
-    coin::{connect_lwd, CoinDef},
-    db::{
+    cli::CONFIG, coin::{connect_lwd, CoinDef}, db::{
         notes::{
             get_block_header, mark_shielded_spent, mark_transparent_spent, rewind_checkpoint,
             store_block, store_received_note, store_utxo, update_tx_timestamp,
         },
         tx::add_tx_value,
-    },
-    lwd::{get_compact_block_range, get_transparent, get_tree_state},
-    txdetails::CompressedMemo,
-    warp::{
+    }, lwd::{get_compact_block_range, get_transparent, get_tree_state}, txdetails::CompressedMemo, warp::{
         hasher::{OrchardHasher, SaplingHasher},
         BlockHeader,
-    },
-    Hash,
+    }, Hash
 };
 use anyhow::Result;
 use header::BlockHeaderStore;
@@ -109,12 +104,6 @@ pub struct ReceivedNote {
 pub use orchard::Synchronizer as OrchardSync;
 pub use sapling::Synchronizer as SaplingSync;
 
-fn warp_end_height() -> Result<u32> {
-    let height = dotenv::var("WARP_END_HEIGHT")?;
-    let height = str::parse::<u32>(&height)?;
-    Ok(height)
-}
-
 pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncError> {
     tracing::info!("{}-{}", start, end);
     let mut connection = coin.connection()?;
@@ -157,7 +146,7 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
     let bh = get_block_header(&connection, start)?;
     let mut prev_hash = bh.hash;
 
-    let block_url = if end < warp_end_height()? { &coin.warp } else { &coin.url };
+    let block_url = if end < CONFIG.warp_end_height { &coin.warp } else { &coin.url };
     let mut block_client = connect_lwd(block_url).await?;
     let mut blocks = get_compact_block_range(&mut block_client, start + 1, end).await?;
     let mut bs = vec![];

@@ -165,7 +165,7 @@ pub async fn purge_blocks(
     let mut ob = BridgeBuilder::new(o, OrchardHasher::default());
     while let Some(mut cb) = blocks.recv().await {
         if cb.height % 100_000 == 0 {
-            println!("{}", cb.height);
+            tracing::info!("Current height: {}", cb.height);
         }
         for tx in cb.vtx.iter_mut() {
             if tx.outputs.len() < 32 {
