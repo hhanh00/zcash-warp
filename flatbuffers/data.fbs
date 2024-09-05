@@ -74,6 +74,7 @@ table ShieldedNote {
 }
 
 table ShieldedMessage {
+  id_msg: uint32;
   id_tx: uint32;
   height: uint32;
   timestamp: uint32;

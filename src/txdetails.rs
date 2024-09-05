@@ -379,7 +379,7 @@ pub fn decode_tx_details(
         }
     }
     let contacts = contact_decoder.finalize()?;
-    tracing::info!("Contacts {:?}", contacts);
+    tracing::debug!("Contacts {:?}", contacts);
     for c in contacts.iter() {
         add_contact(connection, account, &c.name, &c.address)?;
     }
@@ -393,12 +393,11 @@ fn visit_memo(
     tx: &TransactionDetails,
     nout: u32,
     incoming: bool,
-    authenticated: bool,
+    _authenticated: bool,
     sender: Option<String>,
     recipient: String,
     memo: &Memo,
 ) -> Result<()> {
-    tracing::info!("{} {:?}", authenticated, memo);
     match memo {
         Memo::Text(text) => {
             let msg = parse_memo_text(
@@ -431,6 +430,7 @@ fn parse_memo_text(
     let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
     let msg = if memo_lines.len() == 4 && memo_lines[0] == "\u{1F6E1}MSG" {
         ShieldedMessageT {
+            id_msg: 0,
             id_tx,
             nout,
             height,
@@ -447,6 +447,7 @@ fn parse_memo_text(
         }
     } else {
         ShieldedMessageT {
+            id_msg: 0,
             id_tx,
             height,
             timestamp,
@@ -458,7 +459,6 @@ fn parse_memo_text(
             body: Some(memo.to_string()),
         }
     };
-    tracing::info!("{:?}", msg);
     Ok(msg)
 }
 

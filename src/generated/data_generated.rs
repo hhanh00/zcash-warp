@@ -16,7 +16,9 @@ pub mod fb {
   use core::cmp::Ordering;
 
   extern crate flatbuffers;
-  use self::flatbuffers::{EndianScalar, Follow};
+  use serde::Serialize;
+
+use self::flatbuffers::{EndianScalar, Follow};
 
 pub enum BackupOffset {}
 #[derive(Copy, Clone, PartialEq)]
@@ -267,7 +269,7 @@ impl core::fmt::Debug for Backup<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct BackupT {
   pub name: Option<String>,
   pub seed: Option<String>,
@@ -593,7 +595,7 @@ impl core::fmt::Debug for TransactionInfo<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct TransactionInfoT {
   pub id: u32,
   pub txid: Option<String>,
@@ -925,7 +927,7 @@ impl core::fmt::Debug for TransactionInfoExtended<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct TransactionInfoExtendedT {
   pub height: u32,
   pub timestamp: u32,
@@ -1158,7 +1160,7 @@ impl core::fmt::Debug for InputTransparent<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct InputTransparentT {
   pub txid: Option<Vec<u8>>,
   pub vout: u32,
@@ -1321,7 +1323,7 @@ impl core::fmt::Debug for OutputTransparent<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct OutputTransparentT {
   pub address: Option<String>,
   pub value: u64,
@@ -1537,7 +1539,7 @@ impl core::fmt::Debug for InputShielded<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct InputShieldedT {
   pub nf: Option<Vec<u8>>,
   pub address: Option<String>,
@@ -1811,7 +1813,7 @@ impl core::fmt::Debug for OutputShielded<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct OutputShieldedT {
   pub incoming: bool,
   pub cmx: Option<Vec<u8>>,
@@ -2047,7 +2049,7 @@ impl core::fmt::Debug for ShieldedNote<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct ShieldedNoteT {
   pub height: u32,
   pub confirmations: u32,
@@ -2101,15 +2103,16 @@ impl<'a> flatbuffers::Follow<'a> for ShieldedMessage<'a> {
 }
 
 impl<'a> ShieldedMessage<'a> {
-  pub const VT_ID_TX: flatbuffers::VOffsetT = 4;
-  pub const VT_HEIGHT: flatbuffers::VOffsetT = 6;
-  pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 8;
-  pub const VT_INCOMING: flatbuffers::VOffsetT = 10;
-  pub const VT_NOUT: flatbuffers::VOffsetT = 12;
-  pub const VT_SENDER: flatbuffers::VOffsetT = 14;
-  pub const VT_RECIPIENT: flatbuffers::VOffsetT = 16;
-  pub const VT_SUBJECT: flatbuffers::VOffsetT = 18;
-  pub const VT_BODY: flatbuffers::VOffsetT = 20;
+  pub const VT_ID_MSG: flatbuffers::VOffsetT = 4;
+  pub const VT_ID_TX: flatbuffers::VOffsetT = 6;
+  pub const VT_HEIGHT: flatbuffers::VOffsetT = 8;
+  pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 10;
+  pub const VT_INCOMING: flatbuffers::VOffsetT = 12;
+  pub const VT_NOUT: flatbuffers::VOffsetT = 14;
+  pub const VT_SENDER: flatbuffers::VOffsetT = 16;
+  pub const VT_RECIPIENT: flatbuffers::VOffsetT = 18;
+  pub const VT_SUBJECT: flatbuffers::VOffsetT = 20;
+  pub const VT_BODY: flatbuffers::VOffsetT = 22;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2129,11 +2132,13 @@ impl<'a> ShieldedMessage<'a> {
     builder.add_timestamp(args.timestamp);
     builder.add_height(args.height);
     builder.add_id_tx(args.id_tx);
+    builder.add_id_msg(args.id_msg);
     builder.add_incoming(args.incoming);
     builder.finish()
   }
 
   pub fn unpack(&self) -> ShieldedMessageT {
+    let id_msg = self.id_msg();
     let id_tx = self.id_tx();
     let height = self.height();
     let timestamp = self.timestamp();
@@ -2152,6 +2157,7 @@ impl<'a> ShieldedMessage<'a> {
       x.to_string()
     });
     ShieldedMessageT {
+      id_msg,
       id_tx,
       height,
       timestamp,
@@ -2164,6 +2170,13 @@ impl<'a> ShieldedMessage<'a> {
     }
   }
 
+  #[inline]
+  pub fn id_msg(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(ShieldedMessage::VT_ID_MSG, Some(0)).unwrap()}
+  }
   #[inline]
   pub fn id_tx(&self) -> u32 {
     // Safety:
@@ -2236,6 +2249,7 @@ impl flatbuffers::Verifiable for ShieldedMessage<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
+     .visit_field::<u32>("id_msg", Self::VT_ID_MSG, false)?
      .visit_field::<u32>("id_tx", Self::VT_ID_TX, false)?
      .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
      .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
@@ -2250,6 +2264,7 @@ impl flatbuffers::Verifiable for ShieldedMessage<'_> {
   }
 }
 pub struct ShieldedMessageArgs<'a> {
+    pub id_msg: u32,
     pub id_tx: u32,
     pub height: u32,
     pub timestamp: u32,
@@ -2264,6 +2279,7 @@ impl<'a> Default for ShieldedMessageArgs<'a> {
   #[inline]
   fn default() -> Self {
     ShieldedMessageArgs {
+      id_msg: 0,
       id_tx: 0,
       height: 0,
       timestamp: 0,
@@ -2282,6 +2298,10 @@ pub struct ShieldedMessageBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ShieldedMessageBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_id_msg(&mut self, id_msg: u32) {
+    self.fbb_.push_slot::<u32>(ShieldedMessage::VT_ID_MSG, id_msg, 0);
+  }
   #[inline]
   pub fn add_id_tx(&mut self, id_tx: u32) {
     self.fbb_.push_slot::<u32>(ShieldedMessage::VT_ID_TX, id_tx, 0);
@@ -2336,6 +2356,7 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ShieldedMessageBuilder<'a, 'b, 
 impl core::fmt::Debug for ShieldedMessage<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("ShieldedMessage");
+      ds.field("id_msg", &self.id_msg());
       ds.field("id_tx", &self.id_tx());
       ds.field("height", &self.height());
       ds.field("timestamp", &self.timestamp());
@@ -2349,8 +2370,9 @@ impl core::fmt::Debug for ShieldedMessage<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct ShieldedMessageT {
+  pub id_msg: u32,
   pub id_tx: u32,
   pub height: u32,
   pub timestamp: u32,
@@ -2364,6 +2386,7 @@ pub struct ShieldedMessageT {
 impl Default for ShieldedMessageT {
   fn default() -> Self {
     Self {
+      id_msg: 0,
       id_tx: 0,
       height: 0,
       timestamp: 0,
@@ -2381,6 +2404,7 @@ impl ShieldedMessageT {
     &self,
     _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
   ) -> flatbuffers::WIPOffset<ShieldedMessage<'b>> {
+    let id_msg = self.id_msg;
     let id_tx = self.id_tx;
     let height = self.height;
     let timestamp = self.timestamp;
@@ -2399,6 +2423,7 @@ impl ShieldedMessageT {
       _fbb.create_string(x)
     });
     ShieldedMessage::create(_fbb, &ShieldedMessageArgs{
+      id_msg,
       id_tx,
       height,
       timestamp,

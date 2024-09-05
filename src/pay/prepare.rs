@@ -210,7 +210,7 @@ impl PaymentBuilder {
             }
 
             for output in self.outputs.iter_mut() {
-                tracing::info!("phase {} output {:?}", phase, output);
+                tracing::debug!("phase {} output {:?}", phase, output);
                 if phase > 0 && output.remaining == 0 {
                     continue;
                 }
@@ -282,7 +282,7 @@ impl PaymentBuilder {
                     _ => unreachable!(),
                 }
 
-                tracing::info!(
+                tracing::debug!(
                     "src {} out {} amount {}",
                     src_pool,
                     output.pool,
@@ -295,7 +295,6 @@ impl PaymentBuilder {
                             self.fee += self.fee_manager.add_input(src_pool);
                         }
                     }
-                    tracing::info!("FEE {}", self.fee);
                     let r = n.remaining.min(output.remaining + self.fee);
                     n.remaining -= r;
                     let r2 = r.min(self.fee);
@@ -345,9 +344,9 @@ impl PaymentBuilder {
             });
         }
 
-        tracing::info!("{:?}", tx_notes);
-        tracing::info!("{:?}", tx_outputs);
-        tracing::info!("{:?}", self.fee_manager);
+        tracing::debug!("{:?}", tx_notes);
+        tracing::debug!("{:?}", tx_outputs);
+        tracing::debug!("{:?}", self.fee_manager);
 
         let mut change = ChangeOutput::default();
         std::mem::swap(&mut self.change, &mut change);

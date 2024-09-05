@@ -122,6 +122,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         timestamp INTEGER NOT NULL,
         txid BLOB NOT NULL,
         nout INTEGER NOT NULL,
+        incoming BOOL NOT NULL,
         sender TEXT,
         recipient TEXT NOT NULL,
         subject TEXT NOT NULL,

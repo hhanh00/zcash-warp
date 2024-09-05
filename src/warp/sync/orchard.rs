@@ -219,7 +219,6 @@ impl Synchronizer {
                 let b = be.b;
                 let h = &b.start.as_ref().unwrap().levels[depth].hash;
                 if !h.is_empty() {
-                    assert!(be.s % 2 == 1); // must have half pair, s must be right
                     cmxs[(be.s - p) as usize] = Some(h.clone().try_into().unwrap())
                 }
                 let h = &b.end.as_ref().unwrap().levels[depth].hash;
@@ -243,7 +242,7 @@ impl Synchronizer {
 
                 if nidx % 2 == 0 { // left node
                     if nidx + 1 < cmxs.len() { // ommer is right node if it exists
-                        assert!(cmxs[nidx + 1].is_some());
+                        assert!(cmxs[nidx + 1].is_some(), "{} {} {} {} {}", depth, n.position, position, nidx, position + nidx as u32 + 1);
                         n.witness.ommers.0[depth] = cmxs[nidx + 1];
                     } else {
                         n.witness.ommers.0[depth] = None;

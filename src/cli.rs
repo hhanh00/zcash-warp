@@ -18,6 +18,7 @@ use rusqlite::DropBehavior;
 use serde::Deserialize;
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::memo::MemoBytes;
+use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{
     account::{address::get_diversified_address, txs::get_txs},
@@ -31,7 +32,7 @@ use crate::{
             truncate_scan,
         },
         reset_tables,
-        tx::get_tx_details,
+        tx::{get_tx_details, list_messages},
     },
     fb_vec_to_bytes,
     keys::TSKStore,
@@ -106,7 +107,9 @@ pub enum Command {
     ListNotes {
         account: u32,
     },
-    TestFilter,
+    ListMessages {
+        account: u32,
+    },
 }
 
 #[tokio::main]
@@ -135,7 +138,8 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
         Command::Reset { height } => {
             let connection = zec.connection()?;
             truncate_scan(&connection)?;
-            let birth_height = CONFIG.birth;
+            let activation: u32 = network.activation_height(NetworkUpgrade::Sapling).unwrap().into();
+            let birth_height = CONFIG.birth.max(activation + 1);
             let height = height.unwrap_or(birth_height);
             let mut client = zec.connect_lwd().await?;
             let block = get_compact_block(&mut client, height).await?;
@@ -273,7 +277,7 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             let (account, tx) = get_tx_details(&connection, id)?;
             decode_tx_details(network, &connection, account, id, &tx)?;
             let etx = tx.to_transaction_info_ext(network);
-            println!("{:?}", etx);
+            println!("{}", serde_json::to_string_pretty(&etx).unwrap());
         }
         Command::DecodeAddress { address } => {
             let ra = RecipientAddress::decode(network, &address)
@@ -286,8 +290,11 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             let connection = zec.connection()?;
             let txs = get_txs(network, &connection, account, bc_height)?;
 
-            let data = fb_vec_to_bytes!(txs, TransactionInfo)?;
-            println!("{}", hex::encode(data));
+            for tx in txs.iter() {
+                println!("{}", serde_json::to_string_pretty(tx).unwrap());
+            }
+            let _data = fb_vec_to_bytes!(txs, TransactionInfo)?;
+            // println!("{}", hex::encode(data));
         }
         Command::ListNotes { account } => {
             let mut client = zec.connect_lwd().await?;
@@ -295,10 +302,14 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             let connection = zec.connection()?;
             let notes = get_unspent_notes(&connection, account, bc_height)?;
 
-            let data = fb_vec_to_bytes!(notes, ShieldedNote)?;
-            println!("{}", hex::encode(data));
+            println!("{}", serde_json::to_string_pretty(&notes).unwrap());
+            let _data = fb_vec_to_bytes!(notes, ShieldedNote)?;
         }
-        Command::TestFilter => {}
+        Command::ListMessages { account } => {
+            let connection = zec.connection()?;
+            let msgs = list_messages(&connection, account)?;
+            println!("{}", serde_json::to_string_pretty(&msgs).unwrap());
+        }
     }
     Ok(())
 }
