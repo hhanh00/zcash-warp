@@ -260,7 +260,6 @@ pub async fn filter_stats(client: &mut Client, start: u32, end: u32) -> Result<(
     while let Some(block) = blocks.message().await? {
         if block.height % 100_000 == 0 {
             tracing::info!("{}", block.height);
-            tracing::info!("{} {} {}", n, total, (total - n) as f64 / total as f64);
         }
         for tx in block.vtx.iter() {
             total += tx.outputs.len() + tx.actions.len();

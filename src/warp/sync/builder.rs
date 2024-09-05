@@ -134,7 +134,7 @@ impl<H: Hasher + CompactTxCMXExtractor> BridgeBuilder<H> {
             }
 
             let len = self.cmxs.len();
-            if len >= 2 && self.edge.0[depth].is_some() {
+            if len >= 2 {
                 bridge.start.0[depth] = Some(self.cmxs[1]);
             }
             if len % 2 == 1 {

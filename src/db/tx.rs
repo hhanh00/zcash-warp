@@ -1,5 +1,8 @@
 use crate::{
-    data::fb::ShieldedMessageT, txdetails::TransactionDetails, warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate}, Hash
+    data::fb::ShieldedMessageT,
+    txdetails::TransactionDetails,
+    warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate},
+    Hash,
 };
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
@@ -120,6 +123,48 @@ pub fn add_tx_value<IDSpent: std::fmt::Debug>(
     Ok(())
 }
 
+pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<ShieldedMessageT>> {
+    let mut s = connection.prepare(
+        "SELECT m.id_msg, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
+        m.recipient, m.subject, m.body, m.read, t.id_tx FROM msgs m JOIN txs t
+        ON m.txid = t.txid WHERE m.account = ?1",
+    )?;
+    let rows = s.query_map([account], |r| {
+        Ok((
+            r.get::<_, u32>(0)?,
+            r.get::<_, u32>(1)?,
+            r.get::<_, u32>(2)?,
+            r.get::<_, Vec<u8>>(3)?,
+            r.get::<_, u32>(4)?,
+            r.get::<_, bool>(5)?,
+            r.get::<_, Option<String>>(6)?,
+            r.get::<_, Option<String>>(7)?,
+            r.get::<_, String>(8)?,
+            r.get::<_, String>(9)?,
+            r.get::<_, bool>(10)?,
+            r.get::<_, u32>(11)?,
+        ))
+    })?;
+    let mut msgs = vec![];
+    for r in rows {
+        let (id_msg, height, timestamp, txid, nout, incoming, sender, recipient, subject, body, read, id_tx) = r?;
+        let msg = ShieldedMessageT {
+            id_msg,
+            id_tx,
+            height,
+            timestamp,
+            incoming,
+            nout,
+            sender,
+            recipient,
+            subject: Some(subject),
+            body: Some(body),
+        };
+        msgs.push(msg);
+    }
+    Ok(msgs)
+}
+
 pub fn store_message(
     connection: &Connection,
     account: u32,
@@ -129,9 +174,9 @@ pub fn store_message(
 ) -> Result<()> {
     let mut s = connection.prepare_cached(
         "INSERT INTO msgs
-        (account, height, timestamp, txid, nout, 
+        (account, height, timestamp, txid, nout, incoming,
         sender, recipient, subject, body, read)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, false)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, false)
         ON CONFLICT DO NOTHING",
     )?;
     s.execute(params![
@@ -140,6 +185,7 @@ pub fn store_message(
         tx.timestamp,
         tx.txid,
         nout,
+        message.incoming,
         message.sender,
         message.recipient,
         message.subject,

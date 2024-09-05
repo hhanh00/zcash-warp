@@ -35,7 +35,7 @@ impl FeeManager {
             0
         };
         let f = t + s + o;
-        tracing::info!("fee: {t} {s} {o}");
+        tracing::info!("fee: {t} {s} {o} -> {f}");
         f as u64 * 5_000
     }
 

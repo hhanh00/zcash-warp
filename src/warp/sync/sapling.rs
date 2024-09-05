@@ -207,7 +207,6 @@ impl Synchronizer {
                 let b = be.b;
                 let h = &b.start.as_ref().unwrap().levels[depth].hash;
                 if !h.is_empty() {
-                    assert!(be.s % 2 == 1); // must have half pair, s must be right
                     cmxs[(be.s - p) as usize] = Some(h.clone().try_into().unwrap())
                 }
                 let h = &b.end.as_ref().unwrap().levels[depth].hash;
