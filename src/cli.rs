@@ -20,7 +20,6 @@ use rand::rngs::OsRng;
 use rusqlite::DropBehavior;
 use serde::Deserialize;
 use zcash_keys::address::Address as RecipientAddress;
-use zcash_primitives::memo::MemoBytes;
 use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{
@@ -38,16 +37,17 @@ use crate::{
         tx::{get_tx_details, list_messages},
     },
     fb_vec_to_bytes,
-    keys::{generate_random_mnemonic_phrase, TSKStore},
+    keys::generate_random_mnemonic_phrase,
     lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
     pay::{
         make_payment,
         sweep::{prepare_sweep, scan_utxo_by_seed},
-        Payment, PaymentBuilder, PaymentItem,
+        Payment, PaymentItem,
     },
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::PoolMask,
     utils::{
+        db::encrypt_db,
         ua::decode_ua,
         uri::{make_payment_uri, parse_payment_uri},
     },
@@ -75,6 +75,13 @@ pub enum Command {
     GenerateSeed,
     Backup {
         account: u32,
+    },
+    EncryptDb {
+        password: String,
+        new_db_path: String,
+    },
+    SetDbPassword {
+        password: String,
     },
     LastHeight,
     SyncHeight,
@@ -149,13 +156,23 @@ impl FromStr for PaymentRequestT {
 }
 
 #[tokio::main]
-async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
+async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
     let network = &zec.network;
     let mut txb = vec![];
     match command {
         Command::CreateDatabase => {
             let connection = zec.connection().unwrap();
             reset_tables(&connection)?;
+        }
+        Command::EncryptDb {
+            password,
+            new_db_path,
+        } => {
+            let connection = zec.connection()?;
+            encrypt_db(&connection, &password, &new_db_path)?;
+        }
+        Command::SetDbPassword { password } => {
+            zec.db_password = Some(password);
         }
         Command::CreateAccount { key, name } => {
             let connection = zec.connection()?;
@@ -419,7 +436,7 @@ pub fn cli_main() -> Result<()> {
         .build();
 
     rl.repl(|command| {
-        if let Err(e) = process_command(command, &zec) {
+        if let Err(e) = process_command(command, &mut zec) {
             println!("{} {}", style("Error:").red().bold(), e);
         }
     });
