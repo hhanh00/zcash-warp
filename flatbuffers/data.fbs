@@ -85,3 +85,9 @@ table ShieldedMessage {
   subject: string;
   body: string;
 }
+
+table UAReceivers {
+  transparent: string;
+  sapling: string;
+  orchard: string;
+}

@@ -2436,5 +2436,189 @@ impl ShieldedMessageT {
     })
   }
 }
+pub enum UAReceiversOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct UAReceivers<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for UAReceivers<'a> {
+  type Inner = UAReceivers<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> UAReceivers<'a> {
+  pub const VT_TRANSPARENT: flatbuffers::VOffsetT = 4;
+  pub const VT_SAPLING: flatbuffers::VOffsetT = 6;
+  pub const VT_ORCHARD: flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    UAReceivers { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args UAReceiversArgs<'args>
+  ) -> flatbuffers::WIPOffset<UAReceivers<'bldr>> {
+    let mut builder = UAReceiversBuilder::new(_fbb);
+    if let Some(x) = args.orchard { builder.add_orchard(x); }
+    if let Some(x) = args.sapling { builder.add_sapling(x); }
+    if let Some(x) = args.transparent { builder.add_transparent(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> UAReceiversT {
+    let transparent = self.transparent().map(|x| {
+      x.to_string()
+    });
+    let sapling = self.sapling().map(|x| {
+      x.to_string()
+    });
+    let orchard = self.orchard().map(|x| {
+      x.to_string()
+    });
+    UAReceiversT {
+      transparent,
+      sapling,
+      orchard,
+    }
+  }
+
+  #[inline]
+  pub fn transparent(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(UAReceivers::VT_TRANSPARENT, None)}
+  }
+  #[inline]
+  pub fn sapling(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(UAReceivers::VT_SAPLING, None)}
+  }
+  #[inline]
+  pub fn orchard(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(UAReceivers::VT_ORCHARD, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for UAReceivers<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("transparent", Self::VT_TRANSPARENT, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("sapling", Self::VT_SAPLING, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("orchard", Self::VT_ORCHARD, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct UAReceiversArgs<'a> {
+    pub transparent: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub sapling: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub orchard: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for UAReceiversArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    UAReceiversArgs {
+      transparent: None,
+      sapling: None,
+      orchard: None,
+    }
+  }
+}
+
+pub struct UAReceiversBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UAReceiversBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_transparent(&mut self, transparent: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(UAReceivers::VT_TRANSPARENT, transparent);
+  }
+  #[inline]
+  pub fn add_sapling(&mut self, sapling: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(UAReceivers::VT_SAPLING, sapling);
+  }
+  #[inline]
+  pub fn add_orchard(&mut self, orchard: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(UAReceivers::VT_ORCHARD, orchard);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> UAReceiversBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    UAReceiversBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<UAReceivers<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for UAReceivers<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("UAReceivers");
+      ds.field("transparent", &self.transparent());
+      ds.field("sapling", &self.sapling());
+      ds.field("orchard", &self.orchard());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Debug, Clone, PartialEq)]
+pub struct UAReceiversT {
+  pub transparent: Option<String>,
+  pub sapling: Option<String>,
+  pub orchard: Option<String>,
+}
+impl Default for UAReceiversT {
+  fn default() -> Self {
+    Self {
+      transparent: None,
+      sapling: None,
+      orchard: None,
+    }
+  }
+}
+impl UAReceiversT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<UAReceivers<'b>> {
+    let transparent = self.transparent.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let sapling = self.sapling.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let orchard = self.orchard.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    UAReceivers::create(_fbb, &UAReceiversArgs{
+      transparent,
+      sapling,
+      orchard,
+    })
+  }
+}
 }  // pub mod fb
 

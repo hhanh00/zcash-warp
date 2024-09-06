@@ -21,10 +21,7 @@ use zcash_primitives::memo::MemoBytes;
 use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{
-    account::{address::get_diversified_address, txs::get_txs},
-    coin::CoinDef,
-    data::fb::{ShieldedNote, TransactionInfo},
-    db::{
+    account::{address::get_diversified_address, txs::get_txs}, coin::CoinDef, data::fb::{ShieldedNote, TransactionInfo}, db::{
         account::{get_account_info, get_balance},
         account_manager::{create_new_account, detect_key},
         notes::{
@@ -33,17 +30,10 @@ use crate::{
         },
         reset_tables,
         tx::{get_tx_details, list_messages},
-    },
-    fb_vec_to_bytes,
-    keys::{generate_random_mnemonic_phrase, TSKStore},
-    lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
-    pay::{
+    }, fb_vec_to_bytes, keys::{generate_random_mnemonic_phrase, TSKStore}, lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state}, pay::{
         sweep::{prepare_sweep, scan_utxo_by_seed},
         Payment, PaymentBuilder, PaymentItem,
-    },
-    txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
-    types::PoolMask,
-    warp::{sync::warp_sync, BlockHeader},
+    }, txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details}, types::PoolMask, utils::ua::decode_ua, warp::{sync::warp_sync, BlockHeader}
 };
 
 #[derive(Deserialize)]
@@ -115,6 +105,9 @@ pub enum Command {
     ListMessages {
         account: u32,
     },
+    DecodeUA { 
+        ua: String,
+    }
 }
 
 #[tokio::main]
@@ -328,6 +321,10 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             let connection = zec.connection()?;
             let msgs = list_messages(&connection, account)?;
             println!("{}", serde_json::to_string_pretty(&msgs).unwrap());
+        }
+        Command::DecodeUA { ua } => {
+            let ua = decode_ua(network, &ua)?;            
+            println!("{}", serde_json::to_string_pretty(&ua).unwrap());
         }
     }
     Ok(())
