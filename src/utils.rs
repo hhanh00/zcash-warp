@@ -1,5 +1,7 @@
 use crate::Hash;
 
+pub mod ua;
+
 #[macro_export]
 macro_rules! fb_to_bytes {
     ($v: ident) => {{
