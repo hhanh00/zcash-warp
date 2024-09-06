@@ -1,5 +1,6 @@
 use crate::Hash;
 
+pub mod db;
 pub mod ua;
 pub mod uri;
 
