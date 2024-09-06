@@ -7,6 +7,7 @@ use core::mem;
 use core::cmp::Ordering;
 
 extern crate flatbuffers;
+use serde::{Serialize, Deserialize};
 use self::flatbuffers::{EndianScalar, Follow};
 
 #[allow(unused_imports, dead_code)]
@@ -16,9 +17,8 @@ pub mod fb {
   use core::cmp::Ordering;
 
   extern crate flatbuffers;
-  use serde::Serialize;
-
-use self::flatbuffers::{EndianScalar, Follow};
+use serde::{Serialize, Deserialize};
+  use self::flatbuffers::{EndianScalar, Follow};
 
 pub enum BackupOffset {}
 #[derive(Copy, Clone, PartialEq)]
@@ -269,7 +269,7 @@ impl core::fmt::Debug for Backup<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct BackupT {
   pub name: Option<String>,
   pub seed: Option<String>,
@@ -595,7 +595,7 @@ impl core::fmt::Debug for TransactionInfo<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TransactionInfoT {
   pub id: u32,
   pub txid: Option<String>,
@@ -927,7 +927,7 @@ impl core::fmt::Debug for TransactionInfoExtended<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TransactionInfoExtendedT {
   pub height: u32,
   pub timestamp: u32,
@@ -1160,7 +1160,7 @@ impl core::fmt::Debug for InputTransparent<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct InputTransparentT {
   pub txid: Option<Vec<u8>>,
   pub vout: u32,
@@ -1323,7 +1323,7 @@ impl core::fmt::Debug for OutputTransparent<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OutputTransparentT {
   pub address: Option<String>,
   pub value: u64,
@@ -1539,7 +1539,7 @@ impl core::fmt::Debug for InputShielded<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct InputShieldedT {
   pub nf: Option<Vec<u8>>,
   pub address: Option<String>,
@@ -1813,7 +1813,7 @@ impl core::fmt::Debug for OutputShielded<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct OutputShieldedT {
   pub incoming: bool,
   pub cmx: Option<Vec<u8>>,
@@ -2049,7 +2049,7 @@ impl core::fmt::Debug for ShieldedNote<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ShieldedNoteT {
   pub height: u32,
   pub confirmations: u32,
@@ -2370,7 +2370,7 @@ impl core::fmt::Debug for ShieldedMessage<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ShieldedMessageT {
   pub id_msg: u32,
   pub id_tx: u32,
@@ -2584,7 +2584,7 @@ impl core::fmt::Debug for UAReceivers<'_> {
   }
 }
 #[non_exhaustive]
-#[derive(Serialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct UAReceiversT {
   pub transparent: Option<String>,
   pub sapling: Option<String>,
@@ -2617,6 +2617,213 @@ impl UAReceiversT {
       transparent,
       sapling,
       orchard,
+    })
+  }
+}
+pub enum PaymentRequestOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct PaymentRequest<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for PaymentRequest<'a> {
+  type Inner = PaymentRequest<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> PaymentRequest<'a> {
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 4;
+  pub const VT_AMOUNT: flatbuffers::VOffsetT = 6;
+  pub const VT_MEMO_STRING: flatbuffers::VOffsetT = 8;
+  pub const VT_MEMO_BYTES: flatbuffers::VOffsetT = 10;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    PaymentRequest { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args PaymentRequestArgs<'args>
+  ) -> flatbuffers::WIPOffset<PaymentRequest<'bldr>> {
+    let mut builder = PaymentRequestBuilder::new(_fbb);
+    builder.add_amount(args.amount);
+    if let Some(x) = args.memo_bytes { builder.add_memo_bytes(x); }
+    if let Some(x) = args.memo_string { builder.add_memo_string(x); }
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> PaymentRequestT {
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    let amount = self.amount();
+    let memo_string = self.memo_string().map(|x| {
+      x.to_string()
+    });
+    let memo_bytes = self.memo_bytes().map(|x| {
+      x.into_iter().collect()
+    });
+    PaymentRequestT {
+      address,
+      amount,
+      memo_string,
+      memo_bytes,
+    }
+  }
+
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(PaymentRequest::VT_ADDRESS, None)}
+  }
+  #[inline]
+  pub fn amount(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(PaymentRequest::VT_AMOUNT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn memo_string(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(PaymentRequest::VT_MEMO_STRING, None)}
+  }
+  #[inline]
+  pub fn memo_bytes(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(PaymentRequest::VT_MEMO_BYTES, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for PaymentRequest<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("memo_string", Self::VT_MEMO_STRING, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("memo_bytes", Self::VT_MEMO_BYTES, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct PaymentRequestArgs<'a> {
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub amount: u64,
+    pub memo_string: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub memo_bytes: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+}
+impl<'a> Default for PaymentRequestArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    PaymentRequestArgs {
+      address: None,
+      amount: 0,
+      memo_string: None,
+      memo_bytes: None,
+    }
+  }
+}
+
+pub struct PaymentRequestBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PaymentRequestBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentRequest::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn add_amount(&mut self, amount: u64) {
+    self.fbb_.push_slot::<u64>(PaymentRequest::VT_AMOUNT, amount, 0);
+  }
+  #[inline]
+  pub fn add_memo_string(&mut self, memo_string: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentRequest::VT_MEMO_STRING, memo_string);
+  }
+  #[inline]
+  pub fn add_memo_bytes(&mut self, memo_bytes: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentRequest::VT_MEMO_BYTES, memo_bytes);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> PaymentRequestBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    PaymentRequestBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<PaymentRequest<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for PaymentRequest<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("PaymentRequest");
+      ds.field("address", &self.address());
+      ds.field("amount", &self.amount());
+      ds.field("memo_string", &self.memo_string());
+      ds.field("memo_bytes", &self.memo_bytes());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PaymentRequestT {
+  pub address: Option<String>,
+  pub amount: u64,
+  pub memo_string: Option<String>,
+  pub memo_bytes: Option<Vec<u8>>,
+}
+impl Default for PaymentRequestT {
+  fn default() -> Self {
+    Self {
+      address: None,
+      amount: 0,
+      memo_string: None,
+      memo_bytes: None,
+    }
+  }
+}
+impl PaymentRequestT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<PaymentRequest<'b>> {
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let amount = self.amount;
+    let memo_string = self.memo_string.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let memo_bytes = self.memo_bytes.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
+    PaymentRequest::create(_fbb, &PaymentRequestArgs{
+      address,
+      amount,
+      memo_string,
+      memo_bytes,
     })
   }
 }

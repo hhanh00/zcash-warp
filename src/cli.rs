@@ -1,4 +1,7 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::Result;
 use clap::Parser;
@@ -21,7 +24,10 @@ use zcash_primitives::memo::MemoBytes;
 use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{
-    account::{address::get_diversified_address, txs::get_txs}, coin::CoinDef, data::fb::{ShieldedNote, TransactionInfo}, db::{
+    account::{address::get_diversified_address, txs::get_txs},
+    coin::CoinDef,
+    data::fb::{PaymentRequestT, ShieldedNote, TransactionInfo},
+    db::{
         account::{get_account_info, get_balance},
         account_manager::{create_new_account, detect_key},
         notes::{
@@ -30,10 +36,22 @@ use crate::{
         },
         reset_tables,
         tx::{get_tx_details, list_messages},
-    }, fb_vec_to_bytes, keys::{generate_random_mnemonic_phrase, TSKStore}, lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state}, pay::{
+    },
+    fb_vec_to_bytes,
+    keys::{generate_random_mnemonic_phrase, TSKStore},
+    lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
+    pay::{
+        make_payment,
         sweep::{prepare_sweep, scan_utxo_by_seed},
         Payment, PaymentBuilder, PaymentItem,
-    }, txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details}, types::PoolMask, utils::ua::decode_ua, warp::{sync::warp_sync, BlockHeader}
+    },
+    txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
+    types::PoolMask,
+    utils::{
+        ua::decode_ua,
+        uri::{make_payment_uri, parse_payment_uri},
+    },
+    warp::{sync::warp_sync, BlockHeader},
 };
 
 #[derive(Deserialize)]
@@ -55,7 +73,9 @@ pub enum Command {
         name: Option<String>,
     },
     GenerateSeed,
-    Backup { account: u32 },
+    Backup {
+        account: u32,
+    },
     LastHeight,
     SyncHeight,
     Reset {
@@ -85,6 +105,7 @@ pub enum Command {
         amount: u64,
         pools: u8,
         fee_paid_by_sender: u8,
+        send: u8,
     },
     Sweep {
         account: u32,
@@ -105,14 +126,32 @@ pub enum Command {
     ListMessages {
         account: u32,
     },
-    DecodeUA { 
+    DecodeUA {
         ua: String,
+    },
+    MakePaymentURI {
+        recipients: Vec<PaymentRequestT>,
+    },
+    PayPaymentUri {
+        account: u32,
+        uri: String,
+        send: u8,
+    },
+    BroadcastLatest,
+}
+
+impl FromStr for PaymentRequestT {
+    type Err = serde_json::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        serde_json::from_str::<PaymentRequestT>(s)
     }
 }
 
 #[tokio::main]
 async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
     let network = &zec.network;
+    let mut txb = vec![];
     match command {
         Command::CreateDatabase => {
             let connection = zec.connection().unwrap();
@@ -195,6 +234,7 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             amount,
             pools,
             fee_paid_by_sender,
+            send,
         } => {
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
@@ -204,33 +244,27 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
                 recipients: vec![PaymentItem {
                     address,
                     amount,
-                    memo: MemoBytes::empty(),
+                    memo: None,
                 }],
             };
             let height = get_sync_height(&connection)?.unwrap();
             let connection = zec.connection()?;
-            let mut pb = PaymentBuilder::new(
+            txb = make_payment(
                 network,
                 &connection,
                 account,
                 height,
                 p,
                 PoolMask(pools),
+                fee_paid_by_sender != 0,
                 &s_tree,
                 &o_tree,
+                OsRng,
             )?;
-            pb.add_account_funds(&connection)?;
-            pb.set_use_change(true)?;
-            let mut utx = pb.prepare()?;
-            if fee_paid_by_sender == 0 {
-                let fee = pb.fee_manager.fee();
-                utx.add_to_change(fee as i64)?;
+            if send != 0 {
+                let r = broadcast(&mut client, height, &txb).await?;
+                println!("{}", r);
             }
-            let utx = pb.finalize(utx)?;
-            let connection = zec.connection()?;
-            let txb = utx.build(network, &connection, &mut TSKStore::default(), OsRng)?;
-            let r = broadcast(&mut client, height, &txb).await?;
-            println!("{}", r);
         }
         Command::GetTx { account, id } => {
             let connection = zec.connection()?;
@@ -246,7 +280,7 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
                 account,
                 tx,
             )?;
-            let txb = serde_cbor::to_vec(&tx)?;
+            txb = serde_cbor::to_vec(&tx)?;
             println!("{}", hex::encode(&txb));
             store_tx_details(&connection, id, &tx.txid, &txb)?;
         }
@@ -264,16 +298,16 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             let connection = zec.connection()?;
             let ai = get_account_info(network, &connection, account)?;
             let mut client = zec.connect_lwd().await?;
-            let height = get_last_height(&mut client).await?;
-            let (s, o) = get_tree_state(&mut client, height).await?;
+            let bc_height = get_last_height(&mut client).await?;
+            let (s, o) = get_tree_state(&mut client, bc_height).await?;
             let (utxos, mut tsk_store) =
-                scan_utxo_by_seed(network, &zec.url, ai, height, 0, true, 40).await?;
+                scan_utxo_by_seed(network, &zec.url, ai, bc_height, 0, true, 40).await?;
             let connection = zec.connection()?;
             let utx = prepare_sweep(
                 network,
                 &connection,
                 account,
-                height,
+                bc_height,
                 &utxos,
                 destination_address,
                 &s,
@@ -281,7 +315,7 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             )?;
             tracing::info!("{}", serde_json::to_string(&utx)?);
             let tx = utx.build(network, &connection, &mut tsk_store, OsRng)?;
-            let txid = broadcast(&mut client, height, &tx).await?;
+            let txid = broadcast(&mut client, bc_height, &tx).await?;
             println!("{}", txid);
         }
         Command::GetTxDetails { id } => {
@@ -323,8 +357,44 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&msgs).unwrap());
         }
         Command::DecodeUA { ua } => {
-            let ua = decode_ua(network, &ua)?;            
+            let ua = decode_ua(network, &ua)?;
             println!("{}", serde_json::to_string_pretty(&ua).unwrap());
+        }
+        Command::MakePaymentURI { recipients } => {
+            let recipients = recipients
+                .iter()
+                .map(|r| PaymentItem::try_from(r))
+                .collect::<Result<Vec<_>, _>>()?;
+            let payment_uri = make_payment_uri(&recipients)?;
+            println!("{}", payment_uri);
+        }
+        Command::PayPaymentUri { account, uri, send } => {
+            let recipients = parse_payment_uri(&uri)?;
+            let mut client = zec.connect_lwd().await?;
+            let bc_height = get_last_height(&mut client).await?;
+            let (s, o) = get_tree_state(&mut client, bc_height).await?;
+            let connection = zec.connection()?;
+            txb = make_payment(
+                network,
+                &connection,
+                account,
+                bc_height,
+                recipients,
+                PoolMask(7),
+                true,
+                &s,
+                &o,
+                OsRng,
+            )?;
+            if send != 0 {
+                let r = broadcast(&mut client, bc_height, &txb).await?;
+                println!("{}", r);
+            }
+        }
+        Command::BroadcastLatest => {
+            let mut client = zec.connect_lwd().await?;
+            let bc_height = get_last_height(&mut client).await?;
+            broadcast(&mut client, bc_height, &txb).await?;
         }
     }
     Ok(())

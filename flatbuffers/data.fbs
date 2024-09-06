@@ -91,3 +91,10 @@ table UAReceivers {
   sapling: string;
   orchard: string;
 }
+
+table PaymentRequest {
+  address: string;
+  amount: uint64;
+  memo_string: string;
+  memo_bytes: [uint8];
+}

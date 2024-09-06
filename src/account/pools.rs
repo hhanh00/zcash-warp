@@ -18,7 +18,7 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
     from_pool: u8,
     to_pool: u8,
     mut amount: u64,
-    memo: MemoBytes,
+    memo: Option<MemoBytes>,
     split_amount: u64,
     s: &CommitmentTreeFrontier,
     o: &CommitmentTreeFrontier,

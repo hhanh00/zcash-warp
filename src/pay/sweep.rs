@@ -120,7 +120,7 @@ pub fn prepare_sweep(
         recipients: vec![PaymentItem {
             address: destination_address,
             amount,
-            memo: MemoBytes::empty(),
+            memo: None,
         }],
     };
 

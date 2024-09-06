@@ -336,7 +336,8 @@ impl PaymentBuilder {
                 amount,
                 ..
             } = pi;
-            let note = OutputNote::from_address(&self.network, &address, memo)?;
+            let note = OutputNote::from_address(&self.network, &address, 
+                memo.unwrap_or(MemoBytes::empty()))?;
             tx_outputs.push(TxOutput {
                 address_string: address,
                 value: amount,
