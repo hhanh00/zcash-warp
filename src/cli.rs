@@ -4,7 +4,7 @@ use anyhow::Result;
 use clap::Parser;
 use clap_repl::{
     reedline::{DefaultPrompt, DefaultPromptSegment, FileBackedHistory},
-    ClapEditor, ReadCommandOutput,
+    ClapEditor,
 };
 use console::style;
 use figment::{
@@ -35,7 +35,7 @@ use crate::{
         tx::{get_tx_details, list_messages},
     },
     fb_vec_to_bytes,
-    keys::TSKStore,
+    keys::{generate_random_mnemonic_phrase, TSKStore},
     lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
     pay::{
         sweep::{prepare_sweep, scan_utxo_by_seed},
@@ -61,6 +61,7 @@ pub struct Config {
 pub enum Command {
     CreateDatabase,
     CreateAccount,
+    GenerateSeed,
     LastHeight,
     SyncHeight,
     Reset {
@@ -125,6 +126,10 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             let kt = detect_key(network, &CONFIG.seed, 0, 0)?;
             create_new_account(network, &connection, "Test", kt)?;
         }
+        Command::GenerateSeed => {
+            let seed = generate_random_mnemonic_phrase(&mut OsRng);
+            println!("{seed}");
+        }
         Command::LastHeight => {
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
@@ -151,7 +156,6 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
         Command::Sync { end_height } => loop {
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
-            let (s_tree, o_tree) = get_tree_state(&mut client, bc_height).await?;
             let connection = zec.connection()?;
             let end_height = end_height.unwrap_or(bc_height);
             let start_height = get_sync_height(&connection)?.expect("no sync data");
@@ -323,7 +327,7 @@ pub fn cli_main() -> Result<()> {
         left_prompt: DefaultPromptSegment::Basic("zcash-warp".to_owned()),
         ..DefaultPrompt::default()
     };
-    let mut rl = ClapEditor::<Command>::builder()
+    let rl = ClapEditor::<Command>::builder()
         .with_prompt(Box::new(prompt))
         .with_editor_hook(|reed| {
             reed.with_history(Box::new(

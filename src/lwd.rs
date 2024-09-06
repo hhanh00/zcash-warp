@@ -252,22 +252,3 @@ pub async fn get_transaction(
     )?;
     Ok((height, tx))
 }
-
-pub async fn filter_stats(client: &mut Client, start: u32, end: u32) -> Result<()> {
-    let mut blocks = get_compact_block_range(client, start, end).await?;
-    let mut total = 0;
-    let mut n = 0;
-    while let Some(block) = blocks.message().await? {
-        if block.height % 100_000 == 0 {
-            tracing::info!("{}", block.height);
-        }
-        for tx in block.vtx.iter() {
-            total += tx.outputs.len() + tx.actions.len();
-            if tx.outputs.len() >= 50 || tx.actions.len() >= 50 {
-                continue;
-            }
-            n += tx.outputs.len() + tx.actions.len();
-        }
-    }
-    Ok(())
-}
