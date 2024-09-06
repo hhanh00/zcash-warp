@@ -4,6 +4,7 @@ use orchard::{
     keys::{FullViewingKey, SpendingKey},
     Address,
 };
+use prost::bytes::BufMut as _;
 use sapling_crypto::{
     zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey},
     PaymentAddress,
@@ -94,6 +95,58 @@ pub struct AccountInfo {
     pub transparent: Option<TransparentAccountInfo>,
     pub sapling: SaplingAccountInfo,
     pub orchard: Option<OrchardAccountInfo>,
+}
+
+impl SaplingAccountInfo {
+    pub fn from_sk(sk: &ExtendedSpendingKey) -> Self {
+        #[allow(deprecated)]
+        let vk = sk.to_extended_full_viewing_key();
+        let (_, addr) = vk.default_address();
+        Self {
+            sk: Some(sk.clone()),
+            vk,
+            addr,
+        }
+    }
+
+    pub fn from_vk(vk: &ExtendedFullViewingKey) -> Self {
+        let (_, addr) = vk.default_address();
+        Self {
+            sk: None,
+            vk: vk.clone(),
+            addr,
+        }
+    }
+
+    pub fn from_dvk(dvk: &DiversifiableFullViewingKey) -> Self {
+        let (_, addr) = dvk.default_address();
+        // There is no public api to build a ExtendedFullViewingKey from DiversifiableFullViewingKey
+        // we use the binary serialization format as a workaround
+        let mut evk = vec![];
+        evk.put_u8(0); // depth
+        evk.put_u32(0); // tag
+        evk.put_u32(0); // index
+        evk.put_bytes(0, 32); // chain code
+        evk.put(&dvk.to_bytes()[..]);
+        let evk = ExtendedFullViewingKey::read(&*evk).unwrap();
+
+        Self {
+            sk: None,
+            vk: evk,
+            addr,
+        }
+    }
+}
+
+impl OrchardAccountInfo {
+    pub fn from_vk(vk: &FullViewingKey) -> Self {
+        let addr = vk.address_at(0u64, orchard::keys::Scope::External);
+        Self {
+            sk: None,
+            vk: vk.clone(),
+            addr,
+        }
+    }
 }
 
 impl AccountInfo {

@@ -26,7 +26,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         aindex INTEGER NOT NULL,
         sk TEXT,
         vk TEXT NOT NULL,
-        address TEXT NOT NULL,
+        address TEXT NOT NULL UNIQUE,
         saved BOOL NOT NULL)",
         [],
     )?;

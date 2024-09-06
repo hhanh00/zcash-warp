@@ -77,11 +77,8 @@ impl Synchronizer {
         let ivks = self
             .account_infos
             .iter()
-            .map(|ai| {
-                (
-                    ai.account,
-                    ai.orchard.as_ref().unwrap().vk.to_ivk(Scope::External),
-                )
+            .filter_map(|ai| {
+                ai.orchard.as_ref().map(|oi| (ai.account, oi.vk.to_ivk(Scope::External)))
             })
             .collect::<Vec<_>>();
 

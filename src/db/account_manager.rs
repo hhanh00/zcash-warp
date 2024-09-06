@@ -1,7 +1,6 @@
 use anyhow::Result;
 use bip39::{Mnemonic, Seed};
 use rusqlite::{params, Connection};
-use secp256k1::SecretKey;
 use zcash_client_backend::{
     encoding::{
         decode_extended_full_viewing_key, decode_extended_spending_key,
@@ -40,7 +39,7 @@ pub enum KeyType {
     SaplingSK(ExtendedSpendingKey),
     SaplingVK(ExtendedFullViewingKey),
     UnifiedVK(UnifiedFullViewingKey),
-    Transparent(SecretKey),
+    Transparent,
 }
 
 pub fn detect_key(
@@ -64,8 +63,8 @@ pub fn detect_key(
     if let Ok(uvk) = UnifiedFullViewingKey::decode(network, key) {
         return Ok(KeyType::UnifiedVK(uvk));
     }
-    if let Ok(tsk) = import_sk_bip38(key) {
-        return Ok(KeyType::Transparent(tsk));
+    if let Ok(_) = import_sk_bip38(key) {
+        return Ok(KeyType::Transparent);
     }
     return Err(anyhow::anyhow!("Not a valid key"));
 }
@@ -89,10 +88,30 @@ pub fn create_new_account(
             create_orchard_account(network, connection, account, &oi)?;
             account
         }
-        KeyType::SaplingSK(_) => todo!(),
-        KeyType::SaplingVK(_) => todo!(),
-        KeyType::UnifiedVK(_) => todo!(),
-        KeyType::Transparent(_) => {
+        KeyType::SaplingSK(sk) => {
+            let si = SaplingAccountInfo::from_sk(&sk);
+            let account =
+                create_sapling_account(network, connection, name, None, 0, &si)?;
+            account
+        },
+        KeyType::SaplingVK(vk) => {
+            let si = SaplingAccountInfo::from_vk(&vk);
+            let account =
+                create_sapling_account(network, connection, name, None, 0, &si)?;
+            account
+        },
+        KeyType::UnifiedVK(uvk) => {
+            let svk = uvk.sapling().ok_or(anyhow::anyhow!("Missing sapling receiver"))?;
+            let si = SaplingAccountInfo::from_dvk(&svk);
+            let account =
+                create_sapling_account(network, connection, name, None, 0, &si)?;
+            uvk.orchard().map(|ovk| {
+                let oi = OrchardAccountInfo::from_vk(ovk);
+                create_orchard_account(network, connection, account, &oi)
+            }).transpose()?;
+            account
+        }
+        KeyType::Transparent => {
             anyhow::bail!("Transparent Private Keys are not supported. Use Sweep instead.")
         }
     };
@@ -118,8 +137,7 @@ pub fn create_sapling_account(
 
     connection.execute(
         "INSERT INTO accounts(name, seed, aindex, sk, vk, address, saved)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, FALSE)
-        ON CONFLICT DO NOTHING",
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, FALSE)",
         params![name, seed, acc_index, sk, vk, addr],
     )?;
     let account =

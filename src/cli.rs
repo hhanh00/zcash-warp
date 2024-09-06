@@ -60,8 +60,12 @@ pub struct Config {
 #[derive(Parser, Clone, Debug)]
 pub enum Command {
     CreateDatabase,
-    CreateAccount,
+    CreateAccount {
+        key: Option<String>,
+        name: Option<String>,
+    },
     GenerateSeed,
+    Backup { account: u32 },
     LastHeight,
     SyncHeight,
     Reset {
@@ -121,14 +125,22 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
             let connection = zec.connection().unwrap();
             reset_tables(&connection)?;
         }
-        Command::CreateAccount => {
+        Command::CreateAccount { key, name } => {
             let connection = zec.connection()?;
-            let kt = detect_key(network, &CONFIG.seed, 0, 0)?;
-            create_new_account(network, &connection, "Test", kt)?;
+            let key = key.unwrap_or(CONFIG.seed.clone());
+            let name = name.unwrap_or("Test".to_string());
+            let kt = detect_key(network, &key, 0, 0)?;
+            create_new_account(network, &connection, &name, kt)?;
         }
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
             println!("{seed}");
+        }
+        Command::Backup { account } => {
+            let connection = zec.connection()?;
+            let ai = get_account_info(network, &connection, account)?;
+            let backup = ai.to_backup(network);
+            println!("{}", serde_json::to_string_pretty(&backup).unwrap());
         }
         Command::LastHeight => {
             let mut client = zec.connect_lwd().await?;
@@ -143,7 +155,10 @@ async fn process_command(command: Command, zec: &CoinDef) -> Result<()> {
         Command::Reset { height } => {
             let connection = zec.connection()?;
             truncate_scan(&connection)?;
-            let activation: u32 = network.activation_height(NetworkUpgrade::Sapling).unwrap().into();
+            let activation: u32 = network
+                .activation_height(NetworkUpgrade::Sapling)
+                .unwrap()
+                .into();
             let birth_height = CONFIG.birth.max(activation + 1);
             let height = height.unwrap_or(birth_height);
             let mut client = zec.connect_lwd().await?;
