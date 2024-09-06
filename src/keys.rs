@@ -52,15 +52,7 @@ pub fn derive_zip32(network: &Network, seed: &Seed, acc_index: u32) -> SaplingAc
         ChildIndex::hardened(acc_index),
     ];
     let sk = ExtendedSpendingKey::from_path(&master, &path);
-    #[allow(deprecated)]
-    let vk = sk.to_extended_full_viewing_key();
-    let (_, addr) = vk.default_address();
-
-    SaplingAccountInfo {
-        sk: Some(sk),
-        vk,
-        addr,
-    }
+    SaplingAccountInfo::from_sk(&sk)
 }
 
 pub fn derive_bip32(
