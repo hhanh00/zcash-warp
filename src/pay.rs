@@ -1,16 +1,19 @@
+use std::str::FromStr;
+
 use fee::FeeManager;
 use orchard::circuit::ProvingKey;
+use rand::{CryptoRng, RngCore};
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 use zcash_proofs::prover::LocalTxProver;
 use zcash_keys::address::Address as RecipientAddress;
+use zcash_protocol::memo::Memo;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    types::{AccountInfo, PoolMask},
-    warp::{AuthPath, Edge, Witness, UTXO},
-    Hash,
+    data::fb::PaymentRequestT, keys::TSKStore, types::{AccountInfo, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -39,7 +42,25 @@ pub enum Error {
 pub struct PaymentItem {
     pub address: String,
     pub amount: u64,
-    pub memo: MemoBytes,
+    pub memo: Option<MemoBytes>,
+}
+
+impl TryFrom<&PaymentRequestT> for PaymentItem {
+    fn try_from(p: &PaymentRequestT) -> Result<Self> {
+        let memo = p.memo_string.as_ref().map_or_else(
+            || 
+            p.memo_bytes.as_ref().map(|b| Memo::from_bytes(&*b)),
+            |s| Some(Memo::from_str(&s))
+        ).transpose().map_err(anyhow::Error::new)?;
+        let memo = memo.map(|memo| MemoBytes::from(&memo));
+        Ok(Self {
+            address: p.address.clone().unwrap(),
+            amount: p.amount,
+            memo,
+        })
+    }
+    
+    type Error = Error;
 }
 
 pub struct Payment {
@@ -188,4 +209,31 @@ const EXPIRATION_HEIGHT: u32 = 50;
 lazy_static::lazy_static! {
     pub static ref PROVER: LocalTxProver = LocalTxProver::with_default_location().unwrap();
     pub static ref ORCHARD_PROVER: ProvingKey = ProvingKey::build();
+}
+
+pub fn make_payment<R: RngCore + CryptoRng>(network: &Network, connection: &Connection, account: u32,
+    height: u32, p: Payment, src_pools: PoolMask,
+    fee_paid_by_sender: bool,
+    s_tree: &CommitmentTreeFrontier, o_tree: &CommitmentTreeFrontier,
+    mut rng: R) -> Result<Vec<u8>> {
+    let mut pb = PaymentBuilder::new(
+        network,
+        connection,
+        account,
+        height,
+        p,
+        src_pools,
+        s_tree,
+        o_tree,
+    )?;
+    pb.add_account_funds(&connection)?;
+    pb.set_use_change(true)?;
+    let mut utx = pb.prepare()?;
+    if !fee_paid_by_sender {
+        let fee = pb.fee_manager.fee();
+        utx.add_to_change(fee as i64)?;
+    }
+    let utx = pb.finalize(utx)?;
+    let txb = utx.build(network, connection, &mut TSKStore::default(), &mut rng)?;
+    Ok(txb)
 }
