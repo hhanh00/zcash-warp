@@ -2105,14 +2105,16 @@ impl<'a> flatbuffers::Follow<'a> for ShieldedMessage<'a> {
 impl<'a> ShieldedMessage<'a> {
   pub const VT_ID_MSG: flatbuffers::VOffsetT = 4;
   pub const VT_ID_TX: flatbuffers::VOffsetT = 6;
-  pub const VT_HEIGHT: flatbuffers::VOffsetT = 8;
-  pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 10;
-  pub const VT_INCOMING: flatbuffers::VOffsetT = 12;
-  pub const VT_NOUT: flatbuffers::VOffsetT = 14;
-  pub const VT_SENDER: flatbuffers::VOffsetT = 16;
-  pub const VT_RECIPIENT: flatbuffers::VOffsetT = 18;
-  pub const VT_SUBJECT: flatbuffers::VOffsetT = 20;
-  pub const VT_BODY: flatbuffers::VOffsetT = 22;
+  pub const VT_TXID: flatbuffers::VOffsetT = 8;
+  pub const VT_HEIGHT: flatbuffers::VOffsetT = 10;
+  pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 12;
+  pub const VT_INCOMING: flatbuffers::VOffsetT = 14;
+  pub const VT_NOUT: flatbuffers::VOffsetT = 16;
+  pub const VT_SENDER: flatbuffers::VOffsetT = 18;
+  pub const VT_RECIPIENT: flatbuffers::VOffsetT = 20;
+  pub const VT_SUBJECT: flatbuffers::VOffsetT = 22;
+  pub const VT_BODY: flatbuffers::VOffsetT = 24;
+  pub const VT_READ: flatbuffers::VOffsetT = 26;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2131,8 +2133,10 @@ impl<'a> ShieldedMessage<'a> {
     builder.add_nout(args.nout);
     builder.add_timestamp(args.timestamp);
     builder.add_height(args.height);
+    if let Some(x) = args.txid { builder.add_txid(x); }
     builder.add_id_tx(args.id_tx);
     builder.add_id_msg(args.id_msg);
+    builder.add_read(args.read);
     builder.add_incoming(args.incoming);
     builder.finish()
   }
@@ -2140,6 +2144,9 @@ impl<'a> ShieldedMessage<'a> {
   pub fn unpack(&self) -> ShieldedMessageT {
     let id_msg = self.id_msg();
     let id_tx = self.id_tx();
+    let txid = self.txid().map(|x| {
+      x.into_iter().collect()
+    });
     let height = self.height();
     let timestamp = self.timestamp();
     let incoming = self.incoming();
@@ -2156,9 +2163,11 @@ impl<'a> ShieldedMessage<'a> {
     let body = self.body().map(|x| {
       x.to_string()
     });
+    let read = self.read();
     ShieldedMessageT {
       id_msg,
       id_tx,
+      txid,
       height,
       timestamp,
       incoming,
@@ -2167,6 +2176,7 @@ impl<'a> ShieldedMessage<'a> {
       recipient,
       subject,
       body,
+      read,
     }
   }
 
@@ -2183,6 +2193,13 @@ impl<'a> ShieldedMessage<'a> {
     // Created from valid Table for this object
     // which contains a valid value in this slot
     unsafe { self._tab.get::<u32>(ShieldedMessage::VT_ID_TX, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn txid(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(ShieldedMessage::VT_TXID, None)}
   }
   #[inline]
   pub fn height(&self) -> u32 {
@@ -2240,6 +2257,13 @@ impl<'a> ShieldedMessage<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(ShieldedMessage::VT_BODY, None)}
   }
+  #[inline]
+  pub fn read(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(ShieldedMessage::VT_READ, Some(false)).unwrap()}
+  }
 }
 
 impl flatbuffers::Verifiable for ShieldedMessage<'_> {
@@ -2251,6 +2275,7 @@ impl flatbuffers::Verifiable for ShieldedMessage<'_> {
     v.visit_table(pos)?
      .visit_field::<u32>("id_msg", Self::VT_ID_MSG, false)?
      .visit_field::<u32>("id_tx", Self::VT_ID_TX, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("txid", Self::VT_TXID, false)?
      .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
      .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
      .visit_field::<bool>("incoming", Self::VT_INCOMING, false)?
@@ -2259,6 +2284,7 @@ impl flatbuffers::Verifiable for ShieldedMessage<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("recipient", Self::VT_RECIPIENT, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("subject", Self::VT_SUBJECT, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("body", Self::VT_BODY, false)?
+     .visit_field::<bool>("read", Self::VT_READ, false)?
      .finish();
     Ok(())
   }
@@ -2266,6 +2292,7 @@ impl flatbuffers::Verifiable for ShieldedMessage<'_> {
 pub struct ShieldedMessageArgs<'a> {
     pub id_msg: u32,
     pub id_tx: u32,
+    pub txid: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub height: u32,
     pub timestamp: u32,
     pub incoming: bool,
@@ -2274,6 +2301,7 @@ pub struct ShieldedMessageArgs<'a> {
     pub recipient: Option<flatbuffers::WIPOffset<&'a str>>,
     pub subject: Option<flatbuffers::WIPOffset<&'a str>>,
     pub body: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub read: bool,
 }
 impl<'a> Default for ShieldedMessageArgs<'a> {
   #[inline]
@@ -2281,6 +2309,7 @@ impl<'a> Default for ShieldedMessageArgs<'a> {
     ShieldedMessageArgs {
       id_msg: 0,
       id_tx: 0,
+      txid: None,
       height: 0,
       timestamp: 0,
       incoming: false,
@@ -2289,6 +2318,7 @@ impl<'a> Default for ShieldedMessageArgs<'a> {
       recipient: None,
       subject: None,
       body: None,
+      read: false,
     }
   }
 }
@@ -2305,6 +2335,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ShieldedMessageBuilder<'a, 'b, 
   #[inline]
   pub fn add_id_tx(&mut self, id_tx: u32) {
     self.fbb_.push_slot::<u32>(ShieldedMessage::VT_ID_TX, id_tx, 0);
+  }
+  #[inline]
+  pub fn add_txid(&mut self, txid: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ShieldedMessage::VT_TXID, txid);
   }
   #[inline]
   pub fn add_height(&mut self, height: u32) {
@@ -2339,6 +2373,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ShieldedMessageBuilder<'a, 'b, 
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ShieldedMessage::VT_BODY, body);
   }
   #[inline]
+  pub fn add_read(&mut self, read: bool) {
+    self.fbb_.push_slot::<bool>(ShieldedMessage::VT_READ, read, false);
+  }
+  #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> ShieldedMessageBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     ShieldedMessageBuilder {
@@ -2358,6 +2396,7 @@ impl core::fmt::Debug for ShieldedMessage<'_> {
     let mut ds = f.debug_struct("ShieldedMessage");
       ds.field("id_msg", &self.id_msg());
       ds.field("id_tx", &self.id_tx());
+      ds.field("txid", &self.txid());
       ds.field("height", &self.height());
       ds.field("timestamp", &self.timestamp());
       ds.field("incoming", &self.incoming());
@@ -2366,6 +2405,7 @@ impl core::fmt::Debug for ShieldedMessage<'_> {
       ds.field("recipient", &self.recipient());
       ds.field("subject", &self.subject());
       ds.field("body", &self.body());
+      ds.field("read", &self.read());
       ds.finish()
   }
 }
@@ -2374,6 +2414,7 @@ impl core::fmt::Debug for ShieldedMessage<'_> {
 pub struct ShieldedMessageT {
   pub id_msg: u32,
   pub id_tx: u32,
+  pub txid: Option<Vec<u8>>,
   pub height: u32,
   pub timestamp: u32,
   pub incoming: bool,
@@ -2382,12 +2423,14 @@ pub struct ShieldedMessageT {
   pub recipient: Option<String>,
   pub subject: Option<String>,
   pub body: Option<String>,
+  pub read: bool,
 }
 impl Default for ShieldedMessageT {
   fn default() -> Self {
     Self {
       id_msg: 0,
       id_tx: 0,
+      txid: None,
       height: 0,
       timestamp: 0,
       incoming: false,
@@ -2396,6 +2439,7 @@ impl Default for ShieldedMessageT {
       recipient: None,
       subject: None,
       body: None,
+      read: false,
     }
   }
 }
@@ -2406,6 +2450,9 @@ impl ShieldedMessageT {
   ) -> flatbuffers::WIPOffset<ShieldedMessage<'b>> {
     let id_msg = self.id_msg;
     let id_tx = self.id_tx;
+    let txid = self.txid.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
     let height = self.height;
     let timestamp = self.timestamp;
     let incoming = self.incoming;
@@ -2422,9 +2469,11 @@ impl ShieldedMessageT {
     let body = self.body.as_ref().map(|x|{
       _fbb.create_string(x)
     });
+    let read = self.read;
     ShieldedMessage::create(_fbb, &ShieldedMessageArgs{
       id_msg,
       id_tx,
+      txid,
       height,
       timestamp,
       incoming,
@@ -2433,6 +2482,7 @@ impl ShieldedMessageT {
       recipient,
       subject,
       body,
+      read,
     })
   }
 }
@@ -2824,6 +2874,209 @@ impl PaymentRequestT {
       amount,
       memo_string,
       memo_bytes,
+    })
+  }
+}
+pub enum AccountNameOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AccountName<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AccountName<'a> {
+  type Inner = AccountName<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AccountName<'a> {
+  pub const VT_ID: flatbuffers::VOffsetT = 4;
+  pub const VT_NAME: flatbuffers::VOffsetT = 6;
+  pub const VT_SAPLING_ADDRESS: flatbuffers::VOffsetT = 8;
+  pub const VT_BIRTH: flatbuffers::VOffsetT = 10;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AccountName { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args AccountNameArgs<'args>
+  ) -> flatbuffers::WIPOffset<AccountName<'bldr>> {
+    let mut builder = AccountNameBuilder::new(_fbb);
+    builder.add_birth(args.birth);
+    if let Some(x) = args.sapling_address { builder.add_sapling_address(x); }
+    if let Some(x) = args.name { builder.add_name(x); }
+    builder.add_id(args.id);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> AccountNameT {
+    let id = self.id();
+    let name = self.name().map(|x| {
+      x.to_string()
+    });
+    let sapling_address = self.sapling_address().map(|x| {
+      x.to_string()
+    });
+    let birth = self.birth();
+    AccountNameT {
+      id,
+      name,
+      sapling_address,
+      birth,
+    }
+  }
+
+  #[inline]
+  pub fn id(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(AccountName::VT_ID, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn name(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AccountName::VT_NAME, None)}
+  }
+  #[inline]
+  pub fn sapling_address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AccountName::VT_SAPLING_ADDRESS, None)}
+  }
+  #[inline]
+  pub fn birth(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(AccountName::VT_BIRTH, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for AccountName<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("id", Self::VT_ID, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("sapling_address", Self::VT_SAPLING_ADDRESS, false)?
+     .visit_field::<u32>("birth", Self::VT_BIRTH, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AccountNameArgs<'a> {
+    pub id: u32,
+    pub name: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub sapling_address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub birth: u32,
+}
+impl<'a> Default for AccountNameArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    AccountNameArgs {
+      id: 0,
+      name: None,
+      sapling_address: None,
+      birth: 0,
+    }
+  }
+}
+
+pub struct AccountNameBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> AccountNameBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_id(&mut self, id: u32) {
+    self.fbb_.push_slot::<u32>(AccountName::VT_ID, id, 0);
+  }
+  #[inline]
+  pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AccountName::VT_NAME, name);
+  }
+  #[inline]
+  pub fn add_sapling_address(&mut self, sapling_address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AccountName::VT_SAPLING_ADDRESS, sapling_address);
+  }
+  #[inline]
+  pub fn add_birth(&mut self, birth: u32) {
+    self.fbb_.push_slot::<u32>(AccountName::VT_BIRTH, birth, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> AccountNameBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    AccountNameBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AccountName<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AccountName<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AccountName");
+      ds.field("id", &self.id());
+      ds.field("name", &self.name());
+      ds.field("sapling_address", &self.sapling_address());
+      ds.field("birth", &self.birth());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct AccountNameT {
+  pub id: u32,
+  pub name: Option<String>,
+  pub sapling_address: Option<String>,
+  pub birth: u32,
+}
+impl Default for AccountNameT {
+  fn default() -> Self {
+    Self {
+      id: 0,
+      name: None,
+      sapling_address: None,
+      birth: 0,
+    }
+  }
+}
+impl AccountNameT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<AccountName<'b>> {
+    let id = self.id;
+    let name = self.name.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let sapling_address = self.sapling_address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let birth = self.birth;
+    AccountName::create(_fbb, &AccountNameArgs{
+      id,
+      name,
+      sapling_address,
+      birth,
     })
   }
 }

@@ -60,12 +60,6 @@ pub enum AccountType {
 }
 
 #[derive(Debug)]
-pub struct AccountName {
-    pub account: u32,
-    pub name: String,
-}
-
-#[derive(Debug)]
 pub struct TransparentAccountInfo {
     pub sk: secp256k1::SecretKey,
     pub addr: TransparentAddress,

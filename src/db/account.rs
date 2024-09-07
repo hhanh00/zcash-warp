@@ -8,19 +8,32 @@ use zcash_client_backend::encoding::{
 use zcash_primitives::consensus::{Network, NetworkConstants as _};
 use zcash_primitives::legacy::TransparentAddress;
 
+use crate::data::fb::AccountNameT;
 use crate::keys::import_sk_bip38;
 use crate::types::{
-    AccountInfo, AccountName, Balance, OrchardAccountInfo, SaplingAccountInfo,
-    TransparentAccountInfo,
+    AccountInfo, Balance, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo,
 };
 
-pub fn list_accounts(connection: &Connection) -> Result<Vec<AccountName>> {
-    let mut s = connection.prepare("SELECT id_account, name FROM accounts ORDER BY id_account")?;
-    let rows = s.query_map([], |r| Ok((r.get::<_, u32>(0)?, r.get::<_, String>(1)?)))?;
+pub fn list_accounts(connection: &Connection) -> Result<Vec<AccountNameT>> {
+    let mut s =
+        connection.prepare("SELECT id_account, name, address, birth FROM accounts ORDER BY id_account")?;
+    let rows = s.query_map([], |r| {
+        Ok((
+            r.get::<_, u32>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+            r.get::<_, u32>(3)?,
+        ))
+    })?;
     let mut accounts = vec![];
     for r in rows {
-        let (account, name) = r?;
-        accounts.push(AccountName { account, name });
+        let (id, name, address, birth) = r?;
+        accounts.push(AccountNameT {
+            id,
+            name: Some(name),
+            sapling_address: Some(address),
+            birth,
+        });
     }
 
     Ok(accounts)

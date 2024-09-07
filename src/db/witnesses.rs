@@ -5,7 +5,7 @@
 // use tracing::info;
 
 use crate::{
-    warp::{AuthPath, Edge, Hasher, Witness, MERKLE_DEPTH},
+    warp::{AuthPath, Hasher, Witness, MERKLE_DEPTH},
     Hash,
 };
 

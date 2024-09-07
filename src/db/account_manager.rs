@@ -74,12 +74,13 @@ pub fn create_new_account(
     connection: &Connection,
     name: &str,
     key: KeyType,
+    birth: u32,
 ) -> Result<u32> {
     let account = match key {
         KeyType::Seed(seed_str, seed, acc_index, _addr_index) => {
             let si = derive_zip32(network, &seed, acc_index);
             let account =
-                create_sapling_account(network, connection, name, Some(&seed_str), acc_index, &si)?;
+                create_sapling_account(network, connection, name, Some(&seed_str), acc_index, birth, &si)?;
             // This should have been acc_index / addr_index but ZecWallet Lite derives
             // with an incorrect path that we follow for compatibility reasons
             let ti = derive_bip32(network, &seed, 0, acc_index, true);
@@ -91,20 +92,20 @@ pub fn create_new_account(
         KeyType::SaplingSK(sk) => {
             let si = SaplingAccountInfo::from_sk(&sk);
             let account =
-                create_sapling_account(network, connection, name, None, 0, &si)?;
+                create_sapling_account(network, connection, name, None, 0, birth, &si)?;
             account
         },
         KeyType::SaplingVK(vk) => {
             let si = SaplingAccountInfo::from_vk(&vk);
             let account =
-                create_sapling_account(network, connection, name, None, 0, &si)?;
+                create_sapling_account(network, connection, name, None, 0, birth, &si)?;
             account
         },
         KeyType::UnifiedVK(uvk) => {
             let svk = uvk.sapling().ok_or(anyhow::anyhow!("Missing sapling receiver"))?;
             let si = SaplingAccountInfo::from_dvk(&svk);
             let account =
-                create_sapling_account(network, connection, name, None, 0, &si)?;
+                create_sapling_account(network, connection, name, None, 0, birth, &si)?;
             uvk.orchard().map(|ovk| {
                 let oi = OrchardAccountInfo::from_vk(ovk);
                 create_orchard_account(network, connection, account, &oi)
@@ -125,6 +126,7 @@ pub fn create_sapling_account(
     name: &str,
     seed: Option<&str>,
     acc_index: u32,
+    birth: u32,
     si: &SaplingAccountInfo,
 ) -> Result<u32> {
     let sk = si
@@ -136,9 +138,9 @@ pub fn create_sapling_account(
     let addr = encode_payment_address(network.hrp_sapling_payment_address(), &si.addr);
 
     connection.execute(
-        "INSERT INTO accounts(name, seed, aindex, sk, vk, address, saved)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, FALSE)",
-        params![name, seed, acc_index, sk, vk, addr],
+        "INSERT INTO accounts(name, seed, aindex, sk, vk, address, birth, saved)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, FALSE)",
+        params![name, seed, acc_index, sk, vk, addr, birth],
     )?;
     let account =
         connection.query_row("SELECT id_account FROM accounts WHERE vk = ?1", [vk], |r| {
@@ -181,6 +183,18 @@ pub fn create_orchard_account(
     Ok(())
 }
 
+pub fn edit_account_name(connection: &Connection, account: u32, name: &str) -> Result<()> {
+    connection.execute("UPDATE accounts SET name = ?2 where id_account = ?1",
+        params![account, name])?;
+    Ok(())    
+}
+
+pub fn edit_account_birth(connection: &Connection, account: u32, birth: u32) -> Result<()> {
+    connection.execute("UPDATE accounts SET birth = ?2 where id_account = ?1",
+        params![account, birth])?;
+    Ok(())    
+}
+
 pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     connection.execute("DELETE FROM notes WHERE account = ?1", params![account])?;
     connection.execute("DELETE FROM txs WHERE account = ?1", params![account])?;
@@ -198,4 +212,9 @@ pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     )?;
     connection.execute("DELETE FROM messages WHERE account = ?1", params![account])?;
     Ok(())
+}
+
+pub fn get_min_birth(connection: &Connection) -> Result<Option<u32>> {
+    let birth = connection.query_row("SELECT MIN(birth) FROM accounts", [], |r| r.get::<_, Option<u32>>(0))?;
+    Ok(birth)
 }

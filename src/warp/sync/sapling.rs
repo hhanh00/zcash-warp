@@ -52,7 +52,7 @@ impl Synchronizer {
         let accounts = list_accounts(connection)?;
         let mut account_infos = vec![];
         for a in accounts {
-            let ai = get_account_info(network, connection, a.account)?;
+            let ai = get_account_info(network, connection, a.id)?;
             account_infos.push(ai);
         }
         let notes = list_received_notes(connection, start, false)?;

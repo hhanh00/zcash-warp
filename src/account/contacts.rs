@@ -9,17 +9,13 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use zcash_client_backend::address::UnifiedAddress;
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{
-    legacy::TransparentAddress, memo::{Memo, MemoBytes}
+    legacy::TransparentAddress,
+    memo::{Memo, MemoBytes},
 };
 
 use crate::db::contacts::store_contact;
 
-pub fn add_contact(
-    connection: &Connection,
-    account: u32,
-    name: &str,
-    address: &str,
-) -> Result<()> {
+pub fn add_contact(connection: &Connection, account: u32, name: &str, address: &str) -> Result<()> {
     store_contact(connection, account, name, address, true)?;
     Ok(())
 }
@@ -71,9 +67,10 @@ impl<T: ChunkedMemoData> ChunkedMemoDecoder<T> {
     pub fn add_memo(&mut self, memo: &MemoBytes) -> anyhow::Result<()> {
         let memo = Memo::try_from(memo.clone())?;
         if let Memo::Arbitrary(bytes) = memo {
-            let (n, data) = Self::decode_box(&bytes)?;
-            self.has_data = true;
-            self.chunks[n as usize] = data;
+            if let Some((n, data)) = Self::decode_box(&bytes)? {
+                self.has_data = true;
+                self.chunks[n as usize] = data;
+            }
         }
 
         Ok(())
@@ -88,11 +85,11 @@ impl<T: ChunkedMemoData> ChunkedMemoDecoder<T> {
         Ok(contacts)
     }
 
-    fn decode_box(bb: &[u8; 511]) -> anyhow::Result<(u8, Vec<u8>)> {
+    fn decode_box(bb: &[u8; 511]) -> anyhow::Result<Option<(u8, Vec<u8>)>> {
         let mut bb: &[u8] = bb;
         let magic = bb.get_u32();
         if magic != T::COOKIE {
-            anyhow::bail!("Not a contact record");
+            return Ok(None);
         }
         let n = bb.get_u8();
         let len = bb.get_u16() as usize;
@@ -101,7 +98,7 @@ impl<T: ChunkedMemoData> ChunkedMemoDecoder<T> {
         }
 
         let data = &bb[0..len];
-        Ok((n, data.to_vec()))
+        Ok(Some((n, data.to_vec())))
     }
 }
 

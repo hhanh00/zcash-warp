@@ -151,6 +151,7 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
         let msg = ShieldedMessageT {
             id_msg,
             id_tx,
+            txid: Some(txid),
             height,
             timestamp,
             incoming,
@@ -159,6 +160,7 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
             recipient,
             subject: Some(subject),
             body: Some(body),
+            read,
         };
         msgs.push(msg);
     }

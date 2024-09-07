@@ -24,7 +24,7 @@ pub fn make_payment_uri(recipients: &[PaymentItem]) -> Result<String> {
 
 pub fn parse_payment_uri(uri: &str) -> Result<crate::pay::Payment> {
     let treq = TransactionRequest::from_uri(uri)?;
-    let recipients = treq.payments().iter().map(|(r, p)| PaymentItem {
+    let recipients = treq.payments().iter().map(|(_, p)| PaymentItem {
         address: p.recipient_address().encode(),
         amount: p.amount().into(),
         memo: p.memo().cloned(),

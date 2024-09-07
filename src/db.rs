@@ -27,6 +27,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         sk TEXT,
         vk TEXT NOT NULL,
         address TEXT NOT NULL UNIQUE,
+        birth INTEGER NOT NULL,
         saved BOOL NOT NULL)",
         [],
     )?;
