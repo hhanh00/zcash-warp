@@ -402,6 +402,7 @@ fn visit_memo(
         Memo::Text(text) => {
             let msg = parse_memo_text(
                 id_tx,
+                &tx.txid,
                 nout,
                 tx.height,
                 tx.timestamp,
@@ -419,6 +420,7 @@ fn visit_memo(
 
 fn parse_memo_text(
     id_tx: u32,
+    txid: &Hash,
     nout: u32,
     height: u32,
     timestamp: u32,
@@ -432,6 +434,7 @@ fn parse_memo_text(
         ShieldedMessageT {
             id_msg: 0,
             id_tx,
+            txid: Some(txid.to_vec()),
             nout,
             height,
             timestamp,
@@ -444,11 +447,13 @@ fn parse_memo_text(
             recipient: Some(recipient.to_string()),
             subject: Some(memo_lines[2].to_string()),
             body: Some(memo_lines[3].to_string()),
+            read: false,
         }
     } else {
         ShieldedMessageT {
             id_msg: 0,
             id_tx,
+            txid: Some(txid.to_vec()),
             height,
             timestamp,
             incoming,
@@ -457,6 +462,7 @@ fn parse_memo_text(
             recipient: Some(recipient.to_string()),
             subject: Some(String::new()),
             body: Some(memo.to_string()),
+            read: false,
         }
     };
     Ok(msg)

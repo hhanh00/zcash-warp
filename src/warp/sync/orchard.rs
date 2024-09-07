@@ -56,7 +56,7 @@ impl Synchronizer {
         let accounts = list_accounts(connection)?;
         let mut account_infos = vec![];
         for a in accounts {
-            let ai = get_account_info(network, connection, a.account)?;
+            let ai = get_account_info(network, connection, a.id)?;
             account_infos.push(ai);
         }
         let notes = list_received_notes(connection, start, true)?;
@@ -212,11 +212,13 @@ impl Synchronizer {
 
             // restore bridge start/end nodes
             let p = position as i32;
-            for be in bridges.iter_mut() {
+            for (idx, be) in bridges.iter_mut().enumerate() {
                 let b = be.b;
+                tracing::debug!("{} {} {}", idx, be.s, be.e);
+                tracing::debug!("{:?}", b);
                 let h = &b.start.as_ref().unwrap().levels[depth].hash;
-                if !h.is_empty() {
-                    cmxs[(be.s - p) as usize] = Some(h.clone().try_into().unwrap())
+                if !h.is_empty() { // fill the *right* node of the be.s pair
+                    cmxs[((be.s - p) | 1) as usize] = Some(h.clone().try_into().unwrap())
                 }
                 let h = &b.end.as_ref().unwrap().levels[depth].hash;
                 if !h.is_empty() {

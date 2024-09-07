@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{Connection, OptionalExtension as _};
+use rusqlite::Connection;
 
 pub fn encrypt_db(connection: &Connection, password: &str, new_db_path: &str) -> Result<()> {
     connection.execute(

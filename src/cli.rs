@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use clap_repl::{
     reedline::{DefaultPrompt, DefaultPromptSegment, FileBackedHistory},
     ClapEditor,
@@ -27,8 +27,8 @@ use crate::{
     coin::CoinDef,
     data::fb::{PaymentRequestT, ShieldedNote, TransactionInfo},
     db::{
-        account::{get_account_info, get_balance},
-        account_manager::{create_new_account, detect_key},
+        account::{get_account_info, get_balance, list_accounts},
+        account_manager::{create_new_account, delete_account, detect_key, edit_account_birth, edit_account_name, get_min_birth},
         notes::{
             get_sync_height, get_txid, get_unspent_notes, store_block, store_tx_details,
             truncate_scan,
@@ -61,17 +61,40 @@ pub struct Config {
     pub warp_url: String,
     pub warp_end_height: u32,
     pub seed: String,
-    pub birth: u32,
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct Account {
+    #[structopt(subcommand)]
+    command: AccountCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum AccountCommand {
+    List,
+    Create {
+        key: Option<String>,
+        name: Option<String>,
+        birth: Option<u32>,
+    },
+    EditName {
+        account: u32,
+        name: String,
+    },
+    EditBirthHeight {
+        account: u32,
+        birth: u32,
+    },
+    Delete {
+        account: u32,
+    },
 }
 
 /// The enum of sub-commands supported by the CLI
 #[derive(Parser, Clone, Debug)]
 pub enum Command {
+    Account(Account),
     CreateDatabase,
-    CreateAccount {
-        key: Option<String>,
-        name: Option<String>,
-    },
     GenerateSeed,
     Backup {
         account: u32,
@@ -174,12 +197,32 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
         Command::SetDbPassword { password } => {
             zec.db_password = Some(password);
         }
-        Command::CreateAccount { key, name } => {
+        Command::Account(account_cmd) => {
             let connection = zec.connection()?;
-            let key = key.unwrap_or(CONFIG.seed.clone());
-            let name = name.unwrap_or("Test".to_string());
-            let kt = detect_key(network, &key, 0, 0)?;
-            create_new_account(network, &connection, &name, kt)?;
+            match account_cmd.command {
+                AccountCommand::List => {
+                    let accounts = list_accounts(&connection)?;
+                    println!("{}", serde_json::to_string_pretty(&accounts)?);
+                }
+                AccountCommand::Create { key, name, birth } => {
+                    let mut client = zec.connect_lwd().await?;
+                    let bc_height = get_last_height(&mut client).await?;
+                    let key = key.unwrap_or(CONFIG.seed.clone());
+                    let name = name.unwrap_or("<unnamed>".to_string());
+                    let kt = detect_key(network, &key, 0, 0)?;
+                    let birth = birth.unwrap_or(bc_height);
+                    create_new_account(network, &connection, &name, kt, birth)?;
+                }
+                AccountCommand::EditName { account, name } => {
+                    edit_account_name(&connection, account, &name)?;
+                }
+                AccountCommand::EditBirthHeight { account, birth } => {
+                    edit_account_birth(&connection, account, birth)?;
+                }
+                AccountCommand::Delete { account } => {
+                    delete_account(&connection, account)?;
+                }
+            }
         }
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
@@ -208,8 +251,8 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
                 .activation_height(NetworkUpgrade::Sapling)
                 .unwrap()
                 .into();
-            let birth_height = CONFIG.birth.max(activation + 1);
-            let height = height.unwrap_or(birth_height);
+            let min_birth_height = get_min_birth(&connection)?.unwrap_or(activation);
+            let height = height.unwrap_or(min_birth_height).max(activation + 1);
             let mut client = zec.connect_lwd().await?;
             let block = get_compact_block(&mut client, height).await?;
             let mut connection = zec.connection()?;

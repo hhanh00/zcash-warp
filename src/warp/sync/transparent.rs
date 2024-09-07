@@ -26,10 +26,10 @@ impl TransparentSync {
         let accounts = list_accounts(connection)?;
         let mut addresses = vec![];
         for a in accounts.iter() {
-            let ai = get_account_info(network, connection, a.account)?;
+            let ai = get_account_info(network, connection, a.id)?;
             let taddr = ai.transparent.as_ref().map(|ti| ti.addr);
             if let Some(taddr) = taddr {
-                addresses.push((a.account, taddr));
+                addresses.push((a.id, taddr));
             }
         }
         let utxos = list_utxos(connection, height)?;

@@ -76,6 +76,7 @@ table ShieldedNote {
 table ShieldedMessage {
   id_msg: uint32;
   id_tx: uint32;
+  txid: [uint8];
   height: uint32;
   timestamp: uint32;
   incoming: bool;
@@ -84,6 +85,7 @@ table ShieldedMessage {
   recipient: string;
   subject: string;
   body: string;
+  read: bool;
 }
 
 table UAReceivers {
@@ -97,4 +99,11 @@ table PaymentRequest {
   amount: uint64;
   memo_string: string;
   memo_bytes: [uint8];
+}
+
+table AccountName {
+  id: uint32;
+  name: string;
+  sapling_address: string;
+  birth: uint32;
 }
