@@ -107,3 +107,25 @@ table AccountName {
   sapling_address: string;
   birth: uint32;
 }
+
+table ContactCard {
+  id: uint32;
+  account: uint32;
+  name: string;
+  address: string;
+  saved: bool;
+}
+
+table TransactionRecipient {
+  address: string;
+  amount: uint64;
+}
+
+table TransactionSummary {
+  recipients: [TransactionRecipient];
+  transparent_ins: uint64;
+  sapling_net: int64;
+  orchard_net: int64;
+  fee: uint64;
+  data: [uint8];
+}

@@ -26,7 +26,7 @@ pub fn get_txs(
             let tx_address = RecipientAddress::decode(network, tx_address).unwrap();
             for c in contacts.iter() {
                 if recipient_contains(&c.address, &tx_address)? {
-                    contact = Some(c.name.clone());
+                    contact = c.card.name.clone();
                 }
             }
         }

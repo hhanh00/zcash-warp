@@ -3,21 +3,20 @@ use rusqlite::{params, Connection};
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::consensus::Network;
 
-use crate::types::Contact;
+use crate::{data::fb::ContactCardT, types::Contact};
 
-pub fn store_contact(
-    connection: &Connection,
-    account: u32,
-    name: &str,
-    address: &str,
-    dirty: bool,
-) -> Result<u32> {
+pub fn store_contact(connection: &Connection, contact: &ContactCardT) -> Result<u32> {
     let id = connection.query_row(
-        "INSERT INTO contacts(account, name, address, dirty)
+        "INSERT INTO contacts(account, name, address, saved)
         VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO UPDATE
-        SET dirty = excluded.dirty
+        SET saved = excluded.saved
         RETURNING id_contact",
-        params![account, name, address, dirty],
+        params![
+            contact.account,
+            contact.name,
+            contact.address,
+            contact.saved
+        ],
         |r| r.get::<_, u32>(0),
     )?;
     Ok(id)
@@ -25,7 +24,7 @@ pub fn store_contact(
 
 pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<Contact>> {
     let mut s =
-        connection.prepare("SELECT id_contact, account, name, address, dirty FROM contacts")?;
+        connection.prepare("SELECT id_contact, account, name, address, saved FROM contacts")?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -37,14 +36,18 @@ pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<C
     })?;
     let mut contacts = vec![];
     for r in rows {
-        let (id, account, name, address, dirty) = r?;
-        let address = RecipientAddress::decode(network, &address).unwrap();
-        let contact = Contact {
+        let (id, account, name, address, saved) = r?;
+        let recipient = RecipientAddress::decode(network, &address).unwrap();
+        let card = ContactCardT {
             id,
             account,
-            name,
-            address,
-            dirty,
+            name: Some(name),
+            address: Some(address),
+            saved,
+        };
+        let contact = Contact {
+            card,
+            address: recipient,
         };
         contacts.push(contact);
     }
@@ -54,9 +57,9 @@ pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<C
 pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Result<Contact> {
     let mut s = connection.prepare(
         "SELECT account, name, address,
-        dirty FROM contacts WHERE id_contact = ?1",
+        saved FROM contacts WHERE id_contact = ?1",
     )?;
-    let (account, name, address, dirty) = s.query_row([id], |r| {
+    let (account, name, address, saved) = s.query_row([id], |r| {
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, String>(1)?,
@@ -64,21 +67,65 @@ pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Resul
             r.get::<_, bool>(3)?,
         ))
     })?;
-    let address = RecipientAddress::decode(network, &address).unwrap();
-    let contact = Contact {
+    let recipient = RecipientAddress::decode(network, &address).unwrap();
+    let card = ContactCardT {
         id,
         account,
-        name,
-        address,
-        dirty,
+        name: Some(name),
+        address: Some(address),
+        saved,
+    };
+    let contact = Contact {
+        card,
+        address: recipient,
     };
     Ok(contact)
 }
 
-pub fn delete_contact(connection: &Connection, id_contact: u32, tpe: u8) -> Result<()> {
+pub fn edit_contact_name(connection: &Connection, id: u32, name: &str) -> Result<()> {
     connection.execute(
-        "DELETE FROM contacts WHERE id_contact = ?1",
-        params![id_contact],
+        "UPDATE contacts SET name = ?2 WHERE id_contact = ?1",
+        params![id, name],
     )?;
     Ok(())
+}
+
+pub fn edit_contact_address(connection: &Connection, id: u32, address: &str) -> Result<()> {
+    connection.execute(
+        "UPDATE contacts SET address = ?2 WHERE id_contact = ?1",
+        params![id, address],
+    )?;
+    Ok(())
+}
+
+pub fn delete_contact(connection: &Connection, id: u32) -> Result<()> {
+    connection.execute(
+        "DELETE FROM contacts WHERE id_contact = ?1",
+        [id],
+    )?;
+    Ok(())
+}
+
+pub fn get_unsaved_contacts(connection: &Connection, account: u32) -> Result<Vec<ContactCardT>> {
+    let mut s = connection.prepare(
+        "SELECT id_contact, name, address FROM contacts
+        WHERE account = ?1 AND saved = FALSE")?;
+    let rows = s.query_map([account], |r| Ok((
+        r.get::<_, u32>(0)?,
+        r.get::<_, String>(1)?,
+        r.get::<_, String>(2)?,
+    )))?;
+    let mut cards = vec![];
+    for r in rows {
+        let (id, name, address) = r?;
+        let card = ContactCardT {
+            id,
+            account,
+            name: Some(name),
+            address: Some(address),
+            saved: false,
+        };
+        cards.push(card);
+    }
+    Ok(cards)
 }

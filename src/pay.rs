@@ -6,14 +6,18 @@ use rand::{CryptoRng, RngCore};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 use zcash_proofs::prover::LocalTxProver;
-use zcash_keys::address::Address as RecipientAddress;
 use zcash_protocol::memo::Memo;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::PaymentRequestT, keys::TSKStore, types::{AccountInfo, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
+    data::fb::{PaymentRequestT, TransactionRecipientT, TransactionSummaryT},
+    keys::TSKStore,
+    types::{AccountInfo, PoolMask},
+    warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO},
+    Hash,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -47,11 +51,15 @@ pub struct PaymentItem {
 
 impl TryFrom<&PaymentRequestT> for PaymentItem {
     fn try_from(p: &PaymentRequestT) -> Result<Self> {
-        let memo = p.memo_string.as_ref().map_or_else(
-            || 
-            p.memo_bytes.as_ref().map(|b| Memo::from_bytes(&*b)),
-            |s| Some(Memo::from_str(&s))
-        ).transpose().map_err(anyhow::Error::new)?;
+        let memo = p
+            .memo_string
+            .as_ref()
+            .map_or_else(
+                || p.memo_bytes.as_ref().map(|b| Memo::from_bytes(&*b)),
+                |s| Some(Memo::from_str(&s)),
+            )
+            .transpose()
+            .map_err(anyhow::Error::new)?;
         let memo = memo.map(|memo| MemoBytes::from(&memo));
         Ok(Self {
             address: p.address.clone().unwrap(),
@@ -59,7 +67,7 @@ impl TryFrom<&PaymentRequestT> for PaymentItem {
             memo,
         })
     }
-    
+
     type Error = Error;
 }
 
@@ -72,7 +80,8 @@ pub struct ExtendedPayment {
     pub payment: PaymentItem,
     pub amount: u64,
     pub remaining: u64,
-    pub pool: u8,
+    pub pool: PoolMask,
+    pub is_change: bool,
 }
 
 impl ExtendedPayment {
@@ -83,20 +92,21 @@ impl ExtendedPayment {
         let ua = RecipientAddress::decode(network, &payment.address)
             .ok_or(anyhow::anyhow!("Invalid Address"))?;
         let pool = match ua {
-            RecipientAddress::Sapling(_) => 1,
-            RecipientAddress::Tex(_) => 0,
-            RecipientAddress::Transparent(_) => 0,
+            RecipientAddress::Sapling(_) => 2,
+            RecipientAddress::Tex(_) => 1,
+            RecipientAddress::Transparent(_) => 1,
             RecipientAddress::Unified(ua) => {
-                let s = if ua.sapling().is_some() { 1 } else { 0 };
-                let o = if ua.orchard().is_some() { 2 } else { 0 };
-                s + o
+                let s = if ua.sapling().is_some() { 2 } else { 0 };
+                let o = if ua.orchard().is_some() { 4 } else { 0 };
+                s | o
             }
         };
         Ok(ExtendedPayment {
             amount: payment.amount,
             remaining: payment.amount,
             payment,
-            pool,
+            pool: PoolMask(pool),
+            is_change: false,
         })
     }
 }
@@ -154,15 +164,9 @@ pub enum OutputNote {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TxOutput {
     pub address_string: String,
-    pub value: u64,
+    pub amount: u64,
     pub note: OutputNote,
-}
-
-#[derive(Clone, Default, Debug)]
-pub struct ChangeOutput {
-    pub pools: PoolMask,
-    pub value: i64,
-    pub note: Option<OutputNote>,
+    pub change: bool,
 }
 
 pub struct PaymentBuilder {
@@ -179,7 +183,7 @@ pub struct PaymentBuilder {
     pub fee: u64,
 
     pub available: [u64; 3],
-    pub change: ChangeOutput,
+    pub use_change: bool,
 
     pub s_edge: Edge,
     pub o_edge: Edge,
@@ -189,7 +193,7 @@ pub struct PaymentBuilder {
 pub struct AdjustableUnsignedTransaction {
     pub tx_notes: Vec<TxInput>,
     pub tx_outputs: Vec<TxOutput>,
-    pub change: ChangeOutput,
+    pub change: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -204,27 +208,99 @@ pub struct UnsignedTransaction {
     pub edges: [AuthPath; 2],
 }
 
-const EXPIRATION_HEIGHT: u32 = 50;
+impl UnsignedTransaction {
+    pub fn to_summary(&self) -> Result<TransactionSummaryT> {
+        let recipients = self.tx_outputs.iter().filter_map(|o| {
+            if !o.change {
+                Some(TransactionRecipientT {
+                    address: Some(o.address_string.clone()),
+                    amount: o.amount,
+                })
+            } else {
+                None
+            }
+        }).collect::<Vec<_>>();
+        let ins = self.tx_notes.iter().map(|i| {
+            match i.note {
+                InputNote::Transparent { .. } => PoolBalance(i.amount as i64, 0, 0),
+                InputNote::Sapling { .. } => PoolBalance(0, i.amount as i64, 0),
+                InputNote::Orchard { .. } => PoolBalance(0, 0, i.amount as i64),
+            }
+        }).sum::<PoolBalance>();
+        let outs = self.tx_outputs.iter().map(|o| {
+            match o.note {
+                OutputNote::Transparent { .. } => PoolBalance(o.amount as i64, 0, 0),
+                OutputNote::Sapling { .. } => PoolBalance(0, o.amount as i64, 0),
+                OutputNote::Orchard { .. } => PoolBalance(0, 0, o.amount as i64),
+            }
+        }).sum::<PoolBalance>();
+        let net = ins - outs;
+        let fee = (net.0 + net.1 + net.2) as u64;
+        let data = bincode::serialize(&self).unwrap();
+        Ok(TransactionSummaryT {
+            recipients: Some(recipients),
+            transparent_ins: ins.0 as u64,
+            sapling_net: net.1,
+            orchard_net: net.2,
+            fee,
+            data: Some(data),
+        })
+    }
+}
+
+impl TransactionSummaryT {
+    pub fn detach(&mut self) -> Vec<u8> {
+        let data = self.data.take();
+        data.unwrap()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PoolBalance(i64, i64, i64);
+
+impl std::iter::Sum for PoolBalance {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(PoolBalance(0, 0, 0), |a, b| 
+        a + b)
+    }
+}
+
+impl std::ops::Add for PoolBalance {
+    type Output = PoolBalance;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        PoolBalance(self.0 + rhs.0, self.1 + rhs.1, self.2 + rhs.2)
+    }
+}
+
+impl std::ops::Sub for PoolBalance {
+    type Output = PoolBalance;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        PoolBalance(self.0 - rhs.0, self.1 - rhs.1, self.2 - rhs.2)
+    }
+}
 
 lazy_static::lazy_static! {
     pub static ref PROVER: LocalTxProver = LocalTxProver::with_default_location().unwrap();
     pub static ref ORCHARD_PROVER: ProvingKey = ProvingKey::build();
 }
 
-pub fn make_payment<R: RngCore + CryptoRng>(network: &Network, connection: &Connection, account: u32,
-    height: u32, p: Payment, src_pools: PoolMask,
+pub fn make_payment(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    height: u32,
+    confirmations: u32,
+    p: Payment,
+    src_pools: PoolMask,
     fee_paid_by_sender: bool,
-    s_tree: &CommitmentTreeFrontier, o_tree: &CommitmentTreeFrontier,
-    mut rng: R) -> Result<Vec<u8>> {
+    s_tree: &CommitmentTreeFrontier,
+    o_tree: &CommitmentTreeFrontier,
+) -> Result<UnsignedTransaction> {
+    let confirmation_height = height - confirmations + 1;
     let mut pb = PaymentBuilder::new(
-        network,
-        connection,
-        account,
-        height,
-        p,
-        src_pools,
-        s_tree,
-        o_tree,
+        network, connection, account, confirmation_height, p, src_pools, s_tree, o_tree,
     )?;
     pb.add_account_funds(&connection)?;
     pb.set_use_change(true)?;
@@ -234,6 +310,17 @@ pub fn make_payment<R: RngCore + CryptoRng>(network: &Network, connection: &Conn
         utx.add_to_change(fee as i64)?;
     }
     let utx = pb.finalize(utx)?;
-    let txb = utx.build(network, connection, &mut TSKStore::default(), &mut rng)?;
+    Ok(utx)
+}
+
+pub fn sign_tx<R: RngCore + CryptoRng>(
+    network: &Network,
+    connection: &Connection,
+    expiration_height: u32,
+    utx: UnsignedTransaction,
+    tsk_store: &mut TSKStore,
+    mut rng: R,
+) -> Result<Vec<u8>> {
+    let txb = utx.build(network, connection, expiration_height, tsk_store, &mut rng)?;
     Ok(txb)
 }

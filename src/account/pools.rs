@@ -7,7 +7,7 @@ use crate::{
     db::account::get_account_info,
     keys::TSKStore,
     pay::{Payment, PaymentBuilder, PaymentItem},
-    warp::legacy::CommitmentTreeFrontier,
+    warp::legacy::CommitmentTreeFrontier, EXPIRATION_HEIGHT_DELTA,
 };
 
 pub fn transfer_pools<R: RngCore + CryptoRng>(
@@ -15,6 +15,7 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
     connection: &Connection,
     account: u32,
     height: u32,
+    confirmations: u32,
     from_pool: u8,
     to_pool: u8,
     mut amount: u64,
@@ -47,7 +48,7 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
         network,
         connection,
         account,
-        height,
+        height - confirmations + 1,
         payment,
         Some(from_pool).into(),
         &s,
@@ -57,6 +58,6 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
     builder.set_use_change(true)?;
     let utx = builder.prepare()?;
     let utx = builder.finalize(utx)?;
-    let tx = utx.build(network, connection, &mut TSKStore::default(), rng)?;
+    let tx = utx.build(network, connection, height + EXPIRATION_HEIGHT_DELTA, &mut TSKStore::default(), rng)?;
     Ok(tx)
 }

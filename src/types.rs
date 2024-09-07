@@ -10,6 +10,7 @@ use sapling_crypto::{
     PaymentAddress,
 };
 use secp256k1::SecretKey;
+use serde::{Deserialize, Serialize};
 use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_client_backend::{
     address::UnifiedAddress,
@@ -21,12 +22,16 @@ use zcash_primitives::{
     legacy::TransparentAddress,
 };
 
-use crate::{data::fb::BackupT, db::account_manager::parse_seed_phrase, keys::export_sk_bip38};
+use crate::{data::fb::{BackupT, ContactCardT}, db::account_manager::parse_seed_phrase, keys::export_sk_bip38};
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct PoolMask(pub u8);
 
 impl PoolMask {
+    pub fn from_pool(pool: u8) -> Self {
+        Self(1 << pool)
+    }
+
     pub fn to_pool(&self) -> Option<u8> {
         if self.0 & 4 != 0 {
             return Some(2);
@@ -38,6 +43,10 @@ impl PoolMask {
             return Some(0);
         }
         None
+    }
+
+    pub fn single_pool(&self) -> bool {
+        self.0 & (self.0 - 1) == 0
     }
 }
 
@@ -316,9 +325,6 @@ pub struct OptionAccountInfo {
 
 #[derive(Debug, Clone)]
 pub struct Contact {
-    pub id: u32,
-    pub account: u32,
-    pub name: String,
+    pub card: ContactCardT,
     pub address: RecipientAddress,
-    pub dirty: bool,
 }
