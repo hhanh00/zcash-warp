@@ -12,7 +12,7 @@ use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_protocol::value::Zatoshis;
 
 use super::{
-    InputNote, OutputNote, UnsignedTransaction, EXPIRATION_HEIGHT, ORCHARD_PROVER, PROVER,
+    InputNote, OutputNote, UnsignedTransaction, ORCHARD_PROVER, PROVER,
 };
 use jubjub::Fr;
 use orchard::{
@@ -42,6 +42,7 @@ impl UnsignedTransaction {
         self,
         network: &Network,
         connection: &Connection,
+        expiration_height: u32,
         tsk_store: &mut TSKStore,
         mut rng: R,
     ) -> Result<Vec<u8>> {
@@ -177,7 +178,7 @@ impl UnsignedTransaction {
                         TransparentAddress::ScriptHash(address.clone())
                     };
                     transparent_builder
-                        .add_output(&taddr, Zatoshis::from_u64(txout.value).unwrap())
+                        .add_output(&taddr, Zatoshis::from_u64(txout.amount).unwrap())
                         .map_err(anyhow::Error::msg)?;
                 }
                 OutputNote::Sapling { address, memo } => {
@@ -188,7 +189,7 @@ impl UnsignedTransaction {
                         .add_output(
                             Some(ovk),
                             recipient,
-                            sapling_crypto::value::NoteValue::from_raw(txout.value),
+                            sapling_crypto::value::NoteValue::from_raw(txout.amount),
                             Some(memo.as_array().clone()),
                         )
                         .map_err(anyhow::Error::msg)?;
@@ -202,7 +203,7 @@ impl UnsignedTransaction {
                         .add_output(
                             Some(ovk),
                             recipient,
-                            orchard::value::NoteValue::from_raw(txout.value),
+                            orchard::value::NoteValue::from_raw(txout.amount),
                             Some(memo.as_array().clone()),
                         )
                         .map_err(anyhow::Error::msg)?;
@@ -240,7 +241,7 @@ impl UnsignedTransaction {
                 version,
                 consensus_branch_id,
                 0,
-                BlockHeight::from_u32(self.height + EXPIRATION_HEIGHT),
+                BlockHeight::from_u32(expiration_height),
                 transparent_bundle,
                 None,
                 sapling_bundle,
@@ -276,7 +277,7 @@ impl UnsignedTransaction {
                 version,
                 consensus_branch_id,
                 0,
-                BlockHeight::from_u32(self.height + EXPIRATION_HEIGHT),
+                BlockHeight::from_u32(expiration_height),
                 transparent_bundle,
                 None,
                 sapling_bundle,

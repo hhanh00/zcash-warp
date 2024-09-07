@@ -2,7 +2,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 use tonic::Request;
 use zcash_client_backend::encoding::AddressCodec as _;
-use zcash_primitives::{consensus::Network, memo::MemoBytes};
+use zcash_primitives::consensus::Network;
 
 use super::{Payment, PaymentBuilder, PaymentItem, UnsignedTransaction};
 use crate::{
@@ -129,7 +129,7 @@ pub fn prepare_sweep(
     builder.add_utxos(&utxos)?;
     builder.set_use_change(false)?;
     let mut utx = builder.prepare()?;
-    let change = utx.change.value;
+    let change = utx.change;
     assert!(change <= 0);
     utx.add_to_change(-change)?;
     let utx = builder.finalize(utx)?;

@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use anyhow::Result;
 use orchard::Address;
-use prost::bytes::Buf as _;
+use prost::bytes::{Buf as _, BufMut as _};
 use rusqlite::Connection;
 use sapling_crypto::PaymentAddress;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -12,25 +12,107 @@ use zcash_primitives::{
     legacy::TransparentAddress,
     memo::{Memo, MemoBytes},
 };
+use zcash_protocol::consensus::Network;
 
-use crate::db::contacts::store_contact;
+use crate::{
+    data::fb::ContactCardT,
+    db::{
+        account::get_account_info,
+        contacts::{get_unsaved_contacts, store_contact},
+    },
+    pay::{make_payment, Payment, PaymentItem, UnsignedTransaction},
+    types::PoolMask,
+    warp::legacy::CommitmentTreeFrontier,
+};
 
-pub fn add_contact(connection: &Connection, account: u32, name: &str, address: &str) -> Result<()> {
-    store_contact(connection, account, name, address, true)?;
+pub fn add_contact(connection: &Connection, account: u32, name: &str, address: &str, saved: bool) -> Result<()> {
+    let contact = ContactCardT {
+        id: 0,
+        account,
+        name: Some(name.to_string()),
+        address: Some(address.to_string()),
+        saved,
+    };
+    store_contact(connection, &contact)?;
     Ok(())
 }
 
-pub fn ua_of_orchard(address: &[u8; 43]) -> UnifiedAddress {
-    let orchard = Address::from_raw_address_bytes(address).unwrap();
-    let ua =
-        zcash_client_backend::address::UnifiedAddress::from_receivers(Some(orchard), None, None)
-            .unwrap();
-    ua
+pub fn serialize_contacts(contacts: &[ContactV1]) -> Result<Vec<Memo>> {
+    let cs_bin = bincode::serialize(&contacts)?;
+    let chunks = cs_bin.chunks(500);
+    let memos: Vec<_> = chunks
+        .enumerate()
+        .map(|(i, c)| {
+            let n = i as u8;
+            let mut bytes = [0u8; 511];
+            let mut bb: Vec<u8> = vec![];
+            bb.put_u32(ChunkedContactV1::COOKIE);
+            bb.put_u8(n);
+            bb.put_u16(c.len() as u16);
+            bb.put_slice(c);
+            bytes[0..bb.len()].copy_from_slice(&bb);
+            Memo::Arbitrary(Box::new(bytes))
+        })
+        .collect();
+
+    Ok(memos)
+}
+
+const MIN_AMOUNT: u64 = 10_000;
+
+pub fn commit_unsaved_contacts(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    src_pools: u8,
+    bc_height: u32,
+    confirmations: u32,
+    s: &CommitmentTreeFrontier,
+    o: &CommitmentTreeFrontier,
+) -> anyhow::Result<UnsignedTransaction> {
+    let ai = get_account_info(network, connection, account)?;
+    let address = ai.to_address(network, PoolMask(src_pools)).unwrap();
+    tracing::info!("Contact -> {}", address);
+    let contacts = get_unsaved_contacts(connection, account)?;
+    let contacts = contacts
+        .into_iter()
+        .map(|c| ContactV1 {
+            id: 0,
+            name: c.name.unwrap(),
+            address: c.address.unwrap(),
+        })
+        .collect::<Vec<_>>();
+    let memos = serialize_contacts(&contacts)?;
+    let recipients = memos
+        .iter()
+        .map(|m| {
+            let memo = MemoBytes::from(m);
+            PaymentItem {
+                address: address.clone(),
+                amount: MIN_AMOUNT,
+                memo: Some(memo),
+            }
+        })
+        .collect::<Vec<_>>();
+    let payment = Payment { recipients };
+    let utx = make_payment(
+        network,
+        connection,
+        account,
+        bc_height,
+        confirmations,
+        payment,
+        PoolMask(src_pools),
+        true,
+        s,
+        o,
+    )?;
+    Ok(utx)
 }
 
 pub trait ChunkedMemoData {
     const COOKIE: u32;
-    type Data: DeserializeOwned;
+    type Data: DeserializeOwned + std::fmt::Debug;
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -82,6 +164,7 @@ impl<T: ChunkedMemoData> ChunkedMemoDecoder<T> {
         }
         let data: Vec<_> = self.chunks.iter().flatten().cloned().collect();
         let contacts = bincode::deserialize::<Vec<T::Data>>(&data)?;
+        tracing::info!("{contacts:?}");
         Ok(contacts)
     }
 

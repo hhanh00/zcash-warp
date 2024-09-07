@@ -1,5 +1,5 @@
 use super::{
-    fee::FeeManager, AdjustableUnsignedTransaction, ChangeOutput, Error, ExtendedPayment,
+    fee::FeeManager, AdjustableUnsignedTransaction, Error, ExtendedPayment,
     OutputNote, Payment, PaymentBuilder, PaymentItem, Result, TxInput, TxOutput,
     UnsignedTransaction,
 };
@@ -12,6 +12,7 @@ use crate::{
         notes::{list_received_notes, list_utxos},
     },
     types::PoolMask,
+    utils::ua::single_receiver_address,
     warp::{
         hasher::{OrchardHasher, SaplingHasher},
         legacy::CommitmentTreeFrontier,
@@ -95,7 +96,7 @@ impl PaymentBuilder {
             fee_manager: FeeManager::default(),
             fee: 0,
             available: [0; 3],
-            change: ChangeOutput::default(),
+            use_change: true,
             s_edge: s_tree.to_edge(&SaplingHasher::default()),
             o_edge: o_tree.to_edge(&OrchardHasher::default()),
         })
@@ -142,44 +143,13 @@ impl PaymentBuilder {
                 .iter()
                 .map(|note| TxInput::from_orchard(note)),
         );
+        tracing::debug!("{:?}", self.inputs);
 
         Ok(())
     }
 
     pub fn set_use_change(&mut self, use_change: bool) -> Result<()> {
-        // Determine which pool to use for the change output
-        // 1. pick one of the output pools if they are supported by our account
-        let o_pools = self
-            .outputs
-            .iter()
-            .map(|o| 1 << o.pool)
-            .fold(0, |a, b| a | b);
-        // Use a pool in common between our account's and the recipients
-        let change_pools = self.account_pools.0 & o_pools & 6; // but not the transparent pool
-                                                               // fallback to the account's best pool if there is nothing
-        let change_pool = use_change
-            .then_some(
-                PoolMask(change_pools)
-                    .to_pool()
-                    .or(self.account_pools.to_pool()),
-            )
-            .flatten();
-
-        let note = change_pool
-            .map(|p| {
-                self.fee += self.fee_manager.add_output(p);
-                let change_address = self.ai.to_address(&self.network, PoolMask(1 << p)).unwrap();
-                OutputNote::from_address(&self.network, &change_address, MemoBytes::empty())
-            })
-            .transpose()?;
-        let change = ChangeOutput {
-            pools: change_pool.into(),
-            value: 0,
-            note,
-        };
-
-        self.change = change;
-
+        self.use_change = use_change;
         Ok(())
     }
 
@@ -193,10 +163,41 @@ impl PaymentBuilder {
     }
 
     pub fn prepare(&mut self) -> Result<AdjustableUnsignedTransaction> {
+        if self.outputs.is_empty() {
+            return Err(Error::NoRecipient);
+        }
+
         let mut used = [false; 3];
-        self.change.pools.to_pool().map(|p| {
-            used[p as usize] = true;
-        });
+
+        if self.use_change {
+            // add a change output in first position
+            // Determine which pool to use for the change output
+            // 1. pick one of the output pools if they are supported by our account
+            let o_pools = self.outputs.iter().map(|o| o.pool.0).fold(0, |a, b| a | b);
+            // 2. Use a pool in common between our account's and the recipients
+            let change_pools = self.account_pools.0 & o_pools & 6; // but not the transparent pool
+            let change_pools = if change_pools != 0 {
+                change_pools
+            } else {
+                // fallback to the account's best pool if there is nothing
+                self.account_pools.0
+            };
+            let change_pools = PoolMask(change_pools);
+
+            let change_address = self.ai.to_address(&self.network, change_pools).unwrap();
+            let change = ExtendedPayment {
+                payment: PaymentItem {
+                    address: change_address,
+                    amount: 0,
+                    memo: None,
+                },
+                amount: 0,
+                remaining: 0,
+                pool: change_pools,
+                is_change: true,
+            };
+            self.outputs.insert(0, change);
+        }
 
         for i in 0..3 {
             for inp in self.inputs[i].iter_mut() {
@@ -211,61 +212,72 @@ impl PaymentBuilder {
 
             for output in self.outputs.iter_mut() {
                 tracing::debug!("phase {} output {:?}", phase, output);
-                if phase > 0 && output.remaining == 0 {
+                if phase > 0 && output.remaining == 0 && !output.is_change {
                     continue;
                 }
                 let src_pool: u8;
-                let out_pool = output.pool;
-                assert!(out_pool < 4);
+                let out_pool_mask = output.pool.0;
+                assert!(
+                    out_pool_mask == 1
+                        || out_pool_mask == 2
+                        || out_pool_mask == 4
+                        || out_pool_mask == 6
+                );
                 match phase {
                     0 => {
                         output.remaining = output.amount;
-                        if out_pool != 3 {
-                            self.fee += self.fee_manager.add_output(output.pool);
+                        if out_pool_mask != 6 {
+                            // add outputs except S+O
+                            self.fee += self.fee_manager.add_output(out_pool_mask);
                         }
                         continue;
                     }
                     // pay shielded outputs from the same source pool
                     // s -> s, o -> o
                     1 => {
-                        if out_pool == 0 || out_pool == 3 {
+                        if out_pool_mask == 1 || out_pool_mask == 6 {
                             continue;
                         }
-                        assert!(out_pool == 1 || out_pool == 2);
-                        src_pool = output.pool;
+                        assert!(out_pool_mask == 2 || out_pool_mask == 4);
+                        src_pool = PoolMask(out_pool_mask).to_pool().unwrap();
                     }
                     // handle S+O
                     2 => {
-                        if out_pool != 3 {
+                        if out_pool_mask != 6 {
                             continue;
                         }
-                        assert!(out_pool == 3);
+                        assert!(out_pool_mask == 6);
 
                         src_pool = Self::select_pool(&used, &self.available);
-                        output.pool = src_pool;
-                        self.fee += self.fee_manager.add_output(output.pool);
+                        output.pool = PoolMask::from_pool(src_pool);
+                        // Only T/S/O possible from now
+                        self.fee += self.fee_manager.add_output(src_pool);
                     }
                     // use the other shielded pool
                     // s -> o, o -> s
                     3 => {
-                        assert!(out_pool != 3);
-                        if out_pool == 0 {
+                        assert!(out_pool_mask != 6);
+                        if out_pool_mask == 1 {
+                            // Skip not T
                             continue;
                         }
-                        src_pool = 3 - out_pool;
+                        src_pool = PoolMask(6 - out_pool_mask).to_pool().unwrap();
+                        // S -> O, O -> S
                     }
                     // use t -> s/o
                     4 => {
-                        if out_pool == 0 {
+                        if out_pool_mask == 1 {
+                            // Skip not T
                             continue;
                         }
-                        assert!(out_pool != 0);
+                        assert!(out_pool_mask != 1);
                         src_pool = 0;
                     }
                     // handle transparent payments
                     // s/o -> t, using the select_pool algorithm
                     5 | 6 => {
-                        if out_pool != 0 {
+                        if out_pool_mask != 1 {
+                            // T
                             continue;
                         }
                         src_pool = Self::select_pool(&used, &self.available);
@@ -273,7 +285,7 @@ impl PaymentBuilder {
                     // finally
                     // t -> t
                     7 => {
-                        if out_pool != 0 {
+                        if out_pool_mask != 1 {
                             continue;
                         }
                         src_pool = 0;
@@ -283,7 +295,7 @@ impl PaymentBuilder {
                 }
 
                 tracing::debug!(
-                    "src {} out {} amount {}",
+                    "src {} out {:?} amount {}",
                     src_pool,
                     output.pool,
                     output.remaining
@@ -308,27 +320,17 @@ impl PaymentBuilder {
             }
         }
 
-        if self.fee != 0 {
-            self.change.value -= self.fee as i64;
-        }
         let mut tx_notes = vec![];
         let mut tx_outputs = vec![];
         for i in 0..3 {
             for n in self.inputs[i].iter() {
-                if n.remaining == n.amount {
-                    continue;
-                }
-                tx_notes.push(n.clone());
-                if n.remaining != 0 {
-                    self.change.value += n.remaining as i64;
+                if n.remaining != n.amount {
+                    tx_notes.push(n.clone());
                 }
             }
         }
 
         for n in self.outputs.iter() {
-            if n.remaining != 0 {
-                self.change.value -= n.remaining as i64;
-            }
             let pi = n.clone().to_inner();
             let PaymentItem {
                 address,
@@ -336,21 +338,26 @@ impl PaymentBuilder {
                 amount,
                 ..
             } = pi;
-            let note = OutputNote::from_address(&self.network, &address, 
-                memo.unwrap_or(MemoBytes::empty()))?;
+            let address = single_receiver_address(&self.network, &address, n.pool)?.unwrap();
+            let note = OutputNote::from_address(
+                &self.network,
+                &address,
+                memo.unwrap_or(MemoBytes::empty()),
+            )?;
             tx_outputs.push(TxOutput {
                 address_string: address,
-                value: amount,
+                amount,
                 note,
+                change: false,
             });
         }
+        if self.use_change {
+            tx_outputs[0].change = true;
+        }
 
-        tracing::debug!("{:?}", tx_notes);
-        tracing::debug!("{:?}", tx_outputs);
-        tracing::debug!("{:?}", self.fee_manager);
-
-        let mut change = ChangeOutput::default();
-        std::mem::swap(&mut self.change, &mut change);
+        let sum_ins = tx_notes.iter().map(|n| n.amount).sum::<u64>();
+        let sum_outs = tx_outputs.iter().map(|n| n.amount).sum::<u64>() + self.fee_manager.fee();
+        let change = (sum_ins as i64) - (sum_outs as i64); // can be negative at this point
 
         let transaction = AdjustableUnsignedTransaction {
             tx_notes,
@@ -363,24 +370,23 @@ impl PaymentBuilder {
 
     pub fn finalize(self, mut utx: AdjustableUnsignedTransaction) -> Result<UnsignedTransaction> {
         let change = utx.change;
-        if change.value.is_negative() {
-            return Err(Error::NotEnoughFunds(-change.value as u64));
+        if change < 0 {
+            return Err(Error::NotEnoughFunds(-change as u64));
         }
-        match change.note {
-            Some(note) => {
-                let address_string = note.to_address(&self.network);
-                utx.tx_outputs.push(TxOutput {
-                    address_string,
-                    value: change.value as u64,
-                    note,
-                });
-            }
-            None => {
-                if change.value != 0 {
-                    return Err(Error::NoChangeOutput);
-                }
-            }
+        if self.use_change {
+            let note = OutputNote::from_address(
+                &self.network,
+                &utx.tx_outputs[0].address_string,
+                MemoBytes::empty(),
+            )?;
+            utx.tx_outputs[0].amount = change as u64;
+            utx.tx_outputs[0].note = note;
+        } else if change != 0 {
+            return Err(Error::NoChangeOutput);
         }
+        tracing::info!("{:?}", utx.tx_notes);
+        tracing::info!("{:?}", utx.tx_outputs);
+
         let utx = UnsignedTransaction {
             account: self.account,
             account_name: self.ai.name.clone(),
@@ -423,18 +429,18 @@ impl PaymentBuilder {
 
 impl AdjustableUnsignedTransaction {
     pub fn add_to_change(&mut self, offset: i64) -> Result<()> {
-        if let Some(payee) = self.tx_outputs.first_mut() {
+        if let Some(payee) = self.tx_outputs.last_mut() {
             if offset > 0 {
                 let o = offset as u64;
-                if o > payee.value {
+                if o > payee.amount {
                     return Err(Error::FeesTooHighForRecipient(o));
                 }
-                payee.value -= o;
-                self.change.value += o as i64;
+                payee.amount -= o;
+                self.change += o as i64;
             } else {
                 let o = -offset;
-                payee.value += o as u64;
-                self.change.value -= o as i64;
+                payee.amount += o as u64;
+                self.change -= o as i64;
             }
         } else {
             return Err(Error::NoRecipient);

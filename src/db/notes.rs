@@ -44,6 +44,9 @@ pub fn list_received_notes(
     height: u32,
     orchard: bool,
 ) -> Result<Vec<ReceivedNote>> {
+    let height = connection.query_row(
+        "SELECT MAX(height) FROM blcks WHERE height <= ?1", [height], |r| r.get::<_, Option<u32>>(0))?;
+    let height = height.ok_or(anyhow::anyhow!("No suitable checkpoint"))?;
     let mut s = connection.prepare(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
@@ -350,8 +353,12 @@ pub fn get_sync_height(connection: &Connection) -> Result<Option<u32>> {
 pub fn truncate_scan(connection: &Connection) -> Result<()> {
     connection.execute("DELETE FROM blcks", [])?;
     connection.execute("DELETE FROM txs", [])?;
+    connection.execute("DELETE FROM txdetails", [])?;
     connection.execute("DELETE FROM notes", [])?;
     connection.execute("DELETE FROM witnesses", [])?;
+    connection.execute("DELETE FROM utxos", [])?;
+    connection.execute("DELETE FROM contacts", [])?;
+    connection.execute("DELETE FROM msgs", [])?;
 
     Ok(())
 }
@@ -369,6 +376,7 @@ pub fn reset_scan(network: &Network, connection: &Connection, height: Option<u32
     connection.execute("DELETE FROM txs WHERE height >= ?1", [height])?;
     connection.execute("DELETE FROM notes WHERE height >= ?1", [height])?;
     connection.execute("DELETE FROM witnesses WHERE height >= ?1", [height])?;
+    connection.execute("DELETE FROM txdetails", [])?;
     connection.execute("UPDATE notes SET spent = NULL WHERE spent >= ?1", [height])?;
 
     Ok(height)

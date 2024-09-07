@@ -138,7 +138,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         account INTEGER NOT NULL,
         name TEXT NOT NULL,
         address TEXT NOT NULL,
-        dirty BOOL NOT NULL,
+        saved BOOL NOT NULL,
         UNIQUE (account, name))",
         [],
     )?;

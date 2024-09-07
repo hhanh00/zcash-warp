@@ -17,23 +17,16 @@ use zcash_primitives::{
 };
 
 use crate::{
-    account::contacts::{add_contact, ua_of_orchard, ChunkedContactV1, ChunkedMemoDecoder},
-    coin::connect_lwd,
-    data::fb::{
+    account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder}, coin::connect_lwd, data::fb::{
         InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT, ShieldedMessageT, TransactionInfoExtendedT
-    },
-    db::{
+    }, db::{
         account::get_account_info,
         notes::{get_note_by_nf, store_tx_details},
         tx::{get_tx, list_new_txids, store_message, update_tx_primary_address_memo},
-    },
-    lwd::{get_transaction, get_txin_coins},
-    types::{Addresses, PoolMask},
-    warp::{
+    }, lwd::{get_transaction, get_txin_coins}, types::{Addresses, PoolMask}, utils::ua::ua_of_orchard, warp::{
         sync::{FullPlainNote, PlainNote, ReceivedTx},
         OutPoint, TxOut2,
-    },
-    Hash, PooledSQLConnection,
+    }, Hash, PooledSQLConnection
 };
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -379,9 +372,8 @@ pub fn decode_tx_details(
         }
     }
     let contacts = contact_decoder.finalize()?;
-    tracing::debug!("Contacts {:?}", contacts);
     for c in contacts.iter() {
-        add_contact(connection, account, &c.name, &c.address)?;
+        add_contact(connection, account, &c.name, &c.address, true)?;
     }
     Ok(())
 }

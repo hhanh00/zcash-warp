@@ -17,18 +17,26 @@ use figment::{
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use parking_lot::Mutex;
 use rand::rngs::OsRng;
-use rusqlite::DropBehavior;
+use rusqlite::{Connection, DropBehavior};
 use serde::Deserialize;
 use zcash_keys::address::Address as RecipientAddress;
-use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
+use zcash_protocol::consensus::{Network, NetworkUpgrade, Parameters};
 
 use crate::{
-    account::{address::get_diversified_address, txs::get_txs},
+    account::{
+        address::get_diversified_address,
+        contacts::{add_contact, commit_unsaved_contacts},
+        txs::get_txs,
+    },
     coin::CoinDef,
     data::fb::{PaymentRequestT, ShieldedNote, TransactionInfo},
     db::{
         account::{get_account_info, get_balance, list_accounts},
-        account_manager::{create_new_account, delete_account, detect_key, edit_account_birth, edit_account_name, get_min_birth},
+        account_manager::{
+            create_new_account, delete_account, detect_key, edit_account_birth, edit_account_name,
+            get_min_birth,
+        },
+        contacts::{delete_contact, edit_contact_address, edit_contact_name, list_contacts},
         notes::{
             get_sync_height, get_txid, get_unspent_notes, store_block, store_tx_details,
             truncate_scan,
@@ -37,12 +45,12 @@ use crate::{
         tx::{get_tx_details, list_messages},
     },
     fb_vec_to_bytes,
-    keys::generate_random_mnemonic_phrase,
+    keys::{generate_random_mnemonic_phrase, TSKStore},
     lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
     pay::{
         make_payment,
         sweep::{prepare_sweep, scan_utxo_by_seed},
-        Payment, PaymentItem,
+        Payment, PaymentItem, UnsignedTransaction,
     },
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::PoolMask,
@@ -52,6 +60,7 @@ use crate::{
         uri::{make_payment_uri, parse_payment_uri},
     },
     warp::{sync::warp_sync, BlockHeader},
+    EXPIRATION_HEIGHT_DELTA,
 };
 
 #[derive(Deserialize)]
@@ -61,6 +70,7 @@ pub struct Config {
     pub warp_url: String,
     pub warp_end_height: u32,
     pub seed: String,
+    pub confirmations: u32,
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -90,10 +100,41 @@ pub enum AccountCommand {
     },
 }
 
+#[derive(Parser, Clone, Debug)]
+pub struct Contact {
+    #[structopt(subcommand)]
+    command: ContactCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum ContactCommand {
+    List,
+    Create {
+        account: u32,
+        name: String,
+        address: String,
+    },
+    EditName {
+        id: u32,
+        name: String,
+    },
+    EditAddress {
+        id: u32,
+        address: String,
+    },
+    Delete {
+        id: u32,
+    },
+    Save {
+        account: u32,
+    },
+}
+
 /// The enum of sub-commands supported by the CLI
 #[derive(Parser, Clone, Debug)]
 pub enum Command {
     Account(Account),
+    Contact(Contact),
     CreateDatabase,
     GenerateSeed,
     Backup {
@@ -135,7 +176,6 @@ pub enum Command {
         amount: u64,
         pools: u8,
         fee_paid_by_sender: u8,
-        send: u8,
     },
     Sweep {
         account: u32,
@@ -165,9 +205,10 @@ pub enum Command {
     PayPaymentUri {
         account: u32,
         uri: String,
-        send: u8,
     },
-    BroadcastLatest,
+    BroadcastLatest {
+        clear: Option<u8>,
+    },
 }
 
 impl FromStr for PaymentRequestT {
@@ -178,10 +219,29 @@ impl FromStr for PaymentRequestT {
     }
 }
 
+fn display_tx(
+    network: &Network,
+    connection: &Connection,
+    bc_height: u32,
+    unsigned_tx: UnsignedTransaction,
+    tsk_store: &mut TSKStore,
+) -> Result<Vec<u8>> {
+    let mut summary = unsigned_tx.to_summary()?;
+    summary.detach();
+    println!("{}", serde_json::to_string_pretty(&summary).unwrap());
+    let txb = unsigned_tx.build(
+        network,
+        &connection,
+        bc_height + EXPIRATION_HEIGHT_DELTA,
+        tsk_store,
+        OsRng,
+    )?;
+    Ok(txb)
+}
+
 #[tokio::main]
-async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
+async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<u8>) -> Result<()> {
     let network = &zec.network;
-    let mut txb = vec![];
     match command {
         Command::CreateDatabase => {
             let connection = zec.connection().unwrap();
@@ -221,6 +281,48 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
                 }
                 AccountCommand::Delete { account } => {
                     delete_account(&connection, account)?;
+                }
+            }
+        }
+        Command::Contact(contact_cmd) => {
+            let connection = zec.connection()?;
+            match contact_cmd.command {
+                ContactCommand::List => {
+                    let contacts = list_contacts(network, &connection)?;
+                    let cards = contacts.iter().map(|c| c.card.clone()).collect::<Vec<_>>();
+                    println!("{}", serde_json::to_string_pretty(&cards).unwrap());
+                }
+                ContactCommand::Create {
+                    account,
+                    name,
+                    address,
+                } => {
+                    add_contact(&connection, account, &name, &address, false)?;
+                }
+                ContactCommand::EditName { id, name } => {
+                    edit_contact_name(&connection, id, &name)?;
+                }
+                ContactCommand::EditAddress { id, address } => {
+                    edit_contact_address(&connection, id, &address)?;
+                }
+                ContactCommand::Delete { id } => {
+                    delete_contact(&connection, id)?;
+                }
+                ContactCommand::Save { account } => {
+                    let mut client = zec.connect_lwd().await?;
+                    let bc_height = get_last_height(&mut client).await?;
+                    let (s_tree, o_tree) = get_tree_state(&mut client, bc_height).await?;
+                    let unsigned_tx = commit_unsaved_contacts(
+                        network,
+                        &connection,
+                        account,
+                        7,
+                        bc_height,
+                        CONFIG.confirmations,
+                        &s_tree,
+                        &o_tree,
+                    )?;
+                    *txbytes = display_tx(network, &connection, bc_height, unsigned_tx, &mut TSKStore::default())?;
                 }
             }
         }
@@ -294,7 +396,6 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
             amount,
             pools,
             fee_paid_by_sender,
-            send,
         } => {
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
@@ -309,22 +410,25 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
             };
             let height = get_sync_height(&connection)?.unwrap();
             let connection = zec.connection()?;
-            txb = make_payment(
+            let unsigned_tx = make_payment(
                 network,
                 &connection,
                 account,
                 height,
+                CONFIG.confirmations,
                 p,
                 PoolMask(pools),
                 fee_paid_by_sender != 0,
                 &s_tree,
                 &o_tree,
-                OsRng,
             )?;
-            if send != 0 {
-                let r = broadcast(&mut client, height, &txb).await?;
-                println!("{}", r);
-            }
+            *txbytes = display_tx(
+                network,
+                &connection,
+                bc_height,
+                unsigned_tx,
+                &mut TSKStore::default(),
+            )?;
         }
         Command::GetTx { account, id } => {
             let connection = zec.connection()?;
@@ -340,7 +444,7 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
                 account,
                 tx,
             )?;
-            txb = serde_cbor::to_vec(&tx)?;
+            let txb = serde_cbor::to_vec(&tx)?;
             println!("{}", hex::encode(&txb));
             store_tx_details(&connection, id, &tx.txid, &txb)?;
         }
@@ -363,7 +467,7 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
             let (utxos, mut tsk_store) =
                 scan_utxo_by_seed(network, &zec.url, ai, bc_height, 0, true, 40).await?;
             let connection = zec.connection()?;
-            let utx = prepare_sweep(
+            let unsigned_tx = prepare_sweep(
                 network,
                 &connection,
                 account,
@@ -373,10 +477,7 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
                 &s,
                 &o,
             )?;
-            tracing::info!("{}", serde_json::to_string(&utx)?);
-            let tx = utx.build(network, &connection, &mut tsk_store, OsRng)?;
-            let txid = broadcast(&mut client, bc_height, &tx).await?;
-            println!("{}", txid);
+            *txbytes = display_tx(network, &connection, bc_height, unsigned_tx, &mut tsk_store)?;
         }
         Command::GetTxDetails { id } => {
             let connection = zec.connection()?;
@@ -428,33 +529,42 @@ async fn process_command(command: Command, zec: &mut CoinDef) -> Result<()> {
             let payment_uri = make_payment_uri(&recipients)?;
             println!("{}", payment_uri);
         }
-        Command::PayPaymentUri { account, uri, send } => {
+        Command::PayPaymentUri { account, uri } => {
             let recipients = parse_payment_uri(&uri)?;
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
             let (s, o) = get_tree_state(&mut client, bc_height).await?;
             let connection = zec.connection()?;
-            txb = make_payment(
+            let unsigned_tx = make_payment(
                 network,
                 &connection,
                 account,
                 bc_height,
+                CONFIG.confirmations,
                 recipients,
                 PoolMask(7),
                 true,
                 &s,
                 &o,
-                OsRng,
             )?;
-            if send != 0 {
-                let r = broadcast(&mut client, bc_height, &txb).await?;
-                println!("{}", r);
-            }
+            *txbytes = display_tx(
+                network,
+                &connection,
+                bc_height,
+                unsigned_tx,
+                &mut TSKStore::default(),
+            )?;
         }
-        Command::BroadcastLatest => {
-            let mut client = zec.connect_lwd().await?;
-            let bc_height = get_last_height(&mut client).await?;
-            broadcast(&mut client, bc_height, &txb).await?;
+        Command::BroadcastLatest { clear } => {
+            let clear = clear.unwrap_or(1);
+            if clear != 0 {
+                if !txbytes.is_empty() {
+                    let mut client = zec.connect_lwd().await?;
+                    let bc_height = get_last_height(&mut client).await?;
+                    let r = broadcast(&mut client, bc_height, &txbytes).await?;
+                    println!("{}", r);
+                }
+            }
         }
     }
     Ok(())
@@ -478,8 +588,9 @@ pub fn cli_main() -> Result<()> {
         })
         .build();
 
+    let mut txbytes = vec![];
     rl.repl(|command| {
-        if let Err(e) = process_command(command, &mut zec) {
+        if let Err(e) = process_command(command, &mut zec, &mut txbytes) {
             println!("{} {}", style("Error:").red().bold(), e);
         }
     });

@@ -23,6 +23,8 @@ pub type Client = CompactTxStreamerClient<Channel>;
 pub type PooledSQLConnection = PooledConnection<SqliteConnectionManager>;
 pub type Hash = [u8; 32];
 
+pub const EXPIRATION_HEIGHT_DELTA: u32 = 50;
+
 // pub use coin::{CoinDef, COINS};
 // pub use keys::{generate_random_mnemonic_phrase, TSKStore};
 pub use cli::cli_main;

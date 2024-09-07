@@ -3080,5 +3080,633 @@ impl AccountNameT {
     })
   }
 }
+pub enum ContactCardOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct ContactCard<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for ContactCard<'a> {
+  type Inner = ContactCard<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> ContactCard<'a> {
+  pub const VT_ID: flatbuffers::VOffsetT = 4;
+  pub const VT_ACCOUNT: flatbuffers::VOffsetT = 6;
+  pub const VT_NAME: flatbuffers::VOffsetT = 8;
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 10;
+  pub const VT_SAVED: flatbuffers::VOffsetT = 12;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    ContactCard { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args ContactCardArgs<'args>
+  ) -> flatbuffers::WIPOffset<ContactCard<'bldr>> {
+    let mut builder = ContactCardBuilder::new(_fbb);
+    if let Some(x) = args.address { builder.add_address(x); }
+    if let Some(x) = args.name { builder.add_name(x); }
+    builder.add_account(args.account);
+    builder.add_id(args.id);
+    builder.add_saved(args.saved);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> ContactCardT {
+    let id = self.id();
+    let account = self.account();
+    let name = self.name().map(|x| {
+      x.to_string()
+    });
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    let saved = self.saved();
+    ContactCardT {
+      id,
+      account,
+      name,
+      address,
+      saved,
+    }
+  }
+
+  #[inline]
+  pub fn id(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(ContactCard::VT_ID, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn account(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(ContactCard::VT_ACCOUNT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn name(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(ContactCard::VT_NAME, None)}
+  }
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(ContactCard::VT_ADDRESS, None)}
+  }
+  #[inline]
+  pub fn saved(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(ContactCard::VT_SAVED, Some(false)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for ContactCard<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("id", Self::VT_ID, false)?
+     .visit_field::<u32>("account", Self::VT_ACCOUNT, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .visit_field::<bool>("saved", Self::VT_SAVED, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct ContactCardArgs<'a> {
+    pub id: u32,
+    pub account: u32,
+    pub name: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub saved: bool,
+}
+impl<'a> Default for ContactCardArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    ContactCardArgs {
+      id: 0,
+      account: 0,
+      name: None,
+      address: None,
+      saved: false,
+    }
+  }
+}
+
+pub struct ContactCardBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ContactCardBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_id(&mut self, id: u32) {
+    self.fbb_.push_slot::<u32>(ContactCard::VT_ID, id, 0);
+  }
+  #[inline]
+  pub fn add_account(&mut self, account: u32) {
+    self.fbb_.push_slot::<u32>(ContactCard::VT_ACCOUNT, account, 0);
+  }
+  #[inline]
+  pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ContactCard::VT_NAME, name);
+  }
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ContactCard::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn add_saved(&mut self, saved: bool) {
+    self.fbb_.push_slot::<bool>(ContactCard::VT_SAVED, saved, false);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> ContactCardBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    ContactCardBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<ContactCard<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for ContactCard<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("ContactCard");
+      ds.field("id", &self.id());
+      ds.field("account", &self.account());
+      ds.field("name", &self.name());
+      ds.field("address", &self.address());
+      ds.field("saved", &self.saved());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ContactCardT {
+  pub id: u32,
+  pub account: u32,
+  pub name: Option<String>,
+  pub address: Option<String>,
+  pub saved: bool,
+}
+impl Default for ContactCardT {
+  fn default() -> Self {
+    Self {
+      id: 0,
+      account: 0,
+      name: None,
+      address: None,
+      saved: false,
+    }
+  }
+}
+impl ContactCardT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<ContactCard<'b>> {
+    let id = self.id;
+    let account = self.account;
+    let name = self.name.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let saved = self.saved;
+    ContactCard::create(_fbb, &ContactCardArgs{
+      id,
+      account,
+      name,
+      address,
+      saved,
+    })
+  }
+}
+pub enum TransactionRecipientOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct TransactionRecipient<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for TransactionRecipient<'a> {
+  type Inner = TransactionRecipient<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> TransactionRecipient<'a> {
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 4;
+  pub const VT_AMOUNT: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    TransactionRecipient { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args TransactionRecipientArgs<'args>
+  ) -> flatbuffers::WIPOffset<TransactionRecipient<'bldr>> {
+    let mut builder = TransactionRecipientBuilder::new(_fbb);
+    builder.add_amount(args.amount);
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> TransactionRecipientT {
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    let amount = self.amount();
+    TransactionRecipientT {
+      address,
+      amount,
+    }
+  }
+
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(TransactionRecipient::VT_ADDRESS, None)}
+  }
+  #[inline]
+  pub fn amount(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(TransactionRecipient::VT_AMOUNT, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for TransactionRecipient<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct TransactionRecipientArgs<'a> {
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub amount: u64,
+}
+impl<'a> Default for TransactionRecipientArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    TransactionRecipientArgs {
+      address: None,
+      amount: 0,
+    }
+  }
+}
+
+pub struct TransactionRecipientBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionRecipientBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionRecipient::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn add_amount(&mut self, amount: u64) {
+    self.fbb_.push_slot::<u64>(TransactionRecipient::VT_AMOUNT, amount, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransactionRecipientBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    TransactionRecipientBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<TransactionRecipient<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for TransactionRecipient<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("TransactionRecipient");
+      ds.field("address", &self.address());
+      ds.field("amount", &self.amount());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct TransactionRecipientT {
+  pub address: Option<String>,
+  pub amount: u64,
+}
+impl Default for TransactionRecipientT {
+  fn default() -> Self {
+    Self {
+      address: None,
+      amount: 0,
+    }
+  }
+}
+impl TransactionRecipientT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<TransactionRecipient<'b>> {
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let amount = self.amount;
+    TransactionRecipient::create(_fbb, &TransactionRecipientArgs{
+      address,
+      amount,
+    })
+  }
+}
+pub enum TransactionSummaryOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct TransactionSummary<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for TransactionSummary<'a> {
+  type Inner = TransactionSummary<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> TransactionSummary<'a> {
+  pub const VT_RECIPIENTS: flatbuffers::VOffsetT = 4;
+  pub const VT_TRANSPARENT_INS: flatbuffers::VOffsetT = 6;
+  pub const VT_SAPLING_NET: flatbuffers::VOffsetT = 8;
+  pub const VT_ORCHARD_NET: flatbuffers::VOffsetT = 10;
+  pub const VT_FEE: flatbuffers::VOffsetT = 12;
+  pub const VT_DATA: flatbuffers::VOffsetT = 14;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    TransactionSummary { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args TransactionSummaryArgs<'args>
+  ) -> flatbuffers::WIPOffset<TransactionSummary<'bldr>> {
+    let mut builder = TransactionSummaryBuilder::new(_fbb);
+    builder.add_fee(args.fee);
+    builder.add_orchard_net(args.orchard_net);
+    builder.add_sapling_net(args.sapling_net);
+    builder.add_transparent_ins(args.transparent_ins);
+    if let Some(x) = args.data { builder.add_data(x); }
+    if let Some(x) = args.recipients { builder.add_recipients(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> TransactionSummaryT {
+    let recipients = self.recipients().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
+    });
+    let transparent_ins = self.transparent_ins();
+    let sapling_net = self.sapling_net();
+    let orchard_net = self.orchard_net();
+    let fee = self.fee();
+    let data = self.data().map(|x| {
+      x.into_iter().collect()
+    });
+    TransactionSummaryT {
+      recipients,
+      transparent_ins,
+      sapling_net,
+      orchard_net,
+      fee,
+      data,
+    }
+  }
+
+  #[inline]
+  pub fn recipients(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<TransactionRecipient<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<TransactionRecipient>>>>(TransactionSummary::VT_RECIPIENTS, None)}
+  }
+  #[inline]
+  pub fn transparent_ins(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(TransactionSummary::VT_TRANSPARENT_INS, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn sapling_net(&self) -> i64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<i64>(TransactionSummary::VT_SAPLING_NET, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn orchard_net(&self) -> i64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<i64>(TransactionSummary::VT_ORCHARD_NET, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn fee(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(TransactionSummary::VT_FEE, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn data(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionSummary::VT_DATA, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for TransactionSummary<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<TransactionRecipient>>>>("recipients", Self::VT_RECIPIENTS, false)?
+     .visit_field::<u64>("transparent_ins", Self::VT_TRANSPARENT_INS, false)?
+     .visit_field::<i64>("sapling_net", Self::VT_SAPLING_NET, false)?
+     .visit_field::<i64>("orchard_net", Self::VT_ORCHARD_NET, false)?
+     .visit_field::<u64>("fee", Self::VT_FEE, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("data", Self::VT_DATA, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct TransactionSummaryArgs<'a> {
+    pub recipients: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<TransactionRecipient<'a>>>>>,
+    pub transparent_ins: u64,
+    pub sapling_net: i64,
+    pub orchard_net: i64,
+    pub fee: u64,
+    pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+}
+impl<'a> Default for TransactionSummaryArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    TransactionSummaryArgs {
+      recipients: None,
+      transparent_ins: 0,
+      sapling_net: 0,
+      orchard_net: 0,
+      fee: 0,
+      data: None,
+    }
+  }
+}
+
+pub struct TransactionSummaryBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionSummaryBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_recipients(&mut self, recipients: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<TransactionRecipient<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_RECIPIENTS, recipients);
+  }
+  #[inline]
+  pub fn add_transparent_ins(&mut self, transparent_ins: u64) {
+    self.fbb_.push_slot::<u64>(TransactionSummary::VT_TRANSPARENT_INS, transparent_ins, 0);
+  }
+  #[inline]
+  pub fn add_sapling_net(&mut self, sapling_net: i64) {
+    self.fbb_.push_slot::<i64>(TransactionSummary::VT_SAPLING_NET, sapling_net, 0);
+  }
+  #[inline]
+  pub fn add_orchard_net(&mut self, orchard_net: i64) {
+    self.fbb_.push_slot::<i64>(TransactionSummary::VT_ORCHARD_NET, orchard_net, 0);
+  }
+  #[inline]
+  pub fn add_fee(&mut self, fee: u64) {
+    self.fbb_.push_slot::<u64>(TransactionSummary::VT_FEE, fee, 0);
+  }
+  #[inline]
+  pub fn add_data(&mut self, data: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_DATA, data);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransactionSummaryBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    TransactionSummaryBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<TransactionSummary<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for TransactionSummary<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("TransactionSummary");
+      ds.field("recipients", &self.recipients());
+      ds.field("transparent_ins", &self.transparent_ins());
+      ds.field("sapling_net", &self.sapling_net());
+      ds.field("orchard_net", &self.orchard_net());
+      ds.field("fee", &self.fee());
+      ds.field("data", &self.data());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct TransactionSummaryT {
+  pub recipients: Option<Vec<TransactionRecipientT>>,
+  pub transparent_ins: u64,
+  pub sapling_net: i64,
+  pub orchard_net: i64,
+  pub fee: u64,
+  pub data: Option<Vec<u8>>,
+}
+impl Default for TransactionSummaryT {
+  fn default() -> Self {
+    Self {
+      recipients: None,
+      transparent_ins: 0,
+      sapling_net: 0,
+      orchard_net: 0,
+      fee: 0,
+      data: None,
+    }
+  }
+}
+impl TransactionSummaryT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<TransactionSummary<'b>> {
+    let recipients = self.recipients.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
+    });
+    let transparent_ins = self.transparent_ins;
+    let sapling_net = self.sapling_net;
+    let orchard_net = self.orchard_net;
+    let fee = self.fee;
+    let data = self.data.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
+    TransactionSummary::create(_fbb, &TransactionSummaryArgs{
+      recipients,
+      transparent_ins,
+      sapling_net,
+      orchard_net,
+      fee,
+      data,
+    })
+  }
+}
 }  // pub mod fb
 
