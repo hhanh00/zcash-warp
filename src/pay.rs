@@ -13,7 +13,7 @@ use zcash_protocol::memo::Memo;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::{PaymentRequestT, TransactionRecipientT, TransactionSummaryT}, db::notes::snap_to_checkpoint, keys::TSKStore, types::{AccountInfo, CheckpointHeight, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
+    data::fb::{PaymentRequestT, TransactionRecipientT, TransactionSummaryT}, keys::TSKStore, types::{AccountInfo, CheckpointHeight, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
