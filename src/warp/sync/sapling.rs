@@ -205,9 +205,14 @@ impl Synchronizer {
             let p = position as i32;
             for be in bridges.iter_mut() {
                 let b = be.b;
+                // tracing::info!("{depth} {i} {} {}", be.s, be.e);
+                // tracing::info!("{} {}", be.s - p, be.e - p);
+                // tracing::info!("{:?} {:?}", 
+                //     b.start.as_ref().unwrap().levels[depth], 
+                //     b.end.as_ref().unwrap().levels[depth]);
                 let h = &b.start.as_ref().unwrap().levels[depth].hash;
-                if !h.is_empty() {
-                    cmxs[(be.s - p) as usize] = Some(h.clone().try_into().unwrap())
+                if !h.is_empty() { // fill the *right* node of the be.s pair
+                    cmxs[((be.s - p) | 1) as usize] = Some(h.clone().try_into().unwrap())
                 }
                 let h = &b.end.as_ref().unwrap().levels[depth].hash;
                 if !h.is_empty() {
@@ -230,13 +235,13 @@ impl Synchronizer {
 
                 if nidx % 2 == 0 { // left node
                     if nidx + 1 < cmxs.len() { // ommer is right node if it exists
-                        assert!(cmxs[nidx + 1].is_some());
+                        assert!(cmxs[nidx + 1].is_some(), "{} {} {}", depth, n.position, nidx);
                         n.witness.ommers.0[depth] = cmxs[nidx + 1];
                     } else {
                         n.witness.ommers.0[depth] = None;
                     }
                 } else { // right node
-                    assert!(cmxs[nidx - 1].is_some());
+                    assert!(cmxs[nidx - 1].is_some(), "{} {} {}", depth, n.position, nidx);
                     n.witness.ommers.0[depth] = cmxs[nidx - 1]; // ommer is left node
                 }
             }
@@ -299,11 +304,11 @@ impl Synchronizer {
         }
 
         info!("# {}", self.notes.len());
-        let auth_path = self.tree_state.to_auth_path(&self.hasher);
-        for note in self.notes.iter() {
-            let root = note.witness.root(&auth_path, &self.hasher);
-            info!("{}", hex::encode(&root));
-        }
+        // let auth_path = self.tree_state.to_auth_path(&self.hasher);
+        // for note in self.notes.iter() {
+        //     let root = note.witness.root(&auth_path, &self.hasher);
+        //     info!("{}", hex::encode(&root));
+        // }
 
         Ok(())
     }

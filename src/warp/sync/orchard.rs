@@ -241,13 +241,13 @@ impl Synchronizer {
 
                 if nidx % 2 == 0 { // left node
                     if nidx + 1 < cmxs.len() { // ommer is right node if it exists
-                        assert!(cmxs[nidx + 1].is_some(), "{} {} {} {} {}", depth, n.position, position, nidx, position + nidx as u32 + 1);
+                        assert!(cmxs[nidx + 1].is_some(), "{} {} {}", depth, n.position, nidx);
                         n.witness.ommers.0[depth] = cmxs[nidx + 1];
                     } else {
                         n.witness.ommers.0[depth] = None;
                     }
                 } else { // right node
-                    assert!(cmxs[nidx - 1].is_some());
+                    assert!(cmxs[nidx - 1].is_some(), "{} {} {}", depth, n.position, nidx);
                     n.witness.ommers.0[depth] = cmxs[nidx - 1]; // ommer is left node
                 }
             }
@@ -310,11 +310,11 @@ impl Synchronizer {
         }
 
         info!("# {}", self.notes.len());
-        let auth_path = self.tree_state.to_auth_path(&self.hasher);
-        for note in self.notes.iter() {
-            let root = note.witness.root(&auth_path, &self.hasher);
-            info!("{}", hex::encode(&root));
-        }
+        // let auth_path = self.tree_state.to_auth_path(&self.hasher);
+        // for note in self.notes.iter() {
+        //     let root = note.witness.root(&auth_path, &self.hasher);
+        //     info!("{}", hex::encode(&root));
+        // }
 
         Ok(())
     }
