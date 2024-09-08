@@ -1,10 +1,8 @@
 use crate::{
-    data::fb::ShieldedNoteT,
-    warp::{
+    data::fb::ShieldedNoteT, types::CheckpointHeight, warp::{
         sync::{PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
         BlockHeader, OutPoint, Witness, UTXO,
-    },
-    Hash,
+    }, Hash
 };
 use anyhow::{Error, Result};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
@@ -39,14 +37,21 @@ pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Optio
     Ok(r)
 }
 
-pub fn list_received_notes(
-    connection: &Connection,
+pub fn snap_to_checkpoint(connection: &Connection,
     height: u32,
-    orchard: bool,
-) -> Result<Vec<ReceivedNote>> {
+) -> Result<CheckpointHeight> {
     let height = connection.query_row(
         "SELECT MAX(height) FROM blcks WHERE height <= ?1", [height], |r| r.get::<_, Option<u32>>(0))?;
     let height = height.ok_or(anyhow::anyhow!("No suitable checkpoint"))?;
+    Ok(CheckpointHeight(height))
+}
+
+pub fn list_received_notes(
+    connection: &Connection,
+    height: CheckpointHeight,
+    orchard: bool,
+) -> Result<Vec<ReceivedNote>> {
+    let height: u32 = height.into();
     let mut s = connection.prepare(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
@@ -233,7 +238,8 @@ pub fn store_block(connection: &Transaction, bh: &BlockHeader) -> Result<()> {
     Ok(())
 }
 
-pub fn list_utxos(connection: &Connection, height: u32) -> Result<Vec<UTXO>> {
+pub fn list_utxos(connection: &Connection, height: CheckpointHeight) -> Result<Vec<UTXO>> {
+    let height: u32 = height.into();
     let mut s = connection.prepare(
         "SELECT u.id_utxo, u.account, u.height, u.txid, u.vout, t.address,
         u.value FROM utxos u, t_accounts t WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)

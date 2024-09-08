@@ -8,6 +8,7 @@ table Backup {
   fvk: string;
   uvk: string;
   tsk: string;
+  birth: uint32;
   saved: bool;
 }
 

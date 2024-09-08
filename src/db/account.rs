@@ -46,6 +46,7 @@ pub fn get_account_info(
 ) -> Result<AccountInfo> {
     let ai = connection.query_row(
         "SELECT a.name, a.seed, a.aindex, a.sk as ssk, a.vk as svk, a.address as saddr,
+        a.birth,
         t.sk as tsk, t.address as taddr,
         o.sk as osk, o.vk as ovk,
         a.saved
@@ -83,6 +84,7 @@ pub fn get_account_info(
             let name = r.get::<_, String>("name")?;
             let seed = r.get::<_, Option<String>>("seed")?;
             let aindex = r.get::<_, u32>("aindex")?;
+            let birth = r.get::<_, u32>("birth")?;
             let saved = r.get::<_, Option<bool>>("saved")?;
             let si = SaplingAccountInfo { sk, vk, addr };
 
@@ -106,6 +108,7 @@ pub fn get_account_info(
                 name,
                 seed,
                 aindex,
+                birth,
                 transparent: ti,
                 sapling: si,
                 orchard: oi,

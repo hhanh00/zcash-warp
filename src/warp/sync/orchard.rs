@@ -13,7 +13,7 @@ use crate::{
         notes::list_received_notes,
     },
     lwd::rpc::{Bridge, CompactBlock},
-    types::AccountInfo,
+    types::{AccountInfo, CheckpointHeight},
     warp::{hasher::OrchardHasher, try_orchard_decrypt},
     Hash,
 };
@@ -49,7 +49,7 @@ impl Synchronizer {
     pub fn new(
         network: &Network,
         connection: &Connection,
-        start: u32,
+        start: CheckpointHeight,
         position: u32,
         tree_state: Edge,
     ) -> Result<Self> {
@@ -65,7 +65,7 @@ impl Synchronizer {
             hasher: OrchardHasher::default(),
             network: *network,
             account_infos,
-            start,
+            start: start.into(),
             notes,
             spends: vec![],
             position,

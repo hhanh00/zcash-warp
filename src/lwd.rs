@@ -13,9 +13,7 @@ use zcash_primitives::{
 };
 
 use crate::{
-    coin::connect_lwd,
-    warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2},
-    Client,
+    coin::connect_lwd, types::CheckpointHeight, warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2}, Client
 };
 
 #[path = "./generated/cash.z.wallet.sdk.rpc.rs"]
@@ -31,8 +29,9 @@ pub async fn get_last_height(client: &mut Client) -> Result<u32> {
 
 pub async fn get_tree_state(
     client: &mut Client,
-    height: u32,
+    height: CheckpointHeight,
 ) -> Result<(CommitmentTreeFrontier, CommitmentTreeFrontier)> {
+    let height: u32 = height.into();
     let tree_state = client
         .get_tree_state(Request::new(BlockId {
             height: height as u64,

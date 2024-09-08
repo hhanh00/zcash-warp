@@ -13,11 +13,7 @@ use zcash_protocol::memo::Memo;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::{PaymentRequestT, TransactionRecipientT, TransactionSummaryT},
-    keys::TSKStore,
-    types::{AccountInfo, PoolMask},
-    warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO},
-    Hash,
+    data::fb::{PaymentRequestT, TransactionRecipientT, TransactionSummaryT}, db::notes::snap_to_checkpoint, keys::TSKStore, types::{AccountInfo, CheckpointHeight, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -290,17 +286,15 @@ pub fn make_payment(
     network: &Network,
     connection: &Connection,
     account: u32,
-    height: u32,
-    confirmations: u32,
+    cp_height: CheckpointHeight,
     p: Payment,
     src_pools: PoolMask,
     fee_paid_by_sender: bool,
     s_tree: &CommitmentTreeFrontier,
     o_tree: &CommitmentTreeFrontier,
 ) -> Result<UnsignedTransaction> {
-    let confirmation_height = height - confirmations + 1;
     let mut pb = PaymentBuilder::new(
-        network, connection, account, confirmation_height, p, src_pools, s_tree, o_tree,
+        network, connection, account, cp_height, p, src_pools, s_tree, o_tree,
     )?;
     pb.add_account_funds(&connection)?;
     pb.set_use_change(true)?;

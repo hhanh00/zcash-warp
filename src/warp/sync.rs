@@ -5,7 +5,7 @@ use crate::{
             store_block, store_received_note, store_utxo, update_tx_timestamp,
         },
         tx::add_tx_value,
-    }, lwd::{get_compact_block_range, get_transparent, get_tree_state}, txdetails::CompressedMemo, warp::{
+    }, lwd::{get_compact_block_range, get_transparent, get_tree_state}, txdetails::CompressedMemo, types::CheckpointHeight, warp::{
         hasher::{OrchardHasher, SaplingHasher},
         BlockHeader,
     }, Hash
@@ -104,11 +104,11 @@ pub struct ReceivedNote {
 pub use orchard::Synchronizer as OrchardSync;
 pub use sapling::Synchronizer as SaplingSync;
 
-pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncError> {
-    tracing::info!("{}-{}", start, end);
+pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Result<(), SyncError> {
+    tracing::info!("{:?}-{}", start, end);
     let mut connection = coin.connection()?;
     let mut client = coin.connect_lwd().await?;
-    let (sapling_state, orchard_state) = get_tree_state(&mut client, start).await?;
+    let (sapling_state, orchard_state) = get_tree_state(&mut client, start.into()).await?;
 
     let sap_hasher = SaplingHasher::default();
     let mut sap_dec = SaplingSync::new(
@@ -132,7 +132,7 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
 
     let addresses = trp_dec.addresses.clone();
     for (account, taddr) in addresses.into_iter() {
-        let txs = get_transparent(&coin.network, &mut client, account, taddr, start, end).await?;
+        let txs = get_transparent(&coin.network, &mut client, account, taddr, start.into(), end).await?;
         trp_dec.process_txs(&txs)?;
     }
     let heights = trp_dec
@@ -143,12 +143,12 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
     let mut header_dec = BlockHeaderStore::new();
     header_dec.add_heights(&heights)?;
 
-    let bh = get_block_header(&connection, start)?;
+    let bh = get_block_header(&connection, start.into())?;
     let mut prev_hash = bh.hash;
 
     let block_url = if end < CONFIG.warp_end_height { &coin.warp } else { &coin.url };
     let mut block_client = connect_lwd(block_url).await?;
-    let mut blocks = get_compact_block_range(&mut block_client, start + 1, end).await?;
+    let mut blocks = get_compact_block_range(&mut block_client, u32::from(start) + 1, end).await?;
     let mut bs = vec![];
     let mut bh = BlockHeader::default();
     let mut c = 0;
@@ -190,7 +190,8 @@ pub async fn warp_sync(coin: &CoinDef, start: u32, end: u32) -> Result<(), SyncE
     sap_dec.add(&bs)?;
     orch_dec.add(&bs)?;
 
-    let (s, o) = get_tree_state(&mut client, bh.height as u32).await?;
+    // Verification
+    let (s, o) = get_tree_state(&mut client, CheckpointHeight(bh.height as u32)).await?;
     let r = s.to_edge(&sap_dec.hasher).root(&sap_dec.hasher);
     let r2 = sap_dec.tree_state.root(&sap_dec.hasher);
     info!("s_root {}", hex::encode(&r));

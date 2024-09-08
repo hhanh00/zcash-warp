@@ -38,8 +38,7 @@ use crate::{
         },
         contacts::{delete_contact, edit_contact_address, edit_contact_name, list_contacts},
         notes::{
-            get_sync_height, get_txid, get_unspent_notes, store_block, store_tx_details,
-            truncate_scan,
+            get_sync_height, get_txid, get_unspent_notes, snap_to_checkpoint, store_block, store_tx_details, truncate_scan
         },
         reset_tables,
         tx::{get_tx_details, list_messages},
@@ -53,7 +52,7 @@ use crate::{
         Payment, PaymentItem, UnsignedTransaction,
     },
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
-    types::PoolMask,
+    types::{CheckpointHeight, PoolMask},
     utils::{
         db::encrypt_db,
         ua::decode_ua,
@@ -153,7 +152,7 @@ pub enum Command {
         height: Option<u32>,
     },
     Sync {
-        end_height: Option<u32>,
+        confirmations: Option<u32>,
     },
     Address {
         account: u32,
@@ -222,7 +221,7 @@ impl FromStr for PaymentRequestT {
 fn display_tx(
     network: &Network,
     connection: &Connection,
-    bc_height: u32,
+    cp_height: CheckpointHeight,
     unsigned_tx: UnsignedTransaction,
     tsk_store: &mut TSKStore,
 ) -> Result<Vec<u8>> {
@@ -232,7 +231,7 @@ fn display_tx(
     let txb = unsigned_tx.build(
         network,
         &connection,
-        bc_height + EXPIRATION_HEIGHT_DELTA,
+        cp_height.0 + EXPIRATION_HEIGHT_DELTA,
         tsk_store,
         OsRng,
     )?;
@@ -311,18 +310,18 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 ContactCommand::Save { account } => {
                     let mut client = zec.connect_lwd().await?;
                     let bc_height = get_last_height(&mut client).await?;
-                    let (s_tree, o_tree) = get_tree_state(&mut client, bc_height).await?;
+                    let cp_height = snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
+                    let (s_tree, o_tree) = get_tree_state(&mut client, cp_height).await?;
                     let unsigned_tx = commit_unsaved_contacts(
                         network,
                         &connection,
                         account,
                         7,
-                        bc_height,
-                        CONFIG.confirmations,
+                        cp_height,
                         &s_tree,
                         &o_tree,
                     )?;
-                    *txbytes = display_tx(network, &connection, bc_height, unsigned_tx, &mut TSKStore::default())?;
+                    *txbytes = display_tx(network, &connection, cp_height, unsigned_tx, &mut TSKStore::default())?;
                 }
             }
         }
@@ -362,17 +361,21 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             transaction.set_drop_behavior(DropBehavior::Commit);
             store_block(&transaction, &BlockHeader::from(&block))?;
         }
-        Command::Sync { end_height } => loop {
+        Command::Sync { confirmations } => loop {
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
+            let confirmations = confirmations.unwrap_or(1);
+            if confirmations == 0 {
+                anyhow::bail!("# Confirmations must be > 0");
+            }
             let connection = zec.connection()?;
-            let end_height = end_height.unwrap_or(bc_height);
-            let start_height = get_sync_height(&connection)?.expect("no sync data");
+            let end_height = bc_height - confirmations + 1;
+            let start_height = get_sync_height(&connection)?.ok_or(anyhow::anyhow!("no sync data. Have you run reset?"))?;
             if start_height >= end_height {
                 break;
             }
             let end_height = (start_height + 100_000).min(end_height);
-            warp_sync(&zec, start_height, end_height).await?;
+            warp_sync(&zec, CheckpointHeight(start_height), end_height).await?;
             let connection = Mutex::new(zec.connection()?);
             retrieve_tx_details(network, connection, zec.url.clone()).await?;
         },
@@ -399,8 +402,9 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         } => {
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
-            let (s_tree, o_tree) = get_tree_state(&mut client, bc_height).await?;
             let connection = zec.connection()?;
+            let cp_height = snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
+            let (s_tree, o_tree) = get_tree_state(&mut client, cp_height).await?;
             let p = Payment {
                 recipients: vec![PaymentItem {
                     address,
@@ -408,14 +412,12 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                     memo: None,
                 }],
             };
-            let height = get_sync_height(&connection)?.unwrap();
             let connection = zec.connection()?;
             let unsigned_tx = make_payment(
                 network,
                 &connection,
                 account,
-                height,
-                CONFIG.confirmations,
+                cp_height,
                 p,
                 PoolMask(pools),
                 fee_paid_by_sender != 0,
@@ -425,7 +427,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             *txbytes = display_tx(
                 network,
                 &connection,
-                bc_height,
+                cp_height,
                 unsigned_tx,
                 &mut TSKStore::default(),
             )?;
@@ -463,7 +465,8 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let ai = get_account_info(network, &connection, account)?;
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
-            let (s, o) = get_tree_state(&mut client, bc_height).await?;
+            let cp_height = snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
+            let (s, o) = get_tree_state(&mut client, cp_height).await?;
             let (utxos, mut tsk_store) =
                 scan_utxo_by_seed(network, &zec.url, ai, bc_height, 0, true, 40).await?;
             let connection = zec.connection()?;
@@ -477,7 +480,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 &s,
                 &o,
             )?;
-            *txbytes = display_tx(network, &connection, bc_height, unsigned_tx, &mut tsk_store)?;
+            *txbytes = display_tx(network, &connection, cp_height, unsigned_tx, &mut tsk_store)?;
         }
         Command::GetTxDetails { id } => {
             let connection = zec.connection()?;
@@ -533,14 +536,14 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let recipients = parse_payment_uri(&uri)?;
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
-            let (s, o) = get_tree_state(&mut client, bc_height).await?;
             let connection = zec.connection()?;
+            let cp_height = snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
+            let (s, o) = get_tree_state(&mut client, cp_height).await?;
             let unsigned_tx = make_payment(
                 network,
                 &connection,
                 account,
-                bc_height,
-                CONFIG.confirmations,
+                cp_height,
                 recipients,
                 PoolMask(7),
                 true,
@@ -550,7 +553,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             *txbytes = display_tx(
                 network,
                 &connection,
-                bc_height,
+                cp_height,
                 unsigned_tx,
                 &mut TSKStore::default(),
             )?;
