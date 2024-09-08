@@ -6,12 +6,7 @@ use zcash_primitives::consensus::Network;
 
 use super::{Payment, PaymentBuilder, PaymentItem, UnsignedTransaction};
 use crate::{
-    coin::connect_lwd,
-    keys::Bip32KeyIterator,
-    keys::TSKStore,
-    lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter},
-    types::{AccountInfo, AccountType, PoolMask},
-    warp::{legacy::CommitmentTreeFrontier, UTXO},
+    coin::connect_lwd, db::notes::snap_to_checkpoint, keys::{Bip32KeyIterator, TSKStore}, lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter}, types::{AccountInfo, AccountType, PoolMask}, warp::{legacy::CommitmentTreeFrontier, UTXO}
 };
 
 pub async fn scan_utxo_by_address(
@@ -124,6 +119,7 @@ pub fn prepare_sweep(
         }],
     };
 
+    let height = snap_to_checkpoint(connection, height)?;
     let mut builder =
         PaymentBuilder::new(network, connection, account, height, p, PoolMask(1), &s, &o)?;
     builder.add_utxos(&utxos)?;

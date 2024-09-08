@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 
 use crate::{
-    db::account::get_account_info,
+    db::{account::get_account_info, notes::snap_to_checkpoint},
     keys::TSKStore,
     pay::{Payment, PaymentBuilder, PaymentItem},
     warp::legacy::CommitmentTreeFrontier, EXPIRATION_HEIGHT_DELTA,
@@ -44,11 +44,12 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
         amount -= a;
     }
     let payment = Payment { recipients };
+    let confirmation_height = snap_to_checkpoint(connection, height - confirmations + 1)?;
     let mut builder = PaymentBuilder::new(
         network,
         connection,
         account,
-        height - confirmations + 1,
+        confirmation_height,
         payment,
         Some(from_pool).into(),
         &s,

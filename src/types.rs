@@ -10,7 +10,6 @@ use sapling_crypto::{
     PaymentAddress,
 };
 use secp256k1::SecretKey;
-use serde::{Deserialize, Serialize};
 use zcash_client_backend::keys::UnifiedFullViewingKey;
 use zcash_client_backend::{
     address::UnifiedAddress,
@@ -23,6 +22,15 @@ use zcash_primitives::{
 };
 
 use crate::{data::fb::{BackupT, ContactCardT}, db::account_manager::parse_seed_phrase, keys::export_sk_bip38};
+
+#[derive(Clone, Copy, Default, Debug)]
+pub struct CheckpointHeight(pub u32);
+
+impl From<CheckpointHeight> for u32 {
+    fn from(value: CheckpointHeight) -> Self {
+        value.0
+    }
+}
 
 #[derive(Clone, Copy, Default, Debug)]
 pub struct PoolMask(pub u8);
@@ -94,6 +102,7 @@ pub struct AccountInfo {
     pub name: String,
     pub seed: Option<String>,
     pub aindex: u32,
+    pub birth: u32,
     pub saved: bool,
     pub transparent: Option<TransparentAccountInfo>,
     pub sapling: SaplingAccountInfo,
@@ -194,6 +203,7 @@ impl AccountInfo {
             name: Some(self.name.clone()),
             seed: self.seed.clone(),
             index: self.aindex,
+            birth: self.birth,
             sk,
             fvk: Some(fvk),
             uvk: Some(uvk),

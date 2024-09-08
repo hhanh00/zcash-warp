@@ -6,7 +6,6 @@ use prost::bytes::{Buf as _, BufMut as _};
 use rusqlite::Connection;
 use sapling_crypto::PaymentAddress;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
-use zcash_client_backend::address::UnifiedAddress;
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{
     legacy::TransparentAddress,
@@ -21,7 +20,7 @@ use crate::{
         contacts::{get_unsaved_contacts, store_contact},
     },
     pay::{make_payment, Payment, PaymentItem, UnsignedTransaction},
-    types::PoolMask,
+    types::{CheckpointHeight, PoolMask},
     warp::legacy::CommitmentTreeFrontier,
 };
 
@@ -65,8 +64,7 @@ pub fn commit_unsaved_contacts(
     connection: &Connection,
     account: u32,
     src_pools: u8,
-    bc_height: u32,
-    confirmations: u32,
+    cp_height: CheckpointHeight,
     s: &CommitmentTreeFrontier,
     o: &CommitmentTreeFrontier,
 ) -> anyhow::Result<UnsignedTransaction> {
@@ -99,8 +97,7 @@ pub fn commit_unsaved_contacts(
         network,
         connection,
         account,
-        bc_height,
-        confirmations,
+        cp_height,
         payment,
         PoolMask(src_pools),
         true,

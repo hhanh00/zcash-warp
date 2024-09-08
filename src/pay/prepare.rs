@@ -11,7 +11,7 @@ use crate::{
         account::get_account_info,
         notes::{list_received_notes, list_utxos},
     },
-    types::PoolMask,
+    types::{CheckpointHeight, PoolMask},
     utils::ua::single_receiver_address,
     warp::{
         hasher::{OrchardHasher, SaplingHasher},
@@ -72,12 +72,13 @@ impl PaymentBuilder {
         network: &Network,
         connection: &Connection,
         account: u32,
-        height: u32,
+        height: CheckpointHeight,
         payment: Payment,
         src_pools: PoolMask,
         s_tree: &CommitmentTreeFrontier,
         o_tree: &CommitmentTreeFrontier,
     ) -> Result<Self> {
+        let height: u32 = height.into();
         let ai = get_account_info(network, connection, account)?;
         let outputs = payment
             .recipients
@@ -113,17 +114,17 @@ impl PaymentBuilder {
         self.account_pools = PoolMask(account_pools);
 
         let transparent_inputs = if account_pools & 1 != 0 {
-            list_utxos(connection, self.height)?
+            list_utxos(connection, CheckpointHeight(self.height))?
         } else {
             vec![]
         };
         let sapling_inputs = if account_pools & 2 != 0 {
-            list_received_notes(connection, self.height, false)?
+            list_received_notes(connection, CheckpointHeight(self.height), false)?
         } else {
             vec![]
         };
         let orchard_inputs = if account_pools & 4 != 0 {
-            list_received_notes(connection, self.height, true)?
+            list_received_notes(connection, CheckpointHeight(self.height), true)?
         } else {
             vec![]
         };
@@ -369,6 +370,7 @@ impl PaymentBuilder {
     }
 
     pub fn finalize(self, mut utx: AdjustableUnsignedTransaction) -> Result<UnsignedTransaction> {
+        tracing::debug!("{:?}", utx.tx_notes);
         let change = utx.change;
         if change < 0 {
             return Err(Error::NotEnoughFunds(-change as u64));
@@ -384,8 +386,7 @@ impl PaymentBuilder {
         } else if change != 0 {
             return Err(Error::NoChangeOutput);
         }
-        tracing::info!("{:?}", utx.tx_notes);
-        tracing::info!("{:?}", utx.tx_outputs);
+        tracing::debug!("{:?}", utx.tx_outputs);
 
         let utx = UnsignedTransaction {
             account: self.account,

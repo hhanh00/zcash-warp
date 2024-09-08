@@ -7,8 +7,7 @@ use crate::{
     db::{
         account::{get_account_info, list_accounts},
         notes::list_utxos,
-    },
-    warp::{OutPoint, TransparentTx, UTXO},
+    }, types::CheckpointHeight, warp::{OutPoint, TransparentTx, UTXO}
 };
 
 use super::{ReceivedTx, TxValueUpdate};
@@ -22,7 +21,7 @@ pub struct TransparentSync {
 }
 
 impl TransparentSync {
-    pub fn new(network: &Network, connection: &Connection, height: u32) -> Result<Self> {
+    pub fn new(network: &Network, connection: &Connection, height: CheckpointHeight) -> Result<Self> {
         let accounts = list_accounts(connection)?;
         let mut addresses = vec![];
         for a in accounts.iter() {
