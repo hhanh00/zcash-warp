@@ -12,21 +12,29 @@ use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use zcash_primitives::{
     consensus::Network,
     memo::Memo,
-//    sapling::{note_encryption::SaplingDomain, PaymentAddress},
     transaction::{components::sapling::zip212_enforcement, Transaction as ZTransaction},
 };
 
 use crate::{
-    account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder}, coin::connect_lwd, data::fb::{
-        InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT, ShieldedMessageT, TransactionInfoExtendedT
-    }, db::{
+    account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
+    coin::connect_lwd,
+    data::fb::{
+        InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT, ShieldedMessageT,
+        TransactionInfoExtendedT,
+    },
+    db::{
         account::get_account_info,
         notes::{get_note_by_nf, store_tx_details},
         tx::{get_tx, list_new_txids, store_message, update_tx_primary_address_memo},
-    }, lwd::{get_transaction, get_txin_coins}, types::{Addresses, PoolMask}, utils::ua::ua_of_orchard, warp::{
+    },
+    lwd::{get_transaction, get_txin_coins},
+    types::{Addresses, PoolMask},
+    utils::ua::ua_of_orchard,
+    warp::{
         sync::{FullPlainNote, PlainNote, ReceivedTx},
         OutPoint, TxOut2,
-    }, Hash, PooledSQLConnection
+    },
+    Hash, PooledSQLConnection,
 };
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -158,9 +166,8 @@ pub fn analyze_raw_transaction(
     let mut sins = vec![];
     let mut souts = vec![];
     if let Some(b) = data.sapling_bundle() {
-        let ivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(
-            &ai.sapling.vk.fvk.vk.ivk(),
-        );
+        let ivk =
+            sapling_crypto::keys::PreparedIncomingViewingKey::new(&ai.sapling.vk.fvk.vk.ivk());
         let ovk = &ai.sapling.vk.fvk.ovk;
         for sin in b.shielded_spends() {
             let spend = get_note_by_nf(connection, &sin.nullifier().0)?;
@@ -201,44 +208,45 @@ pub fn analyze_raw_transaction(
     let mut oins = vec![];
     let mut oouts = vec![];
     if let Some(b) = data.orchard_bundle() {
-        let orchard = ai.orchard.as_ref().unwrap();
-        let ivk =
-            orchard::keys::PreparedIncomingViewingKey::new(&orchard.vk.to_ivk(Scope::External));
-        let ovk = &orchard.vk.to_ovk(Scope::External);
-        for a in b.actions() {
-            let spend = get_note_by_nf(connection, &a.nullifier().to_bytes())?;
-            oins.push(ShieldedInput {
-                note: spend,
-                nf: a.nullifier().to_bytes(),
-            });
-
-            let domain = OrchardDomain::for_rho(&a.rho());
-            let fnote = try_note_decryption(&domain, &ivk, a)
-                .map(|(n, a, m)| (n, a, m, true))
-                .or_else(|| {
-                    try_output_recovery_with_ovk(
-                        &domain,
-                        ovk,
-                        a,
-                        a.cv_net(),
-                        &a.encrypted_note().out_ciphertext,
-                    )
-                    .map(|(n, a, m)| (n, a, m, false))
-                })
-                .map(|(n, addr, m, incoming)| FullPlainNote {
-                    note: PlainNote {
-                        address: addr.to_raw_address_bytes(),
-                        value: n.value().inner(),
-                        rcm: n.rseed().as_bytes().clone(),
-                        rho: Some(a.nullifier().to_bytes()),
-                    },
-                    memo: CompressedMemo(m.to_vec()),
-                    incoming,
+        if let Some(orchard) = ai.orchard.as_ref() {
+            let ivk =
+                orchard::keys::PreparedIncomingViewingKey::new(&orchard.vk.to_ivk(Scope::External));
+            let ovk = &orchard.vk.to_ovk(Scope::External);
+            for a in b.actions() {
+                let spend = get_note_by_nf(connection, &a.nullifier().to_bytes())?;
+                oins.push(ShieldedInput {
+                    note: spend,
+                    nf: a.nullifier().to_bytes(),
                 });
-            let cmx = a.cmx();
-            let cmx = cmx.to_bytes();
-            let output = ShieldedOutput { cmx, note: fnote };
-            oouts.push(output);
+
+                let domain = OrchardDomain::for_rho(&a.rho());
+                let fnote = try_note_decryption(&domain, &ivk, a)
+                    .map(|(n, a, m)| (n, a, m, true))
+                    .or_else(|| {
+                        try_output_recovery_with_ovk(
+                            &domain,
+                            ovk,
+                            a,
+                            a.cv_net(),
+                            &a.encrypted_note().out_ciphertext,
+                        )
+                        .map(|(n, a, m)| (n, a, m, false))
+                    })
+                    .map(|(n, addr, m, incoming)| FullPlainNote {
+                        note: PlainNote {
+                            address: addr.to_raw_address_bytes(),
+                            value: n.value().inner(),
+                            rcm: n.rseed().as_bytes().clone(),
+                            rho: Some(a.nullifier().to_bytes()),
+                        },
+                        memo: CompressedMemo(m.to_vec()),
+                        incoming,
+                    });
+                let cmx = a.cmx();
+                let cmx = cmx.to_bytes();
+                let output = ShieldedOutput { cmx, note: fnote };
+                oouts.push(output);
+            }
         }
     }
 
