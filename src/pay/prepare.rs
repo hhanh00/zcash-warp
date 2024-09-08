@@ -1,7 +1,6 @@
 use super::{
-    fee::FeeManager, AdjustableUnsignedTransaction, Error, ExtendedPayment,
-    OutputNote, Payment, PaymentBuilder, PaymentItem, Result, TxInput, TxOutput,
-    UnsignedTransaction,
+    fee::FeeManager, AdjustableUnsignedTransaction, Error, ExtendedPayment, OutputNote, Payment,
+    PaymentBuilder, PaymentItem, Result, TxInput, TxOutput, UnsignedTransaction,
 };
 use rusqlite::Connection;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
@@ -186,6 +185,7 @@ impl PaymentBuilder {
             let change_pools = PoolMask(change_pools);
 
             let change_address = self.ai.to_address(&self.network, change_pools).unwrap();
+            tracing::info!("Use pool {change_pools:?} for change");
             let change = ExtendedPayment {
                 payment: PaymentItem {
                     address: change_address,
@@ -226,16 +226,20 @@ impl PaymentBuilder {
                 );
                 match phase {
                     0 => {
+                        tracing::debug!("Initialization");
                         output.remaining = output.amount;
                         if out_pool_mask != 6 {
                             // add outputs except S+O
-                            self.fee += self.fee_manager.add_output(out_pool_mask);
+                            self.fee += self
+                                .fee_manager
+                                .add_output(PoolMask(out_pool_mask).to_pool().unwrap());
                         }
                         continue;
                     }
                     // pay shielded outputs from the same source pool
                     // s -> s, o -> o
                     1 => {
+                        tracing::debug!("S -> S, O -> O");
                         if out_pool_mask == 1 || out_pool_mask == 6 {
                             continue;
                         }
@@ -244,6 +248,7 @@ impl PaymentBuilder {
                     }
                     // handle S+O
                     2 => {
+                        tracing::debug!("S+O -> S|O");
                         if out_pool_mask != 6 {
                             continue;
                         }
@@ -257,6 +262,7 @@ impl PaymentBuilder {
                     // use the other shielded pool
                     // s -> o, o -> s
                     3 => {
+                        tracing::debug!("S -> O, O -> S");
                         assert!(out_pool_mask != 6);
                         if out_pool_mask == 1 {
                             // Skip not T
@@ -267,6 +273,7 @@ impl PaymentBuilder {
                     }
                     // use t -> s/o
                     4 => {
+                        tracing::debug!("T -> Z");
                         if out_pool_mask == 1 {
                             // Skip not T
                             continue;
@@ -277,6 +284,7 @@ impl PaymentBuilder {
                     // handle transparent payments
                     // s/o -> t, using the select_pool algorithm
                     5 | 6 => {
+                        tracing::debug!("Z -> T");
                         if out_pool_mask != 1 {
                             // T
                             continue;
@@ -286,6 +294,7 @@ impl PaymentBuilder {
                     // finally
                     // t -> t
                     7 => {
+                        tracing::debug!("T -> T");
                         if out_pool_mask != 1 {
                             continue;
                         }
