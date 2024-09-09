@@ -7,6 +7,7 @@ pub(crate) mod contacts;
 pub(crate) mod notes;
 pub(crate) mod tx;
 pub(crate) mod witnesses;
+pub(crate) mod messages;
 
 pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute("DROP TABLE IF EXISTS txs", [])?;

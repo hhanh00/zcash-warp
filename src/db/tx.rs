@@ -5,7 +5,7 @@ use crate::{
     Hash,
 };
 use anyhow::Result;
-use rusqlite::{params, Connection, Transaction};
+use rusqlite::{params, Connection, Row, Transaction};
 
 pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Hash)>> {
     let mut s = connection.prepare(
@@ -123,33 +123,61 @@ pub fn add_tx_value<IDSpent: std::fmt::Debug>(
     Ok(())
 }
 
+fn select_message(r: &Row) -> rusqlite::Result<(u32, u32, u32, u32, Vec<u8>, u32,
+    bool, Option<String>, Option<String>, String, String, bool, u32)> {
+    Ok((
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get(5)?,
+        r.get(6)?,
+        r.get(7)?,
+        r.get(8)?,
+        r.get(9)?,
+        r.get(10)?,
+        r.get(11)?,
+        r.get(12)?,
+    ))
+}
+
+pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT> {
+    let r = connection.query_row("SELECT m.id_msg, m.account, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
+        m.recipient, m.subject, m.body, m.read, t.id_tx FROM msgs m JOIN txs t
+        ON m.txid = t.txid WHERE m.id_msg = ?1", [id], select_message)?;
+    let (id_msg, account, height, timestamp, txid, nout, incoming, sender, recipient, subject, body, read, id_tx) = r;
+    let msg = ShieldedMessageT {
+        id_msg,
+        account,
+        id_tx,
+        txid: Some(txid),
+        height,
+        timestamp,
+        incoming,
+        nout,
+        sender,
+        recipient,
+        subject: Some(subject),
+        body: Some(body),
+        read,
+    };
+    Ok(msg)
+}
+
 pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<ShieldedMessageT>> {
     let mut s = connection.prepare(
-        "SELECT m.id_msg, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
+        "SELECT m.id_msg, m.account, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
         m.recipient, m.subject, m.body, m.read, t.id_tx FROM msgs m JOIN txs t
         ON m.txid = t.txid WHERE m.account = ?1",
     )?;
-    let rows = s.query_map([account], |r| {
-        Ok((
-            r.get::<_, u32>(0)?,
-            r.get::<_, u32>(1)?,
-            r.get::<_, u32>(2)?,
-            r.get::<_, Vec<u8>>(3)?,
-            r.get::<_, u32>(4)?,
-            r.get::<_, bool>(5)?,
-            r.get::<_, Option<String>>(6)?,
-            r.get::<_, Option<String>>(7)?,
-            r.get::<_, String>(8)?,
-            r.get::<_, String>(9)?,
-            r.get::<_, bool>(10)?,
-            r.get::<_, u32>(11)?,
-        ))
-    })?;
+    let rows = s.query_map([account], select_message)?;
     let mut msgs = vec![];
     for r in rows {
-        let (id_msg, height, timestamp, txid, nout, incoming, sender, recipient, subject, body, read, id_tx) = r?;
+        let (id_msg, account, height, timestamp, txid, nout, incoming, sender, recipient, subject, body, read, id_tx) = r?;
         let msg = ShieldedMessageT {
             id_msg,
+            account,
             id_tx,
             txid: Some(txid),
             height,

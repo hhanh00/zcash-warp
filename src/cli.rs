@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
+use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use clap_repl::{
     reedline::{DefaultPrompt, DefaultPromptSegment, FileBackedHistory},
@@ -31,17 +32,12 @@ use crate::{
     coin::CoinDef,
     data::fb::{PaymentRequestT, ShieldedNote, TransactionInfo},
     db::{
-        account::{get_account_info, get_balance, list_accounts},
-        account_manager::{
+        account::{get_account_info, get_balance, list_accounts}, account_manager::{
             create_new_account, delete_account, detect_key, edit_account_birth, edit_account_name,
             get_min_birth,
-        },
-        contacts::{delete_contact, edit_contact_address, edit_contact_name, list_contacts},
-        notes::{
+        }, contacts::{delete_contact, edit_contact_address, edit_contact_name, list_contacts}, messages::{mark_all_read, mark_read}, notes::{
             get_sync_height, get_txid, get_unspent_notes, snap_to_checkpoint, store_block, store_tx_details, truncate_scan
-        },
-        reset_tables,
-        tx::{get_tx_details, list_messages},
+        }, reset_tables, tx::{get_message, get_tx_details, list_messages}
     },
     fb_vec_to_bytes,
     keys::{generate_random_mnemonic_phrase, TSKStore},
@@ -54,9 +50,7 @@ use crate::{
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::{CheckpointHeight, PoolMask},
     utils::{
-        db::encrypt_db,
-        ua::decode_ua,
-        uri::{make_payment_uri, parse_payment_uri},
+        chain::{get_activation_date, get_height_by_time}, db::encrypt_db, messages::navigate_message, ua::decode_ua, uri::{make_payment_uri, parse_payment_uri}
     },
     warp::{sync::warp_sync, BlockHeader},
     EXPIRATION_HEIGHT_DELTA,
@@ -129,11 +123,44 @@ pub enum ContactCommand {
     },
 }
 
+#[derive(Parser, Clone, Debug)]
+pub struct Chain {
+    #[structopt(subcommand)]
+    command: ChainCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum ChainCommand {
+    GetActivationDate,
+    GetHeightFromTime {
+        time: u32,
+    },
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct Message {
+    #[structopt(subcommand)]
+    command: MessageCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum MessageCommand {
+    Prev { id: u32 },
+    Next { id: u32 },
+    PrevInThread { id: u32 },
+    NextInThread { id: u32 },
+    List { account: u32 },
+    MarkAllRead { account: u32, reverse: u8 },
+    MarkRead { id: u32, reverse: u8 },
+}
+
 /// The enum of sub-commands supported by the CLI
 #[derive(Parser, Clone, Debug)]
 pub enum Command {
     Account(Account),
     Contact(Contact),
+    Chain(Chain),
+    Message(Message),
     CreateDatabase,
     GenerateSeed,
     Backup {
@@ -190,9 +217,6 @@ pub enum Command {
         account: u32,
     },
     ListNotes {
-        account: u32,
-    },
-    ListMessages {
         account: u32,
     },
     DecodeUA {
@@ -324,6 +348,56 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                     *txbytes = display_tx(network, &connection, cp_height, unsigned_tx, &mut TSKStore::default())?;
                 }
             }
+        }
+        Command::Chain(chain_command) => {
+            let mut client = zec.connect_lwd().await?;
+            match chain_command.command {
+                ChainCommand::GetActivationDate => {
+                    let timestamp = get_activation_date(network, &mut client).await?;
+                    let datetime = DateTime::<Utc>::from_timestamp(timestamp as i64, 0).unwrap();
+                    let timestamp_str = datetime.format("%Y-%m-%d").to_string();
+                    println!("{timestamp_str}");
+                }
+                ChainCommand::GetHeightFromTime { time } => {
+                    let height = get_height_by_time(network, &mut client, time).await?;
+                    println!("height: {height}");
+                }
+            }
+        }
+        Command::Message(message_command) => {
+            let connection = zec.connection()?;
+            let message = match message_command.command {
+                MessageCommand::Prev { id } => {
+                    let m = get_message(&connection, id)?;
+                    navigate_message(&connection, m.account, m.height, None, true)
+                }
+                MessageCommand::Next { id } => {
+                    let m = get_message(&connection, id)?;
+                    navigate_message(&connection, m.account, m.height, None, false)
+                }
+                MessageCommand::PrevInThread { id } => {
+                    let m = get_message(&connection, id)?;
+                    navigate_message(&connection, m.account, m.height, m.subject, true)
+                }
+                MessageCommand::NextInThread { id } => {
+                    let m = get_message(&connection, id)?;
+                    navigate_message(&connection, m.account, m.height, m.subject, false)
+                }
+                MessageCommand::List { account } => {
+                    let msgs = list_messages(&connection, account)?;
+                    println!("{}", serde_json::to_string_pretty(&msgs).unwrap());
+                    Ok(None)
+                }
+                MessageCommand::MarkRead { id, reverse } => {
+                    mark_read(&connection, id, reverse != 0)?;
+                    Ok(None)
+                }
+                MessageCommand::MarkAllRead { account, reverse } => {
+                    mark_all_read(&connection, account, reverse != 0)?;
+                    Ok(None)
+                }
+            }?;
+            println!("{message:?}");
         }
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
@@ -514,11 +588,6 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
 
             println!("{}", serde_json::to_string_pretty(&notes).unwrap());
             let _data = fb_vec_to_bytes!(notes, ShieldedNote)?;
-        }
-        Command::ListMessages { account } => {
-            let connection = zec.connection()?;
-            let msgs = list_messages(&connection, account)?;
-            println!("{}", serde_json::to_string_pretty(&msgs).unwrap());
         }
         Command::DecodeUA { ua } => {
             let ua = decode_ua(network, &ua)?;

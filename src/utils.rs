@@ -3,6 +3,8 @@ use crate::Hash;
 pub mod db;
 pub mod ua;
 pub mod uri;
+pub mod chain;
+pub mod messages;
 
 #[macro_export]
 macro_rules! fb_to_bytes {

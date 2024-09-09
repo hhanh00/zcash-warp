@@ -2127,17 +2127,18 @@ impl<'a> flatbuffers::Follow<'a> for ShieldedMessage<'a> {
 
 impl<'a> ShieldedMessage<'a> {
   pub const VT_ID_MSG: flatbuffers::VOffsetT = 4;
-  pub const VT_ID_TX: flatbuffers::VOffsetT = 6;
-  pub const VT_TXID: flatbuffers::VOffsetT = 8;
-  pub const VT_HEIGHT: flatbuffers::VOffsetT = 10;
-  pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 12;
-  pub const VT_INCOMING: flatbuffers::VOffsetT = 14;
-  pub const VT_NOUT: flatbuffers::VOffsetT = 16;
-  pub const VT_SENDER: flatbuffers::VOffsetT = 18;
-  pub const VT_RECIPIENT: flatbuffers::VOffsetT = 20;
-  pub const VT_SUBJECT: flatbuffers::VOffsetT = 22;
-  pub const VT_BODY: flatbuffers::VOffsetT = 24;
-  pub const VT_READ: flatbuffers::VOffsetT = 26;
+  pub const VT_ACCOUNT: flatbuffers::VOffsetT = 6;
+  pub const VT_ID_TX: flatbuffers::VOffsetT = 8;
+  pub const VT_TXID: flatbuffers::VOffsetT = 10;
+  pub const VT_HEIGHT: flatbuffers::VOffsetT = 12;
+  pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 14;
+  pub const VT_INCOMING: flatbuffers::VOffsetT = 16;
+  pub const VT_NOUT: flatbuffers::VOffsetT = 18;
+  pub const VT_SENDER: flatbuffers::VOffsetT = 20;
+  pub const VT_RECIPIENT: flatbuffers::VOffsetT = 22;
+  pub const VT_SUBJECT: flatbuffers::VOffsetT = 24;
+  pub const VT_BODY: flatbuffers::VOffsetT = 26;
+  pub const VT_READ: flatbuffers::VOffsetT = 28;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2158,6 +2159,7 @@ impl<'a> ShieldedMessage<'a> {
     builder.add_height(args.height);
     if let Some(x) = args.txid { builder.add_txid(x); }
     builder.add_id_tx(args.id_tx);
+    builder.add_account(args.account);
     builder.add_id_msg(args.id_msg);
     builder.add_read(args.read);
     builder.add_incoming(args.incoming);
@@ -2166,6 +2168,7 @@ impl<'a> ShieldedMessage<'a> {
 
   pub fn unpack(&self) -> ShieldedMessageT {
     let id_msg = self.id_msg();
+    let account = self.account();
     let id_tx = self.id_tx();
     let txid = self.txid().map(|x| {
       x.into_iter().collect()
@@ -2189,6 +2192,7 @@ impl<'a> ShieldedMessage<'a> {
     let read = self.read();
     ShieldedMessageT {
       id_msg,
+      account,
       id_tx,
       txid,
       height,
@@ -2209,6 +2213,13 @@ impl<'a> ShieldedMessage<'a> {
     // Created from valid Table for this object
     // which contains a valid value in this slot
     unsafe { self._tab.get::<u32>(ShieldedMessage::VT_ID_MSG, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn account(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(ShieldedMessage::VT_ACCOUNT, Some(0)).unwrap()}
   }
   #[inline]
   pub fn id_tx(&self) -> u32 {
@@ -2297,6 +2308,7 @@ impl flatbuffers::Verifiable for ShieldedMessage<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<u32>("id_msg", Self::VT_ID_MSG, false)?
+     .visit_field::<u32>("account", Self::VT_ACCOUNT, false)?
      .visit_field::<u32>("id_tx", Self::VT_ID_TX, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("txid", Self::VT_TXID, false)?
      .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
@@ -2314,6 +2326,7 @@ impl flatbuffers::Verifiable for ShieldedMessage<'_> {
 }
 pub struct ShieldedMessageArgs<'a> {
     pub id_msg: u32,
+    pub account: u32,
     pub id_tx: u32,
     pub txid: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub height: u32,
@@ -2331,6 +2344,7 @@ impl<'a> Default for ShieldedMessageArgs<'a> {
   fn default() -> Self {
     ShieldedMessageArgs {
       id_msg: 0,
+      account: 0,
       id_tx: 0,
       txid: None,
       height: 0,
@@ -2354,6 +2368,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ShieldedMessageBuilder<'a, 'b, 
   #[inline]
   pub fn add_id_msg(&mut self, id_msg: u32) {
     self.fbb_.push_slot::<u32>(ShieldedMessage::VT_ID_MSG, id_msg, 0);
+  }
+  #[inline]
+  pub fn add_account(&mut self, account: u32) {
+    self.fbb_.push_slot::<u32>(ShieldedMessage::VT_ACCOUNT, account, 0);
   }
   #[inline]
   pub fn add_id_tx(&mut self, id_tx: u32) {
@@ -2418,6 +2436,7 @@ impl core::fmt::Debug for ShieldedMessage<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("ShieldedMessage");
       ds.field("id_msg", &self.id_msg());
+      ds.field("account", &self.account());
       ds.field("id_tx", &self.id_tx());
       ds.field("txid", &self.txid());
       ds.field("height", &self.height());
@@ -2436,6 +2455,7 @@ impl core::fmt::Debug for ShieldedMessage<'_> {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ShieldedMessageT {
   pub id_msg: u32,
+  pub account: u32,
   pub id_tx: u32,
   pub txid: Option<Vec<u8>>,
   pub height: u32,
@@ -2452,6 +2472,7 @@ impl Default for ShieldedMessageT {
   fn default() -> Self {
     Self {
       id_msg: 0,
+      account: 0,
       id_tx: 0,
       txid: None,
       height: 0,
@@ -2472,6 +2493,7 @@ impl ShieldedMessageT {
     _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
   ) -> flatbuffers::WIPOffset<ShieldedMessage<'b>> {
     let id_msg = self.id_msg;
+    let account = self.account;
     let id_tx = self.id_tx;
     let txid = self.txid.as_ref().map(|x|{
       _fbb.create_vector(x)
@@ -2495,6 +2517,7 @@ impl ShieldedMessageT {
     let read = self.read;
     ShieldedMessage::create(_fbb, &ShieldedMessageArgs{
       id_msg,
+      account,
       id_tx,
       txid,
       height,

@@ -401,6 +401,7 @@ fn visit_memo(
     match memo {
         Memo::Text(text) => {
             let msg = parse_memo_text(
+                account,
                 id_tx,
                 &tx.txid,
                 nout,
@@ -419,6 +420,7 @@ fn visit_memo(
 }
 
 fn parse_memo_text(
+    account: u32,
     id_tx: u32,
     txid: &Hash,
     nout: u32,
@@ -433,6 +435,7 @@ fn parse_memo_text(
     let msg = if memo_lines.len() == 4 && memo_lines[0] == "\u{1F6E1}MSG" {
         ShieldedMessageT {
             id_msg: 0,
+            account,
             id_tx,
             txid: Some(txid.to_vec()),
             nout,
@@ -452,6 +455,7 @@ fn parse_memo_text(
     } else {
         ShieldedMessageT {
             id_msg: 0,
+            account,
             id_tx,
             txid: Some(txid.to_vec()),
             height,

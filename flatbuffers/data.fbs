@@ -76,6 +76,7 @@ table ShieldedNote {
 
 table ShieldedMessage {
   id_msg: uint32;
+  account: uint32;
   id_tx: uint32;
   txid: [uint8];
   height: uint32;
