@@ -30,14 +30,20 @@ use crate::{
         txs::get_txs,
     },
     coin::CoinDef,
-    data::fb::{PaymentRequestT, ShieldedNote, TransactionInfo},
+    data::fb::{PaymentRequestT, TransactionInfo},
     db::{
-        account::{get_account_info, get_balance, list_accounts}, account_manager::{
+        account::{get_account_info, get_balance, list_accounts},
+        account_manager::{
             create_new_account, delete_account, detect_key, edit_account_birth, edit_account_name,
             get_min_birth,
-        }, contacts::{delete_contact, edit_contact_address, edit_contact_name, list_contacts}, messages::{mark_all_read, mark_read}, notes::{
-            get_sync_height, get_txid, get_unspent_notes, snap_to_checkpoint, store_block, store_tx_details, truncate_scan
-        }, reset_tables, tx::{get_message, get_tx_details, list_messages}
+        },
+        contacts::{delete_contact, edit_contact_address, edit_contact_name, list_contacts},
+        messages::{mark_all_read, mark_read},
+        notes::{
+            exclude_note, get_sync_height, get_txid, get_unspent_notes, reverse_note_exclusion, snap_to_checkpoint, store_block, store_tx_details, truncate_scan
+        },
+        reset_tables,
+        tx::{get_message, get_tx_details, list_messages},
     },
     fb_vec_to_bytes,
     keys::{generate_random_mnemonic_phrase, TSKStore},
@@ -50,7 +56,11 @@ use crate::{
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::{CheckpointHeight, PoolMask},
     utils::{
-        chain::{get_activation_date, get_height_by_time}, db::encrypt_db, messages::navigate_message, ua::decode_ua, uri::{make_payment_uri, parse_payment_uri}
+        chain::{get_activation_date, get_height_by_time},
+        db::encrypt_db,
+        messages::navigate_message,
+        ua::decode_ua,
+        uri::{make_payment_uri, parse_payment_uri}, zip_db::{decrypt_zip_database_files, encrypt_zip_database_files},
     },
     warp::{sync::warp_sync, BlockHeader},
     EXPIRATION_HEIGHT_DELTA,
@@ -132,9 +142,7 @@ pub struct Chain {
 #[derive(Subcommand, Clone, Debug)]
 pub enum ChainCommand {
     GetActivationDate,
-    GetHeightFromTime {
-        time: u32,
-    },
+    GetHeightFromTime { time: u32 },
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -154,6 +162,31 @@ pub enum MessageCommand {
     MarkRead { id: u32, reverse: u8 },
 }
 
+#[derive(Parser, Clone, Debug)]
+pub struct Note {
+    #[structopt(subcommand)]
+    command: NoteCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum NoteCommand {
+    List { account: u32 },
+    Exclude { id: u32, reverse: u8 },
+    Reverse { account: u32 },
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct Database {
+    #[structopt(subcommand)]
+    command: DatabaseCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum DatabaseCommand {
+    Encrypt { directory: String, extension: String, public_key: String },
+    Decrypt { file_path: String, secret_key: String },
+}
+
 /// The enum of sub-commands supported by the CLI
 #[derive(Parser, Clone, Debug)]
 pub enum Command {
@@ -161,6 +194,8 @@ pub enum Command {
     Contact(Contact),
     Chain(Chain),
     Message(Message),
+    Note(Note),
+    Database(Database),
     CreateDatabase,
     GenerateSeed,
     Backup {
@@ -214,9 +249,6 @@ pub enum Command {
         address: String,
     },
     ListTxs {
-        account: u32,
-    },
-    ListNotes {
         account: u32,
     },
     DecodeUA {
@@ -334,7 +366,8 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 ContactCommand::Save { account } => {
                     let mut client = zec.connect_lwd().await?;
                     let bc_height = get_last_height(&mut client).await?;
-                    let cp_height = snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
+                    let cp_height =
+                        snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
                     let (s_tree, o_tree) = get_tree_state(&mut client, cp_height).await?;
                     let unsigned_tx = commit_unsaved_contacts(
                         network,
@@ -345,7 +378,13 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                         &s_tree,
                         &o_tree,
                     )?;
-                    *txbytes = display_tx(network, &connection, cp_height, unsigned_tx, &mut TSKStore::default())?;
+                    *txbytes = display_tx(
+                        network,
+                        &connection,
+                        cp_height,
+                        unsigned_tx,
+                        &mut TSKStore::default(),
+                    )?;
                 }
             }
         }
@@ -399,6 +438,33 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             }?;
             println!("{message:?}");
         }
+        Command::Note(note_command) => {
+            let connection = zec.connection()?;
+            match note_command.command {
+                NoteCommand::List { account } => {
+                    let mut client = zec.connect_lwd().await?;
+                    let bc_height = get_last_height(&mut client).await?;
+                    let notes = get_unspent_notes(&connection, account, bc_height)?;
+                    println!("{}", serde_json::to_string_pretty(&notes).unwrap());
+                }
+                NoteCommand::Exclude { id, reverse } => {
+                    exclude_note(&connection, id, reverse != 0)?;
+                }
+                NoteCommand::Reverse { account } => {
+                    reverse_note_exclusion(&connection, account)?;
+                }
+            }
+        }
+        Command::Database(database_command) => {
+            match database_command.command {
+                DatabaseCommand::Encrypt { directory, extension, public_key } => {
+                    encrypt_zip_database_files(&directory, &extension, &public_key)?;
+                }
+                DatabaseCommand::Decrypt { file_path, secret_key } => {
+                    decrypt_zip_database_files(&file_path, &secret_key)?;
+                }
+            }
+        }
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
             println!("{seed}");
@@ -444,7 +510,8 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             }
             let connection = zec.connection()?;
             let end_height = bc_height - confirmations + 1;
-            let start_height = get_sync_height(&connection)?.ok_or(anyhow::anyhow!("no sync data. Have you run reset?"))?;
+            let start_height = get_sync_height(&connection)?
+                .ok_or(anyhow::anyhow!("no sync data. Have you run reset?"))?;
             if start_height >= end_height {
                 break;
             }
@@ -579,15 +646,6 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             }
             let _data = fb_vec_to_bytes!(txs, TransactionInfo)?;
             // println!("{}", hex::encode(data));
-        }
-        Command::ListNotes { account } => {
-            let mut client = zec.connect_lwd().await?;
-            let bc_height = get_last_height(&mut client).await?;
-            let connection = zec.connection()?;
-            let notes = get_unspent_notes(&connection, account, bc_height)?;
-
-            println!("{}", serde_json::to_string_pretty(&notes).unwrap());
-            let _data = fb_vec_to_bytes!(notes, ShieldedNote)?;
         }
         Command::DecodeUA { ua } => {
             let ua = decode_ua(network, &ua)?;

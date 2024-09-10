@@ -56,7 +56,7 @@ pub fn list_received_notes(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2 AND (spent IS NULL OR spent > ?1)
+        AND orchard = ?2 AND (spent IS NULL OR spent > ?1) AND NOT excluded
         ORDER BY n.value DESC",
     )?;
     let rows = s.query_map(params![height, orchard], |r| {
@@ -149,8 +149,8 @@ pub fn store_received_note(
 ) -> Result<()> {
     let mut s_note = connection.prepare_cached(
         "INSERT INTO notes
-    (account, position, height, tx, output_index, address, value, rcm, nf, rho, spent, orchard)
-    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+    (account, position, height, tx, output_index, address, value, rcm, nf, rho, spent, orchard, excluded)
+    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, FALSE)",
     )?;
     for n in notes {
         let orchard = n.rho.is_some();
@@ -325,7 +325,7 @@ pub fn update_tx_timestamp<'a, I: IntoIterator<Item = &'a Option<BlockHeader>>>(
 
 pub fn get_unspent_notes(connection: &Connection, account: u32, bc_height: u32) -> Result<Vec<ShieldedNoteT>> {
     let mut s = connection.prepare(
-        "SELECT n.height, t.timestamp, n.value, n.orchard
+        "SELECT n.height, t.timestamp, n.value, n.orchard, n.excluded
         FROM notes n JOIN txs t ON n.tx = t.id_tx
         WHERE n.account = ?1 AND spent IS NULL")?;
     let rows = s.query_map([account], |r| Ok((
@@ -333,16 +333,18 @@ pub fn get_unspent_notes(connection: &Connection, account: u32, bc_height: u32) 
         r.get::<_, u32>(1)?,
         r.get::<_, u64>(2)?,
         r.get::<_, bool>(3)?,
+        r.get::<_, bool>(4)?,
     )))?;
     let mut notes = vec![];
     for r in rows {
-        let (height, timestamp, value, orchard) = r?;
+        let (height, timestamp, value, orchard, excluded) = r?;
         let note = ShieldedNoteT {
             height,
             confirmations: bc_height - height + 1,
             timestamp,
             value,
             orchard,
+            excluded,
         };
         notes.push(note);
     }
@@ -419,5 +421,17 @@ pub fn store_tx_details(connection: &Connection, id: u32, txid: &Hash, data: &[u
         VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
         params![id, txid, data],
     )?;
+    Ok(())
+}
+
+pub fn exclude_note(connection: &Connection, id: u32, reverse: bool) -> Result<()> {
+    connection.execute("UPDATE notes SET excluded = ?2 WHERE id_note = ?1",
+        params![id, !reverse])?;
+    Ok(())
+}
+
+pub fn reverse_note_exclusion(connection: &Connection, account: u32) -> Result<()> {
+    connection.execute("UPDATE notes SET excluded = NOT excluded WHERE account = ?1",
+        [account])?;
     Ok(())
 }

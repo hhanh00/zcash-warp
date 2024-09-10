@@ -72,6 +72,7 @@ table ShieldedNote {
   timestamp: uint32;
   value: uint64;
   orchard: bool;
+  excluded: bool;
 }
 
 table ShieldedMessage {

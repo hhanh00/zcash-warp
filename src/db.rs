@@ -85,6 +85,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         rho BLOB,
         spent INTEGER,
         orchard BOOL NOT NULL,
+        excluded BOOL NOT NULL,
         UNIQUE (position, orchard))",
         [],
     )?;

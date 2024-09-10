@@ -1913,6 +1913,7 @@ impl<'a> ShieldedNote<'a> {
   pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 8;
   pub const VT_VALUE: flatbuffers::VOffsetT = 10;
   pub const VT_ORCHARD: flatbuffers::VOffsetT = 12;
+  pub const VT_EXCLUDED: flatbuffers::VOffsetT = 14;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1928,6 +1929,7 @@ impl<'a> ShieldedNote<'a> {
     builder.add_timestamp(args.timestamp);
     builder.add_confirmations(args.confirmations);
     builder.add_height(args.height);
+    builder.add_excluded(args.excluded);
     builder.add_orchard(args.orchard);
     builder.finish()
   }
@@ -1938,12 +1940,14 @@ impl<'a> ShieldedNote<'a> {
     let timestamp = self.timestamp();
     let value = self.value();
     let orchard = self.orchard();
+    let excluded = self.excluded();
     ShieldedNoteT {
       height,
       confirmations,
       timestamp,
       value,
       orchard,
+      excluded,
     }
   }
 
@@ -1982,6 +1986,13 @@ impl<'a> ShieldedNote<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<bool>(ShieldedNote::VT_ORCHARD, Some(false)).unwrap()}
   }
+  #[inline]
+  pub fn excluded(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(ShieldedNote::VT_EXCLUDED, Some(false)).unwrap()}
+  }
 }
 
 impl flatbuffers::Verifiable for ShieldedNote<'_> {
@@ -1996,6 +2007,7 @@ impl flatbuffers::Verifiable for ShieldedNote<'_> {
      .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
      .visit_field::<u64>("value", Self::VT_VALUE, false)?
      .visit_field::<bool>("orchard", Self::VT_ORCHARD, false)?
+     .visit_field::<bool>("excluded", Self::VT_EXCLUDED, false)?
      .finish();
     Ok(())
   }
@@ -2006,6 +2018,7 @@ pub struct ShieldedNoteArgs {
     pub timestamp: u32,
     pub value: u64,
     pub orchard: bool,
+    pub excluded: bool,
 }
 impl<'a> Default for ShieldedNoteArgs {
   #[inline]
@@ -2016,6 +2029,7 @@ impl<'a> Default for ShieldedNoteArgs {
       timestamp: 0,
       value: 0,
       orchard: false,
+      excluded: false,
     }
   }
 }
@@ -2046,6 +2060,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ShieldedNoteBuilder<'a, 'b, A> 
     self.fbb_.push_slot::<bool>(ShieldedNote::VT_ORCHARD, orchard, false);
   }
   #[inline]
+  pub fn add_excluded(&mut self, excluded: bool) {
+    self.fbb_.push_slot::<bool>(ShieldedNote::VT_EXCLUDED, excluded, false);
+  }
+  #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> ShieldedNoteBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     ShieldedNoteBuilder {
@@ -2068,6 +2086,7 @@ impl core::fmt::Debug for ShieldedNote<'_> {
       ds.field("timestamp", &self.timestamp());
       ds.field("value", &self.value());
       ds.field("orchard", &self.orchard());
+      ds.field("excluded", &self.excluded());
       ds.finish()
   }
 }
@@ -2079,6 +2098,7 @@ pub struct ShieldedNoteT {
   pub timestamp: u32,
   pub value: u64,
   pub orchard: bool,
+  pub excluded: bool,
 }
 impl Default for ShieldedNoteT {
   fn default() -> Self {
@@ -2088,6 +2108,7 @@ impl Default for ShieldedNoteT {
       timestamp: 0,
       value: 0,
       orchard: false,
+      excluded: false,
     }
   }
 }
@@ -2101,12 +2122,14 @@ impl ShieldedNoteT {
     let timestamp = self.timestamp;
     let value = self.value;
     let orchard = self.orchard;
+    let excluded = self.excluded;
     ShieldedNote::create(_fbb, &ShieldedNoteArgs{
       height,
       confirmations,
       timestamp,
       value,
       orchard,
+      excluded,
     })
   }
 }

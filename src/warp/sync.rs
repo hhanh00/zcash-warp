@@ -181,10 +181,11 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
 
         if c >= 1000000 {
             info!("Height {}", height);
-            sap_dec.add(&bs)?;
-            orch_dec.add(&bs)?;
-            bs.clear();
-            c = 0;
+            break;
+            // sap_dec.add(&bs)?;
+            // orch_dec.add(&bs)?;
+            // bs.clear();
+            // c = 0;
         }
     }
     sap_dec.add(&bs)?;

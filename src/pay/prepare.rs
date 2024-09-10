@@ -4,6 +4,7 @@ use super::{
 };
 use rusqlite::Connection;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
+use zcash_keys::address::Address as RecipientAddress;
 
 use crate::{
     db::{
@@ -112,17 +113,23 @@ impl PaymentBuilder {
         let account_pools = account_pools & self.src_pools.0; // exclude pools
         self.account_pools = PoolMask(account_pools);
 
+        let has_tex = self.outputs.iter().any(|o| { 
+            let address = &o.payment.address;
+            let address = RecipientAddress::decode(&self.network, address).unwrap();
+            if let RecipientAddress::Tex(_) = address { true } else { false }
+        });
+
         let transparent_inputs = if account_pools & 1 != 0 {
             list_utxos(connection, CheckpointHeight(self.height))?
         } else {
             vec![]
         };
-        let sapling_inputs = if account_pools & 2 != 0 {
+        let sapling_inputs = if account_pools & 2 != 0 && !has_tex {
             list_received_notes(connection, CheckpointHeight(self.height), false)?
         } else {
             vec![]
         };
-        let orchard_inputs = if account_pools & 4 != 0 {
+        let orchard_inputs = if account_pools & 4 != 0 && !has_tex {
             list_received_notes(connection, CheckpointHeight(self.height), true)?
         } else {
             vec![]
