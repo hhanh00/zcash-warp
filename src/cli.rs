@@ -37,10 +37,11 @@ use crate::{
             create_new_account, delete_account, detect_key, edit_account_birth, edit_account_name,
             get_min_birth,
         },
-        contacts::{delete_contact, edit_contact_address, edit_contact_name, list_contacts},
+        contacts::{delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts},
         messages::{mark_all_read, mark_read},
         notes::{
-            exclude_note, get_sync_height, get_txid, get_unspent_notes, reverse_note_exclusion, snap_to_checkpoint, store_block, store_tx_details, truncate_scan
+            exclude_note, get_sync_height, get_txid, get_unspent_notes, reverse_note_exclusion,
+            snap_to_checkpoint, store_block, store_tx_details, truncate_scan,
         },
         reset_tables,
         tx::{get_message, get_tx_details, list_messages},
@@ -60,7 +61,8 @@ use crate::{
         db::encrypt_db,
         messages::navigate_message,
         ua::decode_ua,
-        uri::{make_payment_uri, parse_payment_uri}, zip_db::{decrypt_zip_database_files, encrypt_zip_database_files},
+        uri::{make_payment_uri, parse_payment_uri},
+        zip_db::{decrypt_zip_database_files, encrypt_zip_database_files, generate_zip_database_keys},
     },
     warp::{sync::warp_sync, BlockHeader},
     EXPIRATION_HEIGHT_DELTA,
@@ -116,6 +118,9 @@ pub enum ContactCommand {
         account: u32,
         name: String,
         address: String,
+    },
+    Get {
+        id: u32,
     },
     EditName {
         id: u32,
@@ -183,8 +188,18 @@ pub struct Database {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum DatabaseCommand {
-    Encrypt { directory: String, extension: String, public_key: String },
-    Decrypt { file_path: String, secret_key: String },
+    GenerateKeys,
+    Encrypt {
+        directory: String,
+        extension: String,
+        target_path: String,
+        public_key: String,
+    },
+    Decrypt {
+        file_path: String,
+        target_directory: String,
+        secret_key: String,
+    },
 }
 
 /// The enum of sub-commands supported by the CLI
@@ -354,6 +369,10 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 } => {
                     add_contact(&connection, account, &name, &address, false)?;
                 }
+                ContactCommand::Get { id } => {
+                    let contact = get_contact(network, &connection, id)?;
+                    println!("{contact:?}");
+                }
                 ContactCommand::EditName { id, name } => {
                     edit_contact_name(&connection, id, &name)?;
                 }
@@ -455,16 +474,28 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 }
             }
         }
-        Command::Database(database_command) => {
-            match database_command.command {
-                DatabaseCommand::Encrypt { directory, extension, public_key } => {
-                    encrypt_zip_database_files(&directory, &extension, &public_key)?;
-                }
-                DatabaseCommand::Decrypt { file_path, secret_key } => {
-                    decrypt_zip_database_files(&file_path, &secret_key)?;
-                }
+        Command::Database(database_command) => match database_command.command {
+            DatabaseCommand::Encrypt {
+                directory,
+                extension,
+                target_path,
+                public_key,
+            } => {
+                encrypt_zip_database_files(&directory, &extension, 
+                    &target_path, &public_key)?;
             }
-        }
+            DatabaseCommand::Decrypt {
+                file_path,
+                target_directory,
+                secret_key,
+            } => {
+                decrypt_zip_database_files(&file_path, &target_directory, &secret_key)?;
+            }
+            DatabaseCommand::GenerateKeys => {
+                let keys = generate_zip_database_keys()?;
+                println!("{keys:?}");
+            }
+        },
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
             println!("{seed}");

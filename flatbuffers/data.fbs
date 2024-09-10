@@ -132,3 +132,8 @@ table TransactionSummary {
   fee: uint64;
   data: [uint8];
 }
+
+table AGEKeys {
+  public_key: string;
+  secret_key: string;
+}

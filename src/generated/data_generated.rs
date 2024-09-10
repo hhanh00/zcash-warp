@@ -3777,5 +3777,162 @@ impl TransactionSummaryT {
     })
   }
 }
+pub enum AGEKeysOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AGEKeys<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AGEKeys<'a> {
+  type Inner = AGEKeys<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AGEKeys<'a> {
+  pub const VT_PUBLIC_KEY: flatbuffers::VOffsetT = 4;
+  pub const VT_SECRET_KEY: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AGEKeys { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args AGEKeysArgs<'args>
+  ) -> flatbuffers::WIPOffset<AGEKeys<'bldr>> {
+    let mut builder = AGEKeysBuilder::new(_fbb);
+    if let Some(x) = args.secret_key { builder.add_secret_key(x); }
+    if let Some(x) = args.public_key { builder.add_public_key(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> AGEKeysT {
+    let public_key = self.public_key().map(|x| {
+      x.to_string()
+    });
+    let secret_key = self.secret_key().map(|x| {
+      x.to_string()
+    });
+    AGEKeysT {
+      public_key,
+      secret_key,
+    }
+  }
+
+  #[inline]
+  pub fn public_key(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AGEKeys::VT_PUBLIC_KEY, None)}
+  }
+  #[inline]
+  pub fn secret_key(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AGEKeys::VT_SECRET_KEY, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for AGEKeys<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("public_key", Self::VT_PUBLIC_KEY, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("secret_key", Self::VT_SECRET_KEY, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AGEKeysArgs<'a> {
+    pub public_key: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub secret_key: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for AGEKeysArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    AGEKeysArgs {
+      public_key: None,
+      secret_key: None,
+    }
+  }
+}
+
+pub struct AGEKeysBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> AGEKeysBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_public_key(&mut self, public_key: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AGEKeys::VT_PUBLIC_KEY, public_key);
+  }
+  #[inline]
+  pub fn add_secret_key(&mut self, secret_key: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AGEKeys::VT_SECRET_KEY, secret_key);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> AGEKeysBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    AGEKeysBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AGEKeys<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AGEKeys<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AGEKeys");
+      ds.field("public_key", &self.public_key());
+      ds.field("secret_key", &self.secret_key());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct AGEKeysT {
+  pub public_key: Option<String>,
+  pub secret_key: Option<String>,
+}
+impl Default for AGEKeysT {
+  fn default() -> Self {
+    Self {
+      public_key: None,
+      secret_key: None,
+    }
+  }
+}
+impl AGEKeysT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<AGEKeys<'b>> {
+    let public_key = self.public_key.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let secret_key = self.secret_key.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    AGEKeys::create(_fbb, &AGEKeysArgs{
+      public_key,
+      secret_key,
+    })
+  }
+}
 }  // pub mod fb
 
