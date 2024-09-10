@@ -154,3 +154,18 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
     };
     Ok(b)
 }
+
+pub fn get_account_property(connection: &Connection, account: u32, name: &str) -> Result<Vec<u8>> {
+    let value = connection.query_row(
+        "SELECT value FROM props WHERE account = ?1 AND name = ?2", 
+        params![account, name], |r| r.get::<_, Vec<u8>>(0))?;
+    Ok(value)
+}
+
+pub fn set_account_property(connection: &Connection, account: u32, name: &str, value: &[u8]) -> Result<()> {
+    connection.execute(
+        "INSERT INTO props(account, name, value)
+        VALUES (?1, ?2, ?3) ON CONFLICT DO UPDATE
+        SET value = excluded.value", params![account, name, value])?;
+    Ok(())
+}

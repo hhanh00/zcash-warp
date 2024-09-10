@@ -10,6 +10,7 @@ pub(crate) mod witnesses;
 pub(crate) mod messages;
 
 pub fn reset_tables(connection: &Connection) -> Result<()> {
+    connection.execute("DROP TABLE IF EXISTS props", [])?;
     connection.execute("DROP TABLE IF EXISTS txs", [])?;
     connection.execute("DROP TABLE IF EXISTS notes", [])?;
     connection.execute("DROP TABLE IF EXISTS witnesses", [])?;
@@ -19,6 +20,15 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute("DROP TABLE IF EXISTS msgs", [])?;
     connection.execute("DROP TABLE IF EXISTS contacts", [])?;
 
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS props(
+        id_prop INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        value BLOB NOT NULL,
+        UNIQUE (account, name))",
+        [],
+    )?;
     connection.execute(
         "CREATE TABLE IF NOT EXISTS accounts(
         id_account INTEGER PRIMARY KEY,

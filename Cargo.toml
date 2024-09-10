@@ -64,6 +64,7 @@ zcash_proofs.workspace = true
 zcash_address.workspace = true
 zcash_encoding.workspace = true
 zcash_note_encryption.workspace = true
+raptorq = "2.0.0"
 
 #[features]
 #sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]

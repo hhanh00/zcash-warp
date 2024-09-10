@@ -16,6 +16,7 @@ use figment::{
     Figment,
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use hex::FromHexError;
 use parking_lot::Mutex;
 use rand::rngs::OsRng;
 use rusqlite::{Connection, DropBehavior};
@@ -32,7 +33,7 @@ use crate::{
     coin::CoinDef,
     data::fb::{PaymentRequestT, TransactionInfo},
     db::{
-        account::{get_account_info, get_balance, list_accounts},
+        account::{get_account_info, get_account_property, get_balance, list_accounts, set_account_property},
         account_manager::{
             create_new_account, delete_account, detect_key, edit_account_birth, edit_account_name,
             get_min_birth,
@@ -57,12 +58,7 @@ use crate::{
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::{CheckpointHeight, PoolMask},
     utils::{
-        chain::{get_activation_date, get_height_by_time},
-        db::encrypt_db,
-        messages::navigate_message,
-        ua::decode_ua,
-        uri::{make_payment_uri, parse_payment_uri},
-        zip_db::{decrypt_zip_database_files, encrypt_zip_database_files, generate_zip_database_keys},
+        chain::{get_activation_date, get_height_by_time}, data_split::{merge, split}, db::encrypt_db, messages::navigate_message, ua::decode_ua, uri::{make_payment_uri, parse_payment_uri}, zip_db::{decrypt_zip_database_files, encrypt_zip_database_files, generate_zip_database_keys}
     },
     warp::{sync::warp_sync, BlockHeader},
     EXPIRATION_HEIGHT_DELTA,
@@ -102,6 +98,15 @@ pub enum AccountCommand {
     },
     Delete {
         account: u32,
+    },
+    SetProperty {
+        account: u32,
+        name: String,
+        value: String,
+    },
+    GetProperty {
+        account: u32,
+        name: String,
     },
 }
 
@@ -202,6 +207,24 @@ pub enum DatabaseCommand {
     },
 }
 
+#[derive(Parser, Clone, Debug)]
+pub struct QRData {
+    #[structopt(subcommand)]
+    command: QRDataCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum QRDataCommand {
+    Split {
+        data: String,
+        threshold: u32,
+    },
+    Merge {
+        parts: String,
+        data_len: usize,
+    },
+}
+
 /// The enum of sub-commands supported by the CLI
 #[derive(Parser, Clone, Debug)]
 pub enum Command {
@@ -211,6 +234,7 @@ pub enum Command {
     Message(Message),
     Note(Note),
     Database(Database),
+    QRData(QRData),
     CreateDatabase,
     GenerateSeed,
     Backup {
@@ -351,6 +375,13 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 }
                 AccountCommand::Delete { account } => {
                     delete_account(&connection, account)?;
+                }
+                AccountCommand::SetProperty { account, name, value } => {
+                    set_account_property(&connection, account, &name, &hex::decode(value)?)?;
+                }
+                AccountCommand::GetProperty { account, name } => {
+                    let value = get_account_property(&connection, account, &name)?;
+                    println!("{}", hex::encode(&value));
                 }
             }
         }
@@ -496,6 +527,22 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 println!("{keys:?}");
             }
         },
+        Command::QRData(qr_command) => {
+            match qr_command.command {
+                QRDataCommand::Split { data, threshold } => {
+                    let data = hex::decode(&data)?;
+                    let packets = split(&data, threshold)?;
+                    for p in packets {
+                        println!("{} {}", data.len(), hex::encode(&p));
+                    }
+                }
+                QRDataCommand::Merge { parts, data_len } => {
+                    let parts = parts.split(" ").map(|p| hex::decode(&p)).collect::<Result<Vec<_>, FromHexError>>()?;
+                    let data = merge(&parts, data_len)?;
+                    println!("{:?}", data.map(|d| hex::encode(&d)));
+                }
+            }
+        }
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
             println!("{seed}");

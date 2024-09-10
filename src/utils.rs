@@ -6,6 +6,7 @@ pub mod uri;
 pub mod chain;
 pub mod messages;
 pub mod zip_db;
+pub mod data_split;
 
 #[macro_export]
 macro_rules! fb_to_bytes {
