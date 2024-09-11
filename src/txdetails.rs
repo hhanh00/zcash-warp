@@ -295,7 +295,7 @@ pub async fn retrieve_tx_details(
             tx,
         )?;
         let tx_bin = bincode::serialize(&txd)?;
-        store_tx_details(&connection.lock(), id_tx, &txid, &tx_bin)?;
+        store_tx_details(&connection.lock(), id_tx, height, &txid, &tx_bin)?;
         let (tx_address, tx_memo) =
             get_tx_primary_address_memo(network, &account_addrs, &rtx, &txd)?;
         update_tx_primary_address_memo(&connection.lock(), id_tx, tx_address, tx_memo)?;

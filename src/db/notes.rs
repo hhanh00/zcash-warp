@@ -390,6 +390,7 @@ pub fn reset_scan(network: &Network, connection: &Connection, height: Option<u32
     connection.execute("DELETE FROM notes WHERE height >= ?1", [height])?;
     connection.execute("DELETE FROM witnesses WHERE height >= ?1", [height])?;
     connection.execute("DELETE FROM txdetails", [])?;
+    connection.execute("DELETE FROM msgs", [])?;
     connection.execute("UPDATE notes SET spent = NULL WHERE spent >= ?1", [height])?;
 
     Ok(height)
@@ -403,11 +404,16 @@ pub fn rewind_checkpoint(connection: &Connection) -> Result<()> {
 }
 
 pub fn rewind(connection: &Connection, height: u32) -> Result<()> {
-    connection.execute("DELETE FROM blcks WHERE height >= ?1", [height])?;
-    connection.execute("DELETE FROM txs WHERE height >= ?1", [height])?;
-    connection.execute("DELETE FROM notes WHERE height >= ?1", [height])?;
-    connection.execute("DELETE FROM witnesses WHERE height >= ?1", [height])?;
-    connection.execute("UPDATE notes SET spent = NULL WHERE spent >= ?1", [height])?;
+    let height = connection.query_row(
+        "SELECT height FROM blcks WHERE height <= ?1 ORDER BY height DESC LIMIT 1", [height], |r| r.get::<_, u32>(0))?;
+    tracing::info!("Dropping sync data after @{height}");
+    connection.execute("DELETE FROM blcks WHERE height > ?1", [height])?;
+    connection.execute("DELETE FROM txs WHERE height > ?1", [height])?;
+    connection.execute("DELETE FROM notes WHERE height > ?1", [height])?;
+    connection.execute("DELETE FROM witnesses WHERE height > ?1", [height])?;
+    connection.execute("DELETE FROM txdetails WHERE height > ?1", [height])?;
+    connection.execute("DELETE FROM msgs WHERE height > ?1", [height])?;
+    connection.execute("UPDATE notes SET spent = NULL WHERE spent > ?1", [height])?;
     Ok(())
 }
 
@@ -420,11 +426,11 @@ pub fn get_txid(connection: &Connection, id: u32) -> Result<(Vec<u8>, u32)> {
     Ok((txid, timestamp))
 }
 
-pub fn store_tx_details(connection: &Connection, id: u32, txid: &Hash, data: &[u8]) -> Result<()> {
+pub fn store_tx_details(connection: &Connection, id: u32, height: u32, txid: &Hash, data: &[u8]) -> Result<()> {
     connection.execute(
-        "INSERT INTO txdetails(id_tx, txid, data)
-        VALUES (?1, ?2, ?3) ON CONFLICT DO NOTHING",
-        params![id, txid, data],
+        "INSERT INTO txdetails(id_tx, height, txid, data)
+        VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
+        params![id, height, txid, data],
     )?;
     Ok(())
 }

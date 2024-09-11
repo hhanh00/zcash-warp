@@ -124,6 +124,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS txdetails(
         id_tx INTEGER PRIMARY KEY,
+        height INTEGER NOT NULL,
         txid BLOB NOT NULL UNIQUE,
         data BLOB NOT NULL)",
         [],
