@@ -301,6 +301,7 @@ impl Synchronizer {
                             value: -(n.value as i64),
                             id_tx: 0,
                             height: cb.height as u32,
+                            timestamp: cb.time,
                             id_spent: Some(n.nf),
                         };
                         self.spends.push(tx);

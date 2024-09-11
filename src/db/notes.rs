@@ -163,6 +163,7 @@ pub fn store_received_note(
                     account: n.account,
                     height: n.height,
                     txid: n.tx.txid,
+                    timestamp: n.tx.timestamp,
                     value: n.tx.value,
                     id_spent: None,
                 },
@@ -241,7 +242,7 @@ pub fn store_block(connection: &Transaction, bh: &BlockHeader) -> Result<()> {
 pub fn list_utxos(connection: &Connection, height: CheckpointHeight) -> Result<Vec<UTXO>> {
     let height: u32 = height.into();
     let mut s = connection.prepare(
-        "SELECT u.id_utxo, u.account, u.height, u.txid, u.vout, t.address,
+        "SELECT u.id_utxo, u.account, u.height, u.timestamp, u.txid, u.vout, t.address,
         u.value FROM utxos u, t_accounts t WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
         AND u.account = t.account",
     )?;
@@ -250,20 +251,22 @@ pub fn list_utxos(connection: &Connection, height: CheckpointHeight) -> Result<V
             r.get::<_, u32>(0)?,
             r.get::<_, u32>(1)?,
             r.get::<_, u32>(2)?,
-            r.get::<_, Vec<u8>>(3)?,
-            r.get::<_, u32>(4)?,
-            r.get::<_, String>(5)?,
-            r.get::<_, u64>(6)?,
+            r.get::<_, u32>(3)?,
+            r.get::<_, Vec<u8>>(4)?,
+            r.get::<_, u32>(5)?,
+            r.get::<_, String>(6)?,
+            r.get::<_, u64>(7)?,
         ))
     })?;
     let mut utxos = vec![];
     for r in rows {
-        let (id_utxo, account, height, txid, vout, address, value) = r?;
+        let (id_utxo, account, height, timestamp, txid, vout, address, value) = r?;
         let utxo = UTXO {
             is_new: false,
             id: id_utxo,
             account,
             height,
+            timestamp,
             txid: txid.try_into().unwrap(),
             vout,
             address,
@@ -285,13 +288,14 @@ pub fn store_utxo(
     if utxo.is_new {
         let mut s = connection.prepare_cached(
             "INSERT INTO utxos
-            (account, height, txid, vout, value, spent)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            (account, height, timestamp, txid, vout, value, spent)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
             ON CONFLICT DO NOTHING",
         )?;
         s.execute(params![
             utxo.account,
             utxo.height,
+            utxo.timestamp,
             utxo.txid,
             utxo.vout,
             utxo.value,
@@ -303,6 +307,7 @@ pub fn store_utxo(
             txid: utxo.txid,
             value: utxo.value as i64,
             height: utxo.height,
+            timestamp: utxo.timestamp,
             id_spent: None,
         };
         add_tx_value(connection, &tx_value)?;

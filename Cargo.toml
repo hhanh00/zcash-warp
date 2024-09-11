@@ -55,6 +55,9 @@ zip32 = "0.1.1"
 flate2 = "1.0.32"
 age = "0.10.0"
 zip = "2.2.0"
+raptorq = "2.0.0"
+
+warp-macros = { path = "../warp-macros" }
 
 zcash_keys.workspace = true
 zcash_protocol.workspace = true
@@ -64,11 +67,10 @@ zcash_proofs.workspace = true
 zcash_address.workspace = true
 zcash_encoding.workspace = true
 zcash_note_encryption.workspace = true
-raptorq = "2.0.0"
 
 #[features]
 #sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 
 [build-dependencies]
 tonic-build = { version = "0.12", features = [ "prost" ] }
-#cbindgen = "0.26.0"
+cbindgen = "0.27.0"

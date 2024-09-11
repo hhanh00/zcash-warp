@@ -53,6 +53,7 @@ pub async fn scan_utxo_by_address(
             id: 0,
             account,
             height,
+            timestamp: 0, // no need to retrieve block timestamp for a sweep
             txid: utxo.txid.try_into().unwrap(),
             vout: utxo.index as u32,
             address: utxo.address,

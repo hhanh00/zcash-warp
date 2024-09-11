@@ -58,6 +58,7 @@ pub struct TxValueUpdate<IDSpent: std::fmt::Debug> {
     pub id_tx: u32,
     pub account: u32,
     pub height: u32,
+    pub timestamp: u32,
     pub txid: Hash,
     pub value: i64,
     pub id_spent: Option<IDSpent>,

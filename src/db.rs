@@ -113,6 +113,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         id_utxo INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,
         height INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
         txid BLOB NOT NULL,
         vout INTEGER NULL,
         value INTEGER NOT NULL,

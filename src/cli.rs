@@ -254,6 +254,7 @@ pub enum Command {
     },
     Sync {
         confirmations: Option<u32>,
+        end_height: Option<u32>,
     },
     Address {
         account: u32,
@@ -579,7 +580,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             transaction.set_drop_behavior(DropBehavior::Commit);
             store_block(&transaction, &BlockHeader::from(&block))?;
         }
-        Command::Sync { confirmations } => loop {
+        Command::Sync { confirmations, end_height } => loop {
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
             let confirmations = confirmations.unwrap_or(1);
@@ -587,7 +588,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 anyhow::bail!("# Confirmations must be > 0");
             }
             let connection = zec.connection()?;
-            let end_height = bc_height - confirmations + 1;
+            let end_height = end_height.unwrap_or(bc_height - confirmations + 1);
             let start_height = get_sync_height(&connection)?
                 .ok_or(anyhow::anyhow!("no sync data. Have you run reset?"))?;
             if start_height >= end_height {

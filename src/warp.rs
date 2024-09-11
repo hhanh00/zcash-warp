@@ -87,6 +87,7 @@ pub struct UTXO {
     pub id: u32,
     pub account: u32,
     pub height: u32,
+    pub timestamp: u32,
     pub txid: Hash,
     pub vout: u32,
     pub address: String,

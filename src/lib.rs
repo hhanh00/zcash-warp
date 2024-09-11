@@ -18,10 +18,12 @@ pub mod txdetails;
 pub mod types;
 mod utils;
 pub mod warp;
+pub mod ffi;
 
 pub type Client = CompactTxStreamerClient<Channel>;
 pub type PooledSQLConnection = PooledConnection<SqliteConnectionManager>;
 pub type Hash = [u8; 32];
+pub type VecBytes = Vec<u8>;
 
 pub const EXPIRATION_HEIGHT_DELTA: u32 = 50;
 

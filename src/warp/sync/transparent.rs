@@ -56,6 +56,7 @@ impl TransparentSync {
                         txid: tx.txid,
                         value: -(utxo.value as i64),
                         height: tx.height,
+                        timestamp: tx.timestamp,
                         id_spent: Some(OutPoint {
                             txid: vin.txid,
                             vout: vin.vout,
@@ -94,6 +95,7 @@ impl TransparentSync {
                     id: 0,
                     account: tx.account,
                     height: tx.height,
+                    timestamp: tx.timestamp,
                     txid: tx.txid,
                     vout: txout.vout,
                     address,
