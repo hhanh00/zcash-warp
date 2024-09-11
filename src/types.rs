@@ -315,13 +315,6 @@ pub struct Addresses {
 }
 
 #[derive(Debug)]
-pub struct Balance {
-    pub transparent: u64,
-    pub sapling: u64,
-    pub orchard: u64,
-}
-
-#[derive(Debug)]
 pub struct OptionAccountInfo {
     pub account: u32,
     pub name: String,

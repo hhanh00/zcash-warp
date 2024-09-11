@@ -1,11 +1,7 @@
-use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
-use zcash_warp::cli_main;
+use zcash_warp::{cli_main, utils::init_tracing};
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_ansi(false).compact())
-        .with(EnvFilter::from_default_env())
-        .init();
+    init_tracing();
 
     cli_main()?;
     Ok(())

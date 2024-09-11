@@ -16,7 +16,7 @@ pub mod messages;
 pub mod pay;
 pub mod txdetails;
 pub mod types;
-mod utils;
+pub mod utils;
 pub mod warp;
 pub mod ffi;
 

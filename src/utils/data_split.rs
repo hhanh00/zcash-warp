@@ -11,7 +11,7 @@ use crate::Client;
 
 const QR_DATA_SIZE: u16 = 256;
 
-#[c_export]
+#[c_export(asyn)]
 pub async fn test(network: &Network, client: &mut Client, account: u32, s: &str) -> Result<u8> { Ok(0) }
 
 pub fn split(data: &[u8], threshold: u32) -> Result<Vec<Vec<u8>>> {

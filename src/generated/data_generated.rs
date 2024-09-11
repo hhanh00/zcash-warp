@@ -3934,5 +3934,177 @@ impl AGEKeysT {
     })
   }
 }
+pub enum BalanceOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Balance<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Balance<'a> {
+  type Inner = Balance<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Balance<'a> {
+  pub const VT_TRANSPARENT: flatbuffers::VOffsetT = 4;
+  pub const VT_SAPLING: flatbuffers::VOffsetT = 6;
+  pub const VT_ORCHARD: flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Balance { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args BalanceArgs
+  ) -> flatbuffers::WIPOffset<Balance<'bldr>> {
+    let mut builder = BalanceBuilder::new(_fbb);
+    builder.add_orchard(args.orchard);
+    builder.add_sapling(args.sapling);
+    builder.add_transparent(args.transparent);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> BalanceT {
+    let transparent = self.transparent();
+    let sapling = self.sapling();
+    let orchard = self.orchard();
+    BalanceT {
+      transparent,
+      sapling,
+      orchard,
+    }
+  }
+
+  #[inline]
+  pub fn transparent(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(Balance::VT_TRANSPARENT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn sapling(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(Balance::VT_SAPLING, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn orchard(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(Balance::VT_ORCHARD, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for Balance<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u64>("transparent", Self::VT_TRANSPARENT, false)?
+     .visit_field::<u64>("sapling", Self::VT_SAPLING, false)?
+     .visit_field::<u64>("orchard", Self::VT_ORCHARD, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct BalanceArgs {
+    pub transparent: u64,
+    pub sapling: u64,
+    pub orchard: u64,
+}
+impl<'a> Default for BalanceArgs {
+  #[inline]
+  fn default() -> Self {
+    BalanceArgs {
+      transparent: 0,
+      sapling: 0,
+      orchard: 0,
+    }
+  }
+}
+
+pub struct BalanceBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> BalanceBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_transparent(&mut self, transparent: u64) {
+    self.fbb_.push_slot::<u64>(Balance::VT_TRANSPARENT, transparent, 0);
+  }
+  #[inline]
+  pub fn add_sapling(&mut self, sapling: u64) {
+    self.fbb_.push_slot::<u64>(Balance::VT_SAPLING, sapling, 0);
+  }
+  #[inline]
+  pub fn add_orchard(&mut self, orchard: u64) {
+    self.fbb_.push_slot::<u64>(Balance::VT_ORCHARD, orchard, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> BalanceBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    BalanceBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Balance<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Balance<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Balance");
+      ds.field("transparent", &self.transparent());
+      ds.field("sapling", &self.sapling());
+      ds.field("orchard", &self.orchard());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct BalanceT {
+  pub transparent: u64,
+  pub sapling: u64,
+  pub orchard: u64,
+}
+impl Default for BalanceT {
+  fn default() -> Self {
+    Self {
+      transparent: 0,
+      sapling: 0,
+      orchard: 0,
+    }
+  }
+}
+impl BalanceT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<Balance<'b>> {
+    let transparent = self.transparent;
+    let sapling = self.sapling;
+    let orchard = self.orchard;
+    Balance::create(_fbb, &BalanceArgs{
+      transparent,
+      sapling,
+      orchard,
+    })
+  }
+}
 }  // pub mod fb
 

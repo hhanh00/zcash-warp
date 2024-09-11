@@ -1,13 +1,13 @@
 use anyhow::Result;
 use rusqlite::Connection;
 
-pub(crate) mod account;
-pub(crate) mod account_manager;
-pub(crate) mod contacts;
-pub(crate) mod notes;
-pub(crate) mod tx;
-pub(crate) mod witnesses;
-pub(crate) mod messages;
+pub mod account;
+pub mod account_manager;
+pub mod contacts;
+pub mod notes;
+pub mod tx;
+pub mod witnesses;
+pub mod messages;
 
 pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute("DROP TABLE IF EXISTS props", [])?;

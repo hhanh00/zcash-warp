@@ -20,4 +20,25 @@ typedef struct CResult_u8 {
   uint32_t len;
 } CResult_u8;
 
+typedef struct CResult______u8 {
+  const uint8_t *value;
+  char *error;
+  uint32_t len;
+} CResult______u8;
+
+struct CResult_u8 c_init_coin(uint8_t coin);
+
+struct CResult______u8 c_list_accounts(uint8_t coin);
+
+struct CResult______u8 c_get_balance(uint8_t coin, uint32_t account, uint32_t height);
+
+struct CResult______u8 c_get_account_property(uint8_t coin, uint32_t account, char *name);
+
+struct CResult_u8 c_set_account_property(uint8_t coin,
+                                         uint32_t account,
+                                         char *name,
+                                         uint8_t *value);
+
+void c_setup(void);
+
 struct CResult_u8 c_test(uint8_t coin, uint32_t account, char *s);

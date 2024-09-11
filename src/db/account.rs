@@ -1,6 +1,7 @@
 use anyhow::Result;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use rusqlite::{params, Connection};
+use warp_macros::c_export;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address,
     AddressCodec as _,
@@ -8,15 +9,18 @@ use zcash_client_backend::encoding::{
 use zcash_primitives::consensus::{Network, NetworkConstants as _};
 use zcash_primitives::legacy::TransparentAddress;
 
-use crate::data::fb::AccountNameT;
+use crate::coin::COINS;
+use crate::data::fb::{AccountNameT, BalanceT};
+use crate::ffi::{map_result, map_result_bytes, CResult};
 use crate::keys::import_sk_bip38;
-use crate::types::{
-    AccountInfo, Balance, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo,
-};
+use crate::types::{AccountInfo, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use std::ffi::{c_char, CStr};
 
+#[c_export]
 pub fn list_accounts(connection: &Connection) -> Result<Vec<AccountNameT>> {
-    let mut s =
-        connection.prepare("SELECT id_account, name, address, birth FROM accounts ORDER BY id_account")?;
+    let mut s = connection
+        .prepare("SELECT id_account, name, address, birth FROM accounts ORDER BY id_account")?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -120,7 +124,8 @@ pub fn get_account_info(
     Ok(ai)
 }
 
-pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result<Balance> {
+#[c_export]
+pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result<BalanceT> {
     let transparent = connection
         .query_row(
             "SELECT SUM(value) FROM utxos
@@ -147,7 +152,7 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
             |r| r.get::<_, Option<u64>>(0),
         )?
         .unwrap_or_default();
-    let b = Balance {
+    let b = BalanceT {
         transparent,
         sapling,
         orchard,
@@ -155,17 +160,28 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
     Ok(b)
 }
 
+#[c_export]
 pub fn get_account_property(connection: &Connection, account: u32, name: &str) -> Result<Vec<u8>> {
     let value = connection.query_row(
-        "SELECT value FROM props WHERE account = ?1 AND name = ?2", 
-        params![account, name], |r| r.get::<_, Vec<u8>>(0))?;
+        "SELECT value FROM props WHERE account = ?1 AND name = ?2",
+        params![account, name],
+        |r| r.get::<_, Vec<u8>>(0),
+    )?;
     Ok(value)
 }
 
-pub fn set_account_property(connection: &Connection, account: u32, name: &str, value: &[u8]) -> Result<()> {
+#[c_export]
+pub fn set_account_property(
+    connection: &Connection,
+    account: u32,
+    name: &str,
+    value: &[u8],
+) -> Result<()> {
     connection.execute(
         "INSERT INTO props(account, name, value)
         VALUES (?1, ?2, ?3) ON CONFLICT DO UPDATE
-        SET value = excluded.value", params![account, name, value])?;
+        SET value = excluded.value",
+        params![account, name, value],
+    )?;
     Ok(())
 }

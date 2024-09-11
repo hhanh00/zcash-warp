@@ -137,3 +137,9 @@ table AGEKeys {
   public_key: string;
   secret_key: string;
 }
+
+table Balance {
+  transparent: uint64;
+  sapling: uint64;
+  orchard: uint64;
+}

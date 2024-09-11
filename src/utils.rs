@@ -1,4 +1,5 @@
-use crate::Hash;
+use crate::{cli::init_config, coin::init_coin, Hash};
+use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
 
 pub mod db;
 pub mod ua;
@@ -7,6 +8,20 @@ pub mod chain;
 pub mod messages;
 pub mod zip_db;
 pub mod data_split;
+
+pub fn init_tracing() {
+    tracing_subscriber::registry()
+        .with(fmt::layer().with_ansi(false).compact())
+        .with(EnvFilter::from_default_env())
+        .init();
+}
+
+#[no_mangle]
+pub extern "C" fn c_setup() {
+    init_tracing();
+    init_config();
+    init_coin().unwrap();
+}
 
 #[macro_export]
 macro_rules! fb_to_bytes {

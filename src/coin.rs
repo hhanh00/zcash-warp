@@ -9,7 +9,7 @@ use tonic::transport::{Certificate, ClientTlsConfig};
 
 use zcash_primitives::consensus::Network;
 
-use crate::{lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client};
+use crate::{cli::CONFIG, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client};
 
 type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 
@@ -87,6 +87,14 @@ pub async fn connect_lwd(url: &str) -> Result<Client> {
     }
     let client = CompactTxStreamerClient::connect(channel).await?;
     Ok(client)
+}
+
+pub fn init_coin() -> Result<()> {
+    let mut zec = COINS[0].lock();
+    zec.set_db_path(&CONFIG.db_path)?;
+    zec.set_url(&CONFIG.lwd_url);
+    zec.set_warp(&CONFIG.warp_url);
+    Ok(())
 }
 
 lazy_static! {
