@@ -10,6 +10,14 @@ use zcash_keys::address::Address as RecipientAddress;
 
 use super::contacts::recipient_contains;
 
+use crate::{
+    coin::COINS,
+    ffi::{map_result_bytes, CResult},
+};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use warp_macros::c_export;
+
+#[c_export]
 pub fn get_txs(
     network: &Network,
     connection: &Connection,

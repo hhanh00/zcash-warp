@@ -13,6 +13,12 @@ use zip::write::FileOptions;
 use crate::data::fb::AGEKeysT;
 use rusqlite::{backup::Backup, Connection};
 
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result_bytes, map_result, CResult}};
+use std::ffi::{CStr, c_char};
+use flatbuffers::FlatBufferBuilder;
+
+#[c_export]
 pub fn encrypt_zip_database_files(
     directory: &str,
     extension: &str,
@@ -68,6 +74,7 @@ pub fn encrypt_zip_database_files(
     Ok(())
 }
 
+#[c_export]
 pub fn decrypt_zip_database_files(
     file_path: &str,
     target_directory: &str,
@@ -109,6 +116,7 @@ pub fn decrypt_zip_database_files(
     Ok(())
 }
 
+#[c_export]
 pub fn generate_zip_database_keys() -> Result<AGEKeysT> {
     let key = age::x25519::Identity::generate();
     let secret_key = key.to_string().expose_secret().clone();

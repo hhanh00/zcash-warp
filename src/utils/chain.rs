@@ -15,6 +15,7 @@ use crate::{
 use warp_macros::c_export;
 use crate::{coin::COINS, ffi::{map_result, CResult}};
 
+#[c_export]
 pub async fn get_activation_date(network: &Network, client: &mut Client) -> Result<u32> {
     let height = network.activation_height(NetworkUpgrade::Sapling).unwrap();
     let cb = get_compact_block(client, height.into()).await?;
@@ -24,6 +25,7 @@ pub async fn get_activation_date(network: &Network, client: &mut Client) -> Resu
 
 const SEC_PER_DAY: u32 = 24 * 60 * 60;
 
+#[c_export]
 pub async fn get_height_by_time(network: &Network, client: &mut Client, time: u32) -> Result<u32> {
     let time = time / SEC_PER_DAY;
     let mut s: u32 = network

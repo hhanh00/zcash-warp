@@ -3669,12 +3669,14 @@ impl<'a> flatbuffers::Follow<'a> for TransactionSummary<'a> {
 }
 
 impl<'a> TransactionSummary<'a> {
-  pub const VT_RECIPIENTS: flatbuffers::VOffsetT = 4;
-  pub const VT_TRANSPARENT_INS: flatbuffers::VOffsetT = 6;
-  pub const VT_SAPLING_NET: flatbuffers::VOffsetT = 8;
-  pub const VT_ORCHARD_NET: flatbuffers::VOffsetT = 10;
-  pub const VT_FEE: flatbuffers::VOffsetT = 12;
-  pub const VT_DATA: flatbuffers::VOffsetT = 14;
+  pub const VT_HEIGHT: flatbuffers::VOffsetT = 4;
+  pub const VT_RECIPIENTS: flatbuffers::VOffsetT = 6;
+  pub const VT_TRANSPARENT_INS: flatbuffers::VOffsetT = 8;
+  pub const VT_SAPLING_NET: flatbuffers::VOffsetT = 10;
+  pub const VT_ORCHARD_NET: flatbuffers::VOffsetT = 12;
+  pub const VT_FEE: flatbuffers::VOffsetT = 14;
+  pub const VT_DATA: flatbuffers::VOffsetT = 16;
+  pub const VT_KEYS: flatbuffers::VOffsetT = 18;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -3690,12 +3692,15 @@ impl<'a> TransactionSummary<'a> {
     builder.add_orchard_net(args.orchard_net);
     builder.add_sapling_net(args.sapling_net);
     builder.add_transparent_ins(args.transparent_ins);
+    if let Some(x) = args.keys { builder.add_keys(x); }
     if let Some(x) = args.data { builder.add_data(x); }
     if let Some(x) = args.recipients { builder.add_recipients(x); }
+    builder.add_height(args.height);
     builder.finish()
   }
 
   pub fn unpack(&self) -> TransactionSummaryT {
+    let height = self.height();
     let recipients = self.recipients().map(|x| {
       x.iter().map(|t| t.unpack()).collect()
     });
@@ -3706,16 +3711,28 @@ impl<'a> TransactionSummary<'a> {
     let data = self.data().map(|x| {
       x.into_iter().collect()
     });
+    let keys = self.keys().map(|x| {
+      x.into_iter().collect()
+    });
     TransactionSummaryT {
+      height,
       recipients,
       transparent_ins,
       sapling_net,
       orchard_net,
       fee,
       data,
+      keys,
     }
   }
 
+  #[inline]
+  pub fn height(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(TransactionSummary::VT_HEIGHT, Some(0)).unwrap()}
+  }
   #[inline]
   pub fn recipients(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<TransactionRecipient<'a>>>> {
     // Safety:
@@ -3758,6 +3775,13 @@ impl<'a> TransactionSummary<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionSummary::VT_DATA, None)}
   }
+  #[inline]
+  pub fn keys(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionSummary::VT_KEYS, None)}
+  }
 }
 
 impl flatbuffers::Verifiable for TransactionSummary<'_> {
@@ -3767,34 +3791,40 @@ impl flatbuffers::Verifiable for TransactionSummary<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
+     .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<TransactionRecipient>>>>("recipients", Self::VT_RECIPIENTS, false)?
      .visit_field::<u64>("transparent_ins", Self::VT_TRANSPARENT_INS, false)?
      .visit_field::<i64>("sapling_net", Self::VT_SAPLING_NET, false)?
      .visit_field::<i64>("orchard_net", Self::VT_ORCHARD_NET, false)?
      .visit_field::<u64>("fee", Self::VT_FEE, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("data", Self::VT_DATA, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("keys", Self::VT_KEYS, false)?
      .finish();
     Ok(())
   }
 }
 pub struct TransactionSummaryArgs<'a> {
+    pub height: u32,
     pub recipients: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<TransactionRecipient<'a>>>>>,
     pub transparent_ins: u64,
     pub sapling_net: i64,
     pub orchard_net: i64,
     pub fee: u64,
     pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    pub keys: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
 }
 impl<'a> Default for TransactionSummaryArgs<'a> {
   #[inline]
   fn default() -> Self {
     TransactionSummaryArgs {
+      height: 0,
       recipients: None,
       transparent_ins: 0,
       sapling_net: 0,
       orchard_net: 0,
       fee: 0,
       data: None,
+      keys: None,
     }
   }
 }
@@ -3804,6 +3834,10 @@ pub struct TransactionSummaryBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a>
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionSummaryBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_height(&mut self, height: u32) {
+    self.fbb_.push_slot::<u32>(TransactionSummary::VT_HEIGHT, height, 0);
+  }
   #[inline]
   pub fn add_recipients(&mut self, recipients: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<TransactionRecipient<'b >>>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_RECIPIENTS, recipients);
@@ -3829,6 +3863,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionSummaryBuilder<'a, '
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_DATA, data);
   }
   #[inline]
+  pub fn add_keys(&mut self, keys: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_KEYS, keys);
+  }
+  #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransactionSummaryBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     TransactionSummaryBuilder {
@@ -3846,34 +3884,40 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionSummaryBuilder<'a, '
 impl core::fmt::Debug for TransactionSummary<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("TransactionSummary");
+      ds.field("height", &self.height());
       ds.field("recipients", &self.recipients());
       ds.field("transparent_ins", &self.transparent_ins());
       ds.field("sapling_net", &self.sapling_net());
       ds.field("orchard_net", &self.orchard_net());
       ds.field("fee", &self.fee());
       ds.field("data", &self.data());
+      ds.field("keys", &self.keys());
       ds.finish()
   }
 }
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TransactionSummaryT {
+  pub height: u32,
   pub recipients: Option<Vec<TransactionRecipientT>>,
   pub transparent_ins: u64,
   pub sapling_net: i64,
   pub orchard_net: i64,
   pub fee: u64,
   pub data: Option<Vec<u8>>,
+  pub keys: Option<Vec<u8>>,
 }
 impl Default for TransactionSummaryT {
   fn default() -> Self {
     Self {
+      height: 0,
       recipients: None,
       transparent_ins: 0,
       sapling_net: 0,
       orchard_net: 0,
       fee: 0,
       data: None,
+      keys: None,
     }
   }
 }
@@ -3882,6 +3926,7 @@ impl TransactionSummaryT {
     &self,
     _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
   ) -> flatbuffers::WIPOffset<TransactionSummary<'b>> {
+    let height = self.height;
     let recipients = self.recipients.as_ref().map(|x|{
       let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
     });
@@ -3892,13 +3937,18 @@ impl TransactionSummaryT {
     let data = self.data.as_ref().map(|x|{
       _fbb.create_vector(x)
     });
+    let keys = self.keys.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
     TransactionSummary::create(_fbb, &TransactionSummaryArgs{
+      height,
       recipients,
       transparent_ins,
       sapling_net,
       orchard_net,
       fee,
       data,
+      keys,
     })
   }
 }
@@ -4228,6 +4278,289 @@ impl BalanceT {
       transparent,
       sapling,
       orchard,
+    })
+  }
+}
+pub enum PacketOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Packet<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Packet<'a> {
+  type Inner = Packet<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Packet<'a> {
+  pub const VT_DATA: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Packet { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args PacketArgs<'args>
+  ) -> flatbuffers::WIPOffset<Packet<'bldr>> {
+    let mut builder = PacketBuilder::new(_fbb);
+    if let Some(x) = args.data { builder.add_data(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> PacketT {
+    let data = self.data().map(|x| {
+      x.into_iter().collect()
+    });
+    PacketT {
+      data,
+    }
+  }
+
+  #[inline]
+  pub fn data(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(Packet::VT_DATA, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for Packet<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("data", Self::VT_DATA, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct PacketArgs<'a> {
+    pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+}
+impl<'a> Default for PacketArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    PacketArgs {
+      data: None,
+    }
+  }
+}
+
+pub struct PacketBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PacketBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_data(&mut self, data: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Packet::VT_DATA, data);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> PacketBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    PacketBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Packet<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Packet<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Packet");
+      ds.field("data", &self.data());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PacketT {
+  pub data: Option<Vec<u8>>,
+}
+impl Default for PacketT {
+  fn default() -> Self {
+    Self {
+      data: None,
+    }
+  }
+}
+impl PacketT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<Packet<'b>> {
+    let data = self.data.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
+    Packet::create(_fbb, &PacketArgs{
+      data,
+    })
+  }
+}
+pub enum PacketsOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Packets<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Packets<'a> {
+  type Inner = Packets<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Packets<'a> {
+  pub const VT_PACKETS: flatbuffers::VOffsetT = 4;
+  pub const VT_LEN: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Packets { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args PacketsArgs<'args>
+  ) -> flatbuffers::WIPOffset<Packets<'bldr>> {
+    let mut builder = PacketsBuilder::new(_fbb);
+    builder.add_len(args.len);
+    if let Some(x) = args.packets { builder.add_packets(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> PacketsT {
+    let packets = self.packets().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
+    });
+    let len = self.len();
+    PacketsT {
+      packets,
+      len,
+    }
+  }
+
+  #[inline]
+  pub fn packets(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Packet<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Packet>>>>(Packets::VT_PACKETS, None)}
+  }
+  #[inline]
+  pub fn len(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Packets::VT_LEN, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for Packets<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Packet>>>>("packets", Self::VT_PACKETS, false)?
+     .visit_field::<u32>("len", Self::VT_LEN, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct PacketsArgs<'a> {
+    pub packets: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Packet<'a>>>>>,
+    pub len: u32,
+}
+impl<'a> Default for PacketsArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    PacketsArgs {
+      packets: None,
+      len: 0,
+    }
+  }
+}
+
+pub struct PacketsBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PacketsBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_packets(&mut self, packets: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<Packet<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Packets::VT_PACKETS, packets);
+  }
+  #[inline]
+  pub fn add_len(&mut self, len: u32) {
+    self.fbb_.push_slot::<u32>(Packets::VT_LEN, len, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> PacketsBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    PacketsBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Packets<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Packets<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Packets");
+      ds.field("packets", &self.packets());
+      ds.field("len", &self.len());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PacketsT {
+  pub packets: Option<Vec<PacketT>>,
+  pub len: u32,
+}
+impl Default for PacketsT {
+  fn default() -> Self {
+    Self {
+      packets: None,
+      len: 0,
+    }
+  }
+}
+impl PacketsT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<Packets<'b>> {
+    let packets = self.packets.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
+    });
+    let len = self.len;
+    Packets::create(_fbb, &PacketsArgs{
+      packets,
+      len,
     })
   }
 }

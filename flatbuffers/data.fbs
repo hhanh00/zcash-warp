@@ -129,12 +129,14 @@ table TransactionRecipient {
 }
 
 table TransactionSummary {
+  height: uint32;
   recipients: [TransactionRecipient];
   transparent_ins: uint64;
   sapling_net: int64;
   orchard_net: int64;
   fee: uint64;
   data: [uint8];
+  keys: [uint8];
 }
 
 table AGEKeys {
@@ -147,3 +149,22 @@ table Balance {
   sapling: uint64;
   orchard: uint64;
 }
+
+table Packet {
+  data: [uint8];
+}
+
+table Packets {
+  packets: [Packet];
+  len: uint32;
+}
+
+// table TransparentKey {
+//   address: string;
+//   sk: [uint8];
+// }
+
+// table SweepTransaction {
+//   utx: TransactionSummary;
+//   keys: [TransparentKey];
+// }

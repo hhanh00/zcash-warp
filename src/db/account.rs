@@ -1,7 +1,6 @@
 use anyhow::Result;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use rusqlite::{params, Connection};
-use warp_macros::c_export;
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address,
     AddressCodec as _,
@@ -9,6 +8,7 @@ use zcash_client_backend::encoding::{
 use zcash_primitives::consensus::{Network, NetworkConstants as _};
 use zcash_primitives::legacy::TransparentAddress;
 
+use warp_macros::c_export;
 use crate::coin::COINS;
 use crate::data::fb::{AccountNameT, BalanceT};
 use crate::ffi::{map_result, map_result_bytes, CResult, CParam};

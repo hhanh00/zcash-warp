@@ -24,6 +24,11 @@ use crate::{
     warp::legacy::CommitmentTreeFrontier,
 };
 
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CResult}};
+use std::ffi::{CStr, c_char};
+
+#[c_export]
 pub fn add_contact(connection: &Connection, account: u32, name: &str, address: &str, saved: bool) -> Result<()> {
     let contact = ContactCardT {
         id: 0,

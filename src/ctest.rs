@@ -1,4 +1,4 @@
-use zcash_warp::{cli::init_config, coin::init_coin, db::{self, account::{c_list_accounts, list_accounts}}, utils::init_tracing};
+use zcash_warp::{cli::init_config, coin::init_coin, db::account::c_list_accounts, utils::init_tracing};
 
 pub fn main() {
     init_tracing();

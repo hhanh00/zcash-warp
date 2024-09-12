@@ -4,7 +4,7 @@ use anyhow::Result;
 use base58check::{FromBase58Check, ToBase58Check};
 use bip39::{Mnemonic, Seed};
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
-use rand::{CryptoRng, RngCore};
+use rand::{rngs::OsRng, CryptoRng, RngCore};
 use ripemd::{Digest as _, Ripemd160};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -21,12 +21,21 @@ use zip32::ChildIndex;
 
 use crate::types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result_string, CResult}};
+use std::ffi::c_char;
+
 pub fn generate_random_mnemonic_phrase<R: RngCore + CryptoRng>(mut rng: R) -> String {
     let mut entropy = [0u8; 32];
     rng.fill_bytes(&mut entropy);
     Mnemonic::from_entropy(&entropy, bip39::Language::English)
         .unwrap()
         .into_phrase()
+}
+
+#[c_export]
+pub fn generate_random_mnemonic_phrase_os_rng() -> Result<String> {
+    Ok(generate_random_mnemonic_phrase(OsRng))
 }
 
 pub fn export_sk_bip38(sk: &SecretKey) -> String {

@@ -8,8 +8,12 @@ use anyhow::{Error, Result};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 
+use crate::{
+    coin::COINS,
+    ffi::{map_result, map_result_bytes, CResult},
+};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, CResult}};
 
 use super::tx::{add_tx_value, store_tx};
 
@@ -331,6 +335,7 @@ pub fn update_tx_timestamp<'a, I: IntoIterator<Item = &'a Option<BlockHeader>>>(
     Ok(())
 }
 
+#[c_export]
 pub fn get_unspent_notes(connection: &Connection, account: u32, bc_height: u32) -> Result<Vec<ShieldedNoteT>> {
     let mut s = connection.prepare(
         "SELECT n.height, t.timestamp, n.value, n.orchard, n.excluded

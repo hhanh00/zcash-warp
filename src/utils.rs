@@ -9,6 +9,7 @@ pub mod messages;
 pub mod zip_db;
 pub mod data_split;
 pub mod pay;
+pub mod tx;
 
 pub fn init_tracing() {
     tracing_subscriber::registry()

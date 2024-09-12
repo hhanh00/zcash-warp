@@ -205,7 +205,7 @@ pub struct UnsignedTransaction {
 }
 
 impl UnsignedTransaction {
-    pub fn to_summary(&self) -> Result<TransactionSummaryT> {
+    pub fn to_summary(&self, keys: Vec<u8>) -> Result<TransactionSummaryT> {
         let recipients = self.tx_outputs.iter().filter_map(|o| {
             if !o.change {
                 Some(TransactionRecipientT {
@@ -234,12 +234,14 @@ impl UnsignedTransaction {
         let fee = (net.0 + net.1 + net.2) as u64;
         let data = bincode::serialize(&self).unwrap();
         Ok(TransactionSummaryT {
+            height: self.height,
             recipients: Some(recipients),
             transparent_ins: ins.0 as u64,
             sapling_net: net.1,
             orchard_net: net.2,
             fee,
             data: Some(data),
+            keys: Some(keys),
         })
     }
 }
@@ -247,6 +249,7 @@ impl UnsignedTransaction {
 impl TransactionSummaryT {
     pub fn detach(&mut self) -> Vec<u8> {
         let data = self.data.take();
+        self.keys.take();
         data.unwrap()
     }
 }

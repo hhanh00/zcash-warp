@@ -190,18 +190,21 @@ pub fn create_orchard_account(
     Ok(())
 }
 
+#[c_export]
 pub fn edit_account_name(connection: &Connection, account: u32, name: &str) -> Result<()> {
     connection.execute("UPDATE accounts SET name = ?2 where id_account = ?1",
         params![account, name])?;
     Ok(())    
 }
 
+#[c_export]
 pub fn edit_account_birth(connection: &Connection, account: u32, birth: u32) -> Result<()> {
     connection.execute("UPDATE accounts SET birth = ?2 where id_account = ?1",
         params![account, birth])?;
     Ok(())    
 }
 
+#[c_export]
 pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     connection.execute("DELETE FROM notes WHERE account = ?1", params![account])?;
     connection.execute("DELETE FROM txs WHERE account = ?1", params![account])?;

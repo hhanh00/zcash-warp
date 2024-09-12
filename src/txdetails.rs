@@ -23,9 +23,7 @@ use crate::{
         TransactionInfoExtendedT,
     },
     db::{
-        account::get_account_info,
-        notes::{get_note_by_nf, store_tx_details},
-        tx::{get_tx, list_new_txids, store_message, update_tx_primary_address_memo},
+        account::get_account_info, messages::store_message, notes::{get_note_by_nf, store_tx_details}, tx::{get_tx, list_new_txids, update_tx_primary_address_memo}
     },
     lwd::{get_transaction, get_txin_coins},
     types::{Addresses, PoolMask},

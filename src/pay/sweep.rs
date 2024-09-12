@@ -106,7 +106,7 @@ pub fn prepare_sweep(
     account: u32,
     height: u32,
     utxos: &[UTXO],
-    destination_address: String,
+    destination_address: &str,
     s: &CommitmentTreeFrontier,
     o: &CommitmentTreeFrontier,
 ) -> Result<UnsignedTransaction> {
@@ -114,7 +114,7 @@ pub fn prepare_sweep(
 
     let p = Payment {
         recipients: vec![PaymentItem {
-            address: destination_address,
+            address: destination_address.to_string(),
             amount,
             memo: None,
         }],

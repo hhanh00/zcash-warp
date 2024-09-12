@@ -1,7 +1,4 @@
-use std::{
-    str::FromStr,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::str::FromStr;
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -15,50 +12,54 @@ use figment::{
     providers::{Env, Format as _, Toml},
     Figment,
 };
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use hex::FromHexError;
 use parking_lot::Mutex;
 use rand::rngs::OsRng;
 use rusqlite::{Connection, DropBehavior};
 use serde::Deserialize;
-use zcash_keys::address::Address as RecipientAddress;
 use zcash_protocol::consensus::{Network, NetworkUpgrade, Parameters};
 
 use crate::{
     account::{
-        address::get_diversified_address,
         contacts::{add_contact, commit_unsaved_contacts},
         txs::get_txs,
     },
     coin::CoinDef,
-    data::fb::{PaymentRequestT, TransactionInfo},
+    data::fb::{
+        PacketT, PacketsT, PaymentRequestT, PaymentRequestsT, TransactionSummaryT,
+    },
     db::{
-        account::{get_account_info, get_account_property, get_balance, list_accounts, set_account_property},
+        account::{get_account_property, get_balance, list_accounts, set_account_property},
         account_manager::{
             create_new_account, delete_account, edit_account_birth, edit_account_name,
             get_min_birth,
         },
-        contacts::{delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts},
-        messages::{mark_all_read, mark_read},
+        contacts::{
+            delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts,
+        },
+        messages::{get_message, list_messages, mark_all_read, mark_read},
         notes::{
             exclude_note, get_sync_height, get_txid, get_unspent_notes, reverse_note_exclusion,
             snap_to_checkpoint, store_block, store_tx_details, truncate_scan,
         },
         reset_tables,
-        tx::{get_message, get_tx_details, list_messages},
+        tx::get_tx_details,
     },
-    fb_vec_to_bytes,
-    keys::{generate_random_mnemonic_phrase, TSKStore},
+    keys::generate_random_mnemonic_phrase,
     lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
-    pay::{
-        make_payment,
-        sweep::{prepare_sweep, scan_utxo_by_seed},
-        Payment, PaymentItem, UnsignedTransaction,
-    },
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
-    types::{CheckpointHeight, PoolMask},
+    types::CheckpointHeight,
     utils::{
-        chain::{get_activation_date, get_height_by_time}, data_split::{merge, split}, db::encrypt_db, messages::navigate_message, ua::decode_ua, uri::{make_payment_uri, parse_payment_uri}, zip_db::{decrypt_zip_database_files, encrypt_zip_database_files, generate_zip_database_keys}
+        chain::{get_activation_date, get_height_by_time},
+        data_split::{merge, split},
+        db::{create_backup, encrypt_db, get_address},
+        messages::navigate_message,
+        pay::{prepare_payment, prepare_sweep_tx, sign},
+        ua::{decode_address, get_account_diversified_address},
+        uri::{make_payment_uri, parse_payment_uri},
+        zip_db::{
+            decrypt_zip_database_files, encrypt_zip_database_files, generate_zip_database_keys,
+        },
     },
     warp::{sync::warp_sync, BlockHeader},
     EXPIRATION_HEIGHT_DELTA,
@@ -215,14 +216,8 @@ pub struct QRData {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum QRDataCommand {
-    Split {
-        data: String,
-        threshold: u32,
-    },
-    Merge {
-        parts: String,
-        data_len: usize,
-    },
+    Split { data: String, threshold: u32 },
+    Merge { parts: String, data_len: usize },
 }
 
 /// The enum of sub-commands supported by the CLI
@@ -291,11 +286,8 @@ pub enum Command {
     ListTxs {
         account: u32,
     },
-    DecodeUA {
-        ua: String,
-    },
     MakePaymentURI {
-        recipients: Vec<PaymentRequestT>,
+        recipients: PaymentRequestsT,
     },
     PayPaymentUri {
         account: u32,
@@ -306,31 +298,27 @@ pub enum Command {
     },
 }
 
-impl FromStr for PaymentRequestT {
+impl FromStr for PaymentRequestsT {
     type Err = serde_json::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        serde_json::from_str::<PaymentRequestT>(s)
+        serde_json::from_str::<PaymentRequestsT>(s)
     }
 }
 
 fn display_tx(
     network: &Network,
     connection: &Connection,
-    cp_height: CheckpointHeight,
-    unsigned_tx: UnsignedTransaction,
-    tsk_store: &mut TSKStore,
+    mut summary: TransactionSummaryT,
 ) -> Result<Vec<u8>> {
-    let mut summary = unsigned_tx.to_summary()?;
+    let txb = sign(
+        network,
+        connection,
+        &summary,
+        summary.height + EXPIRATION_HEIGHT_DELTA,
+    )?;
     summary.detach();
     println!("{}", serde_json::to_string_pretty(&summary).unwrap());
-    let txb = unsigned_tx.build(
-        network,
-        &connection,
-        cp_height.0 + EXPIRATION_HEIGHT_DELTA,
-        tsk_store,
-        OsRng,
-    )?;
     Ok(txb)
 }
 
@@ -376,7 +364,11 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 AccountCommand::Delete { account } => {
                     delete_account(&connection, account)?;
                 }
-                AccountCommand::SetProperty { account, name, value } => {
+                AccountCommand::SetProperty {
+                    account,
+                    name,
+                    value,
+                } => {
                     set_account_property(&connection, account, &name, &hex::decode(value)?)?;
                 }
                 AccountCommand::GetProperty { account, name } => {
@@ -419,7 +411,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                     let cp_height =
                         snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
                     let (s_tree, o_tree) = get_tree_state(&mut client, cp_height).await?;
-                    let unsigned_tx = commit_unsaved_contacts(
+                    let summary = commit_unsaved_contacts(
                         network,
                         &connection,
                         account,
@@ -427,14 +419,9 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                         cp_height,
                         &s_tree,
                         &o_tree,
-                    )?;
-                    *txbytes = display_tx(
-                        network,
-                        &connection,
-                        cp_height,
-                        unsigned_tx,
-                        &mut TSKStore::default(),
-                    )?;
+                    )?
+                    .to_summary(vec![])?;
+                    *txbytes = display_tx(network, &connection, summary)?;
                 }
             }
         }
@@ -512,8 +499,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 target_path,
                 public_key,
             } => {
-                encrypt_zip_database_files(&directory, &extension, 
-                    &target_path, &public_key)?;
+                encrypt_zip_database_files(&directory, &extension, &target_path, &public_key)?;
             }
             DatabaseCommand::Decrypt {
                 file_path,
@@ -527,30 +513,34 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 println!("{keys:?}");
             }
         },
-        Command::QRData(qr_command) => {
-            match qr_command.command {
-                QRDataCommand::Split { data, threshold } => {
-                    let data = hex::decode(&data)?;
-                    let packets = split(&data, threshold)?;
-                    for p in packets {
-                        println!("{} {}", data.len(), hex::encode(&p));
-                    }
-                }
-                QRDataCommand::Merge { parts, data_len } => {
-                    let parts = parts.split(" ").map(|p| hex::decode(&p)).collect::<Result<Vec<_>, FromHexError>>()?;
-                    let data = merge(&parts, data_len)?;
-                    println!("{:?}", data.map(|d| hex::encode(&d)));
+        Command::QRData(qr_command) => match qr_command.command {
+            QRDataCommand::Split { data, threshold } => {
+                let data = hex::decode(&data)?;
+                let packets = split(&data, threshold)?;
+                for p in packets {
+                    println!("{} {}", data.len(), hex::encode(p.data.as_ref().unwrap()));
                 }
             }
-        }
+            QRDataCommand::Merge { parts, data_len } => {
+                let parts = parts
+                    .split(" ")
+                    .map(|p| hex::decode(&p).map(|d| PacketT { data: Some(d) }))
+                    .collect::<Result<Vec<_>, FromHexError>>()?;
+                let packets = PacketsT {
+                    packets: Some(parts),
+                    len: data_len as u32,
+                };
+                let data = merge(&packets)?;
+                println!("{:?}", data.data.map(|d| hex::encode(&d)));
+            }
+        },
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
             println!("{seed}");
         }
         Command::Backup { account } => {
             let connection = zec.connection()?;
-            let ai = get_account_info(network, &connection, account)?;
-            let backup = ai.to_backup(network);
+            let backup = create_backup(network, &connection, account)?;
             println!("{}", serde_json::to_string_pretty(&backup).unwrap());
         }
         Command::LastHeight => {
@@ -579,7 +569,10 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             transaction.set_drop_behavior(DropBehavior::Commit);
             store_block(&transaction, &BlockHeader::from(&block))?;
         }
-        Command::Sync { confirmations, end_height } => loop {
+        Command::Sync {
+            confirmations,
+            end_height,
+        } => loop {
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
             let confirmations = confirmations.unwrap_or(1);
@@ -602,10 +595,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         },
         Command::Address { account, mask } => {
             let connection = zec.connection()?;
-            let ai = get_account_info(network, &connection, account)?;
-            let address = ai
-                .to_address(network, PoolMask(mask))
-                .ok_or(anyhow::anyhow!("Invalid mask"))?;
+            let address = get_address(network, &connection, account, mask)?;
             println!("Address: {}", address);
         }
         Command::Balance { account } => {
@@ -622,36 +612,28 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             fee_paid_by_sender,
         } => {
             let mut client = zec.connect_lwd().await?;
-            let bc_height = get_last_height(&mut client).await?;
             let connection = zec.connection()?;
-            let cp_height = snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
-            let (s_tree, o_tree) = get_tree_state(&mut client, cp_height).await?;
-            let p = Payment {
-                recipients: vec![PaymentItem {
-                    address,
-                    amount,
-                    memo: None,
-                }],
+            let p = PaymentRequestT {
+                address: Some(address.clone()),
+                amount,
+                memo_string: Some(String::new()),
+                memo_bytes: None,
             };
-            let connection = zec.connection()?;
-            let unsigned_tx = make_payment(
+            let recipients = PaymentRequestsT {
+                payments: Some(vec![p]),
+            };
+            let summary = prepare_payment(
                 network,
                 &connection,
+                &mut client,
                 account,
-                cp_height,
-                p,
-                PoolMask(pools),
+                &recipients,
+                pools,
                 fee_paid_by_sender != 0,
-                &s_tree,
-                &o_tree,
-            )?;
-            *txbytes = display_tx(
-                network,
-                &connection,
-                cp_height,
-                unsigned_tx,
-                &mut TSKStore::default(),
-            )?;
+                CONFIG.confirmations,
+            )
+            .await?;
+            *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::GetTx { account, id } => {
             let connection = zec.connection()?;
@@ -673,9 +655,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         }
         Command::GenDiversifiedAddress { account, pools } => {
             let connection = zec.connection()?;
-            let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;
-            let address =
-                get_diversified_address(network, &connection, account, time, PoolMask(pools))?;
+            let address = get_account_diversified_address(network, &connection, account, pools)?;
             println!("{}", address);
         }
         Command::Sweep {
@@ -683,25 +663,16 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             destination_address,
         } => {
             let connection = zec.connection()?;
-            let ai = get_account_info(network, &connection, account)?;
-            let mut client = zec.connect_lwd().await?;
-            let bc_height = get_last_height(&mut client).await?;
-            let cp_height = snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
-            let (s, o) = get_tree_state(&mut client, cp_height).await?;
-            let (utxos, mut tsk_store) =
-                scan_utxo_by_seed(network, &zec.url, ai, bc_height, 0, true, 40).await?;
-            let connection = zec.connection()?;
-            let unsigned_tx = prepare_sweep(
+            let summary = prepare_sweep_tx(
                 network,
                 &connection,
+                zec.url.clone(),
                 account,
-                bc_height,
-                &utxos,
-                destination_address,
-                &s,
-                &o,
-            )?;
-            *txbytes = display_tx(network, &connection, cp_height, unsigned_tx, &mut tsk_store)?;
+                CONFIG.confirmations,
+                &destination_address,
+            )
+            .await?;
+            *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::GetTxDetails { id } => {
             let connection = zec.connection()?;
@@ -711,9 +682,8 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             println!("{}", serde_json::to_string_pretty(&etx).unwrap());
         }
         Command::DecodeAddress { address } => {
-            let ra = RecipientAddress::decode(network, &address)
-                .ok_or(anyhow::anyhow!("Invalid Address"))?;
-            println!("{:?}", ra);
+            let receivers = decode_address(network, &address)?;
+            println!("{:?}", receivers);
         }
         Command::ListTxs { account } => {
             let mut client = zec.connect_lwd().await?;
@@ -724,46 +694,27 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             for tx in txs.iter() {
                 println!("{}", serde_json::to_string_pretty(tx).unwrap());
             }
-            let _data = fb_vec_to_bytes!(txs, TransactionInfo)?;
-            // println!("{}", hex::encode(data));
-        }
-        Command::DecodeUA { ua } => {
-            let ua = decode_ua(network, &ua)?;
-            println!("{}", serde_json::to_string_pretty(&ua).unwrap());
         }
         Command::MakePaymentURI { recipients } => {
-            let recipients = recipients
-                .iter()
-                .map(|r| PaymentItem::try_from(r))
-                .collect::<Result<Vec<_>, _>>()?;
             let payment_uri = make_payment_uri(&recipients)?;
             println!("{}", payment_uri);
         }
         Command::PayPaymentUri { account, uri } => {
-            let recipients = parse_payment_uri(&uri)?;
-            let mut client = zec.connect_lwd().await?;
-            let bc_height = get_last_height(&mut client).await?;
             let connection = zec.connection()?;
-            let cp_height = snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
-            let (s, o) = get_tree_state(&mut client, cp_height).await?;
-            let unsigned_tx = make_payment(
+            let mut client = zec.connect_lwd().await?;
+            let recipients = parse_payment_uri(&uri)?;
+            let summary = prepare_payment(
                 network,
                 &connection,
+                &mut client,
                 account,
-                cp_height,
-                recipients,
-                PoolMask(7),
+                &recipients,
+                7,
                 true,
-                &s,
-                &o,
-            )?;
-            *txbytes = display_tx(
-                network,
-                &connection,
-                cp_height,
-                unsigned_tx,
-                &mut TSKStore::default(),
-            )?;
+                CONFIG.confirmations,
+            )
+            .await?;
+            *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::BroadcastLatest { clear } => {
             let clear = clear.unwrap_or(1);

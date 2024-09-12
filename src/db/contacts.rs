@@ -3,7 +3,12 @@ use rusqlite::{params, Connection};
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::consensus::Network;
 
+use warp_macros::c_export;
+use crate::coin::COINS;
+use crate::ffi::{map_result, map_result_bytes, CResult};
 use crate::{data::fb::ContactCardT, types::Contact};
+use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use std::ffi::{CStr, c_char};
 
 pub fn store_contact(connection: &Connection, contact: &ContactCardT) -> Result<u32> {
     let id = connection.query_row(
@@ -22,7 +27,8 @@ pub fn store_contact(connection: &Connection, contact: &ContactCardT) -> Result<
     Ok(id)
 }
 
-pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<Contact>> {
+#[c_export]
+pub fn list_contact_cards(connection: &Connection) -> Result<Vec<ContactCardT>> {
     let mut s =
         connection.prepare("SELECT id_contact, account, name, address, saved FROM contacts")?;
     let rows = s.query_map([], |r| {
@@ -34,10 +40,9 @@ pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<C
             r.get::<_, bool>(4)?,
         ))
     })?;
-    let mut contacts = vec![];
+    let mut cards = vec![];
     for r in rows {
         let (id, account, name, address, saved) = r?;
-        let recipient = RecipientAddress::decode(network, &address).unwrap();
         let card = ContactCardT {
             id,
             account,
@@ -45,16 +50,36 @@ pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<C
             address: Some(address),
             saved,
         };
+        cards.push(card);
+    }
+    Ok(cards)
+}
+
+pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<Contact>> {
+    let cards = list_contact_cards(connection)?;
+    let contacts = cards.iter().map(|card| {
+        let recipient = RecipientAddress::decode(network, card.address.as_ref().unwrap()).unwrap();
         let contact = Contact {
-            card,
+            card: card.clone(),
             address: recipient,
         };
-        contacts.push(contact);
-    }
+        contact
+    }).collect::<Vec<_>>();
     Ok(contacts)
 }
 
 pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Result<Contact> {
+    let card = get_contact_card(connection, id)?;
+    let recipient = RecipientAddress::decode(network, card.address.as_ref().unwrap()).unwrap();
+    let contact = Contact {
+        card,
+        address: recipient,
+    };
+    Ok(contact)
+}
+
+#[c_export]
+pub fn get_contact_card(connection: &Connection, id: u32) -> Result<ContactCardT> {
     let mut s = connection.prepare(
         "SELECT account, name, address,
         saved FROM contacts WHERE id_contact = ?1",
@@ -67,7 +92,6 @@ pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Resul
             r.get::<_, bool>(3)?,
         ))
     })?;
-    let recipient = RecipientAddress::decode(network, &address).unwrap();
     let card = ContactCardT {
         id,
         account,
@@ -75,13 +99,10 @@ pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Resul
         address: Some(address),
         saved,
     };
-    let contact = Contact {
-        card,
-        address: recipient,
-    };
-    Ok(contact)
+    Ok(card)
 }
 
+#[c_export]
 pub fn edit_contact_name(connection: &Connection, id: u32, name: &str) -> Result<()> {
     connection.execute(
         "UPDATE contacts SET name = ?2 WHERE id_contact = ?1",
@@ -90,6 +111,7 @@ pub fn edit_contact_name(connection: &Connection, id: u32, name: &str) -> Result
     Ok(())
 }
 
+#[c_export]
 pub fn edit_contact_address(connection: &Connection, id: u32, address: &str) -> Result<()> {
     connection.execute(
         "UPDATE contacts SET address = ?2 WHERE id_contact = ?1",
@@ -98,6 +120,7 @@ pub fn edit_contact_address(connection: &Connection, id: u32, address: &str) -> 
     Ok(())
 }
 
+#[c_export]
 pub fn delete_contact(connection: &Connection, id: u32) -> Result<()> {
     connection.execute(
         "DELETE FROM contacts WHERE id_contact = ?1",

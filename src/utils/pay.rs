@@ -6,11 +6,20 @@ use rusqlite::Connection;
 use zcash_protocol::{consensus::Network, memo::Memo};
 
 use crate::{
-    data::fb::{PaymentRequests, PaymentRequestsT, TransactionSummary, TransactionSummaryT},
-    db::notes::snap_to_checkpoint,
+    account::contacts::commit_unsaved_contacts,
+    coin::connect_lwd,
+    data::fb::{
+        PaymentRequests, PaymentRequestsT, TransactionSummary,
+        TransactionSummaryT,
+    },
+    db::{account::get_account_info, notes::snap_to_checkpoint},
     keys::TSKStore,
-    lwd::{get_last_height, get_tree_state, broadcast},
-    pay::{make_payment, Payment, PaymentItem, UnsignedTransaction},
+    lwd::{broadcast, get_last_height, get_tree_state},
+    pay::{
+        make_payment,
+        sweep::{prepare_sweep, scan_utxo_by_seed},
+        Payment, PaymentItem, UnsignedTransaction,
+    },
     types::PoolMask,
     Client,
 };
@@ -20,11 +29,11 @@ use crate::{
     ffi::{map_result_bytes, map_result_string, CParam, CResult},
 };
 use flatbuffers::FlatBufferBuilder;
+use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
-use std::ffi::c_char;
 
 #[c_export]
-pub async fn pay(
+pub async fn prepare_payment(
     network: &Network,
     connection: &Connection,
     client: &mut Client,
@@ -63,7 +72,7 @@ pub async fn pay(
         &s_tree,
         &o_tree,
     )?;
-    let summary = unsigned_tx.to_summary()?;
+    let summary = unsigned_tx.to_summary(vec![])?;
     Ok(summary)
 }
 
@@ -76,11 +85,13 @@ pub fn sign(
 ) -> Result<Vec<u8>> {
     let data = summary.data.as_ref().unwrap();
     let unsigned_tx = bincode::deserialize_from::<_, UnsignedTransaction>(&data[..])?;
+    let keys = summary.keys.as_ref().unwrap();
+    let mut tsk_store = bincode::deserialize_from::<_, TSKStore>(&keys[..])?;
     let txb = unsigned_tx.build(
         network,
         connection,
         expiration_height,
-        &mut TSKStore::default(),
+        &mut tsk_store,
         OsRng,
     )?;
     tracing::info!("TXBLen {}", txb.len());
@@ -93,4 +104,58 @@ pub async fn tx_broadcast(client: &mut Client, txbytes: &[u8]) -> Result<String>
     let bc_height = get_last_height(client).await?;
     let id = broadcast(client, bc_height, txbytes).await?;
     Ok(id)
+}
+
+#[c_export]
+pub async fn save_contacts(
+    network: &Network,
+    connection: &Connection,
+    client: &mut Client,
+    account: u32,
+    height: u32,
+    confirmations: u32,
+) -> Result<TransactionSummaryT> {
+    let cp_height = snap_to_checkpoint(&connection, height - confirmations + 1)?;
+    let (s_tree, o_tree) = get_tree_state(client, cp_height).await?;
+    let unsigned_tx = commit_unsaved_contacts(
+        network,
+        &connection,
+        account,
+        7,
+        cp_height,
+        &s_tree,
+        &o_tree,
+    )?;
+    unsigned_tx.to_summary(vec![]).map_err(anyhow::Error::msg)
+}
+
+#[c_export]
+pub async fn prepare_sweep_tx(
+    network: &Network,
+    connection: &Connection,
+    url: String,
+    account: u32,
+    confirmations: u32,
+    destination_address: &str,
+) -> Result<TransactionSummaryT> {
+    let ai = get_account_info(network, connection, account)?;
+    let mut client = connect_lwd(&url).await?;
+    let bc_height = get_last_height(&mut client).await?;
+    let cp_height = snap_to_checkpoint(connection, bc_height - confirmations + 1)?;
+    let (s, o) = get_tree_state(&mut client, cp_height).await?;
+    let (utxos, tsk_store) =
+        scan_utxo_by_seed(network, &url, ai, bc_height, 0, true, 40).await?;
+    let unsigned_tx = prepare_sweep(
+        network,
+        &connection,
+        account,
+        bc_height,
+        &utxos,
+        destination_address,
+        &s,
+        &o,
+    )?;
+    let keys = bincode::serialize(&tsk_store)?;
+    let sweep_tx = unsigned_tx.to_summary(keys)?;
+    Ok(sweep_tx)
 }
