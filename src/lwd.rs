@@ -16,9 +16,13 @@ use crate::{
     coin::connect_lwd, types::CheckpointHeight, warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2}, Client
 };
 
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CResult}};
+
 #[path = "./generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod rpc;
 
+#[c_export]
 pub async fn get_last_height(client: &mut Client) -> Result<u32> {
     let r = client
         .get_lightd_info(Request::new(Empty {}))

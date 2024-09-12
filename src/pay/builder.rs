@@ -39,7 +39,7 @@ use zcash_proofs::prover::LocalTxProver;
 
 impl UnsignedTransaction {
     pub fn build<R: RngCore + CryptoRng>(
-        self,
+        &self,
         network: &Network,
         connection: &Connection,
         expiration_height: u32,

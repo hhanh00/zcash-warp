@@ -35,7 +35,7 @@ use crate::{
     db::{
         account::{get_account_info, get_account_property, get_balance, list_accounts, set_account_property},
         account_manager::{
-            create_new_account, delete_account, detect_key, edit_account_birth, edit_account_name,
+            create_new_account, delete_account, edit_account_birth, edit_account_name,
             get_min_birth,
         },
         contacts::{delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts},
@@ -364,9 +364,8 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                     let bc_height = get_last_height(&mut client).await?;
                     let key = key.unwrap_or(CONFIG.seed.clone());
                     let name = name.unwrap_or("<unnamed>".to_string());
-                    let kt = detect_key(network, &key, 0, 0)?;
                     let birth = birth.unwrap_or(bc_height);
-                    create_new_account(network, &connection, &name, kt, birth)?;
+                    create_new_account(network, &connection, &name, &key, 0, birth)?;
                 }
                 AccountCommand::EditName { account, name } => {
                     edit_account_name(&connection, account, &name)?;
@@ -589,8 +588,10 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             }
             let connection = zec.connection()?;
             let end_height = end_height.unwrap_or(bc_height - confirmations + 1);
-            let start_height = get_sync_height(&connection)?
-                .ok_or(anyhow::anyhow!("no sync data. Have you run reset?"))?;
+            let start_height = get_sync_height(&connection)?;
+            if start_height == 0 {
+                anyhow::bail!("no sync data. Have you run reset?");
+            }
             if start_height >= end_height {
                 break;
             }
@@ -609,7 +610,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         }
         Command::Balance { account } => {
             let connection = zec.connection()?;
-            let height = get_sync_height(&connection)?.unwrap_or_default();
+            let height = get_sync_height(&connection)?;
             let balance = get_balance(&connection, account, height)?;
             println!("Balance: {:?}", balance);
         }

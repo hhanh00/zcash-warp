@@ -3,8 +3,8 @@ use super::{
     PaymentBuilder, PaymentItem, Result, TxInput, TxOutput, UnsignedTransaction,
 };
 use rusqlite::Connection;
-use zcash_primitives::{consensus::Network, memo::MemoBytes};
 use zcash_keys::address::Address as RecipientAddress;
+use zcash_primitives::{consensus::Network, memo::MemoBytes};
 
 use crate::{
     db::{
@@ -113,10 +113,14 @@ impl PaymentBuilder {
         let account_pools = account_pools & self.src_pools.0; // exclude pools
         self.account_pools = PoolMask(account_pools);
 
-        let has_tex = self.outputs.iter().any(|o| { 
+        let has_tex = self.outputs.iter().any(|o| {
             let address = &o.payment.address;
             let address = RecipientAddress::decode(&self.network, address).unwrap();
-            if let RecipientAddress::Tex(_) = address { true } else { false }
+            if let RecipientAddress::Tex(_) = address {
+                true
+            } else {
+                false
+            }
         });
 
         let transparent_inputs = if account_pools & 1 != 0 {
@@ -318,17 +322,20 @@ impl PaymentBuilder {
                     output.remaining
                 );
                 for n in self.inputs[src_pool as usize].iter_mut() {
+                    tracing::debug!("{src_pool} {:?}", n);
                     if n.remaining > 0 {
                         used[src_pool as usize] = true;
-                        if n.remaining == n.amount {
+                        let r = n.remaining.min(output.remaining + self.fee);
+                        tracing::debug!("Using Amount {r}");
+                        if n.remaining == n.amount && r > 0 { // first time this note is used
                             self.fee += self.fee_manager.add_input(src_pool);
                         }
+
+                        n.remaining -= r;
+                        let r2 = r.min(self.fee);
+                        self.fee -= r2;
+                        output.remaining -= r - r2;
                     }
-                    let r = n.remaining.min(output.remaining + self.fee);
-                    n.remaining -= r;
-                    let r2 = r.min(self.fee);
-                    self.fee -= r2;
-                    output.remaining -= r - r2;
 
                     if output.remaining == 0 {
                         break;

@@ -8,6 +8,9 @@ use anyhow::{Error, Result};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CResult}};
+
 use super::tx::{add_tx_value, store_tx};
 
 pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Option<PlainNote>> {
@@ -356,11 +359,12 @@ pub fn get_unspent_notes(connection: &Connection, account: u32, bc_height: u32) 
     Ok(notes)
 }
 
-pub fn get_sync_height(connection: &Connection) -> Result<Option<u32>> {
+#[c_export]
+pub fn get_sync_height(connection: &Connection) -> Result<u32> {
     let height = connection.query_row("SELECT MAX(height) FROM blcks", [], |r| {
         r.get::<_, Option<u32>>(0)
     })?;
-    Ok(height)
+    Ok(height.unwrap_or_default())
 }
 
 pub fn truncate_scan(connection: &Connection) -> Result<()> {
@@ -397,7 +401,8 @@ pub fn reset_scan(network: &Network, connection: &Connection, height: Option<u32
 }
 
 pub fn rewind_checkpoint(connection: &Connection) -> Result<()> {
-    if let Some(checkpoint) = get_sync_height(connection)? {
+    let checkpoint = get_sync_height(connection)?;
+    if checkpoint > 0 {
         rewind(connection, checkpoint - 1)?;
     }
     Ok(())

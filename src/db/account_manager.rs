@@ -17,6 +17,10 @@ use crate::{
     types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
 };
 
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CResult}};
+use std::ffi::{CStr, c_char};
+
 pub fn parse_seed_phrase(phrase: &str) -> Result<Seed> {
     let words = phrase.split_whitespace().collect::<Vec<_>>();
     let len = words.len();
@@ -69,14 +73,17 @@ pub fn detect_key(
     return Err(anyhow::anyhow!("Not a valid key"));
 }
 
+#[c_export]
 pub fn create_new_account(
     network: &Network,
     connection: &Connection,
     name: &str,
-    key: KeyType,
+    key: &str,
+    acc_index: u32,
     birth: u32,
 ) -> Result<u32> {
-    let account = match key {
+    let kt = detect_key(network, &key, acc_index, 0)?;
+    let account = match kt {
         KeyType::Seed(seed_str, seed, acc_index, _addr_index) => {
             let si = derive_zip32(network, &seed, acc_index);
             let account =

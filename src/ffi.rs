@@ -6,18 +6,30 @@ use std::{
 
 #[repr(C)]
 pub struct CResult<T> {
-    value: T,
-    error: *mut c_char,
+    pub value: T,
+    pub error: *mut c_char,
     pub len: u32,
+}
+
+#[repr(C)]
+pub struct CParam {
+    pub value: *mut u8,
+    pub len: u32,
+}
+
+impl <T> CResult<T> {
+    pub fn new(value: T) -> Self {
+        Self {
+            value,
+            len: 0,
+            error: ptr::null_mut::<c_char>(),
+        }
+    }
 }
 
 pub fn map_result<T>(res: Result<T>) -> CResult<T> {
     match res {
-        Ok(v) => CResult {
-            value: v,
-            len: 0,
-            error: ptr::null_mut::<c_char>(),
-        },
+        Ok(v) => CResult::new(v),
         Err(e) => {
             tracing::error!("{}", e);
             CResult {

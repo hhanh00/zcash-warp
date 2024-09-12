@@ -104,6 +104,10 @@ table PaymentRequest {
   memo_bytes: [uint8];
 }
 
+table PaymentRequests {
+  payments: [PaymentRequest];
+}
+
 table AccountName {
   id: uint32;
   name: string;

@@ -1,5 +1,7 @@
 use anyhow::Result;
 use rusqlite::Connection;
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CResult}};
 
 pub mod account;
 pub mod account_manager;
@@ -9,6 +11,7 @@ pub mod tx;
 pub mod witnesses;
 pub mod messages;
 
+#[c_export]
 pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute("DROP TABLE IF EXISTS props", [])?;
     connection.execute("DROP TABLE IF EXISTS txs", [])?;

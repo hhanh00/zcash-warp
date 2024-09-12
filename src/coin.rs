@@ -13,7 +13,7 @@ use crate::{cli::CONFIG, lwd::rpc::compact_tx_streamer_client::CompactTxStreamer
 
 type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CoinDef {
     pub network: Network,
     pub url: String,

@@ -11,7 +11,7 @@ use zcash_primitives::legacy::TransparentAddress;
 
 use crate::coin::COINS;
 use crate::data::fb::{AccountNameT, BalanceT};
-use crate::ffi::{map_result, map_result_bytes, CResult};
+use crate::ffi::{map_result, map_result_bytes, CResult, CParam};
 use crate::keys::import_sk_bip38;
 use crate::types::{AccountInfo, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
@@ -126,6 +126,7 @@ pub fn get_account_info(
 
 #[c_export]
 pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result<BalanceT> {
+    let height = if height == 0 { u32::MAX } else { height };
     let transparent = connection
         .query_row(
             "SELECT SUM(value) FROM utxos

@@ -3,12 +3,7 @@
 
 // @generated
 
-use core::mem;
-use core::cmp::Ordering;
-
 extern crate flatbuffers;
-use serde::{Serialize, Deserialize};
-use self::flatbuffers::{EndianScalar, Follow};
 
 #[allow(unused_imports, dead_code)]
 pub mod fb {
@@ -2943,6 +2938,136 @@ impl PaymentRequestT {
       amount,
       memo_string,
       memo_bytes,
+    })
+  }
+}
+pub enum PaymentRequestsOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct PaymentRequests<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for PaymentRequests<'a> {
+  type Inner = PaymentRequests<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> PaymentRequests<'a> {
+  pub const VT_PAYMENTS: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    PaymentRequests { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args PaymentRequestsArgs<'args>
+  ) -> flatbuffers::WIPOffset<PaymentRequests<'bldr>> {
+    let mut builder = PaymentRequestsBuilder::new(_fbb);
+    if let Some(x) = args.payments { builder.add_payments(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> PaymentRequestsT {
+    let payments = self.payments().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
+    });
+    PaymentRequestsT {
+      payments,
+    }
+  }
+
+  #[inline]
+  pub fn payments(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PaymentRequest<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PaymentRequest>>>>(PaymentRequests::VT_PAYMENTS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for PaymentRequests<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<PaymentRequest>>>>("payments", Self::VT_PAYMENTS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct PaymentRequestsArgs<'a> {
+    pub payments: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PaymentRequest<'a>>>>>,
+}
+impl<'a> Default for PaymentRequestsArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    PaymentRequestsArgs {
+      payments: None,
+    }
+  }
+}
+
+pub struct PaymentRequestsBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PaymentRequestsBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_payments(&mut self, payments: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<PaymentRequest<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentRequests::VT_PAYMENTS, payments);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> PaymentRequestsBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    PaymentRequestsBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<PaymentRequests<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for PaymentRequests<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("PaymentRequests");
+      ds.field("payments", &self.payments());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PaymentRequestsT {
+  pub payments: Option<Vec<PaymentRequestT>>,
+}
+impl Default for PaymentRequestsT {
+  fn default() -> Self {
+    Self {
+      payments: None,
+    }
+  }
+}
+impl PaymentRequestsT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<PaymentRequests<'b>> {
+    let payments = self.payments.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
+    });
+    PaymentRequests::create(_fbb, &PaymentRequestsArgs{
+      payments,
     })
   }
 }

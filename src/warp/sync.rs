@@ -1,14 +1,22 @@
 use crate::{
-    cli::CONFIG, coin::{connect_lwd, CoinDef}, db::{
+    cli::CONFIG,
+    coin::{connect_lwd, CoinDef, COINS},
+    db::{
         notes::{
-            get_block_header, mark_shielded_spent, mark_transparent_spent, rewind_checkpoint,
-            store_block, store_received_note, store_utxo, update_tx_timestamp,
+            get_block_header, get_sync_height, mark_shielded_spent, mark_transparent_spent,
+            rewind_checkpoint, store_block, store_received_note, store_utxo, update_tx_timestamp,
         },
         tx::add_tx_value,
-    }, lwd::{get_compact_block_range, get_transparent, get_tree_state}, txdetails::CompressedMemo, types::CheckpointHeight, warp::{
+    },
+    ffi::{map_result, CResult},
+    lwd::{get_compact_block_range, get_transparent, get_tree_state},
+    txdetails::CompressedMemo,
+    types::CheckpointHeight,
+    warp::{
         hasher::{OrchardHasher, SaplingHasher},
         BlockHeader,
-    }, Hash
+    },
+    Hash,
 };
 use anyhow::Result;
 use header::BlockHeaderStore;
@@ -133,7 +141,15 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
 
     let addresses = trp_dec.addresses.clone();
     for (account, taddr) in addresses.into_iter() {
-        let txs = get_transparent(&coin.network, &mut client, account, taddr, start.into(), end).await?;
+        let txs = get_transparent(
+            &coin.network,
+            &mut client,
+            account,
+            taddr,
+            start.into(),
+            end,
+        )
+        .await?;
         trp_dec.process_txs(&txs)?;
     }
     let heights = trp_dec
@@ -147,7 +163,11 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
     let bh = get_block_header(&connection, start.into())?;
     let mut prev_hash = bh.hash;
 
-    let block_url = if end < CONFIG.warp_end_height { &coin.warp } else { &coin.url };
+    let block_url = if end < CONFIG.warp_end_height {
+        &coin.warp
+    } else {
+        &coin.url
+    };
     let mut block_client = connect_lwd(block_url).await?;
     let mut blocks = get_compact_block_range(&mut block_client, u32::from(start) + 1, end).await?;
     let mut bs = vec![];
@@ -235,4 +255,23 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
     }
 
     Ok(())
+}
+
+#[no_mangle]
+#[tokio::main]
+pub async extern "C" fn warp_synchronize(coin: u8, end_height: u32) -> CResult<u8> {
+    let res = async {
+        let coin = COINS[coin as usize].lock().clone();
+        let connection = coin.connection()?;
+        let start_height = get_sync_height(&connection)?;
+        if start_height == 0 {
+            anyhow::bail!("no sync data. Have you run reset?");
+        }
+        if start_height < end_height {
+            let end_height = (start_height + 100_000).min(end_height);
+            warp_sync(&coin, CheckpointHeight(start_height), end_height).await?;
+        }
+        Ok(0)
+    };
+    map_result(res.await)
 }
