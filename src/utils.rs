@@ -1,4 +1,4 @@
-use crate::{cli::init_config, coin::init_coin, Hash};
+use crate::{cli::init_config, coin::{init_coin, COINS}, data::fb::AppConfig, ffi::{CParam, CResult}, Hash};
 use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
 
 pub mod db;
@@ -60,4 +60,27 @@ pub fn to_txid_str(txid: &Hash) -> String {
     let mut txid = txid.clone();
     txid.reverse();
     hex::encode(&txid)
+}
+
+#[no_mangle]
+pub extern "C" fn c_configure(coin: u8, config: CParam) -> CResult<u8> {
+    let config_bytes = config.value;
+    let config_len = config.len as usize;
+    let config = unsafe {
+        Vec::from_raw_parts(config_bytes, config_len, config_len)
+    };
+    let config = flatbuffers::root::<AppConfig>(&config).unwrap();
+    let config = config.unpack();
+    tracing::info!("{:?}", config);
+    let mut coin_def = COINS[coin as usize].lock();
+    if let Some(db) = config.db { 
+        coin_def.set_db_path(&db).unwrap();
+    }
+    if let Some(url) = config.url { 
+        coin_def.set_url(&url);
+    }
+    if let Some(warp) = config.warp { 
+        coin_def.set_warp(&warp);
+    }
+    CResult::new(0)
 }

@@ -3,7 +3,12 @@
 
 // @generated
 
+use core::mem;
+use core::cmp::Ordering;
+
 extern crate flatbuffers;
+use serde::{Serialize, Deserialize};
+use self::flatbuffers::{EndianScalar, Follow};
 
 #[allow(unused_imports, dead_code)]
 pub mod fb {
@@ -4737,6 +4742,190 @@ impl CheckpointT {
       height,
       hash,
       timestamp,
+    })
+  }
+}
+pub enum AppConfigOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AppConfig<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AppConfig<'a> {
+  type Inner = AppConfig<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AppConfig<'a> {
+  pub const VT_URL: flatbuffers::VOffsetT = 4;
+  pub const VT_WARP: flatbuffers::VOffsetT = 6;
+  pub const VT_DB: flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AppConfig { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args AppConfigArgs<'args>
+  ) -> flatbuffers::WIPOffset<AppConfig<'bldr>> {
+    let mut builder = AppConfigBuilder::new(_fbb);
+    if let Some(x) = args.db { builder.add_db(x); }
+    if let Some(x) = args.warp { builder.add_warp(x); }
+    if let Some(x) = args.url { builder.add_url(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> AppConfigT {
+    let url = self.url().map(|x| {
+      x.to_string()
+    });
+    let warp = self.warp().map(|x| {
+      x.to_string()
+    });
+    let db = self.db().map(|x| {
+      x.to_string()
+    });
+    AppConfigT {
+      url,
+      warp,
+      db,
+    }
+  }
+
+  #[inline]
+  pub fn url(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AppConfig::VT_URL, None)}
+  }
+  #[inline]
+  pub fn warp(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AppConfig::VT_WARP, None)}
+  }
+  #[inline]
+  pub fn db(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(AppConfig::VT_DB, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for AppConfig<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("url", Self::VT_URL, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("warp", Self::VT_WARP, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("db", Self::VT_DB, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AppConfigArgs<'a> {
+    pub url: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub warp: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub db: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for AppConfigArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    AppConfigArgs {
+      url: None,
+      warp: None,
+      db: None,
+    }
+  }
+}
+
+pub struct AppConfigBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> AppConfigBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_url(&mut self, url: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AppConfig::VT_URL, url);
+  }
+  #[inline]
+  pub fn add_warp(&mut self, warp: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AppConfig::VT_WARP, warp);
+  }
+  #[inline]
+  pub fn add_db(&mut self, db: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(AppConfig::VT_DB, db);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> AppConfigBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    AppConfigBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AppConfig<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AppConfig<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AppConfig");
+      ds.field("url", &self.url());
+      ds.field("warp", &self.warp());
+      ds.field("db", &self.db());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct AppConfigT {
+  pub url: Option<String>,
+  pub warp: Option<String>,
+  pub db: Option<String>,
+}
+impl Default for AppConfigT {
+  fn default() -> Self {
+    Self {
+      url: None,
+      warp: None,
+      db: None,
+    }
+  }
+}
+impl AppConfigT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<AppConfig<'b>> {
+    let url = self.url.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let warp = self.warp.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let db = self.db.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    AppConfig::create(_fbb, &AppConfigArgs{
+      url,
+      warp,
+      db,
     })
   }
 }

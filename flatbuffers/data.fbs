@@ -164,3 +164,9 @@ table Checkpoint {
   hash: [uint8];
   timestamp: uint32;
 }
+
+table AppConfig {
+  url: string;
+  warp: string;
+  db: string;
+}

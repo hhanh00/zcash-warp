@@ -37,6 +37,9 @@ use zcash_primitives::{
 };
 use zcash_proofs::prover::LocalTxProver;
 
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CParam, CResult}};
+
 impl UnsignedTransaction {
     pub fn build<R: RngCore + CryptoRng>(
         &self,
@@ -212,7 +215,8 @@ impl UnsignedTransaction {
         }
 
         let transparent_bundle = transparent_builder.build();
-        let prover: &LocalTxProver = &PROVER;
+        let prover = PROVER.lock();
+        let prover = prover.as_ref().ok_or(anyhow::anyhow!("Sapling prover not initialized"))?;
         let sapling_bundle = sapling_builder
             .build::<LocalTxProver, LocalTxProver, _, _>(&mut rng)
             .unwrap()
@@ -290,4 +294,11 @@ impl UnsignedTransaction {
 
         Ok(tx_bytes)
     }
+}
+
+#[c_export]
+pub fn init_sapling_prover(spend: &[u8], output: &[u8]) -> Result<()> {
+    let prover = LocalTxProver::from_bytes(spend, output);
+    *PROVER.lock() = Some(prover);
+    Ok(())
 }

@@ -84,7 +84,11 @@ pub fn sign(
     let data = summary.data.as_ref().unwrap();
     let unsigned_tx = bincode::deserialize_from::<_, UnsignedTransaction>(&data[..])?;
     let keys = summary.keys.as_ref().unwrap();
-    let mut tsk_store = bincode::deserialize_from::<_, TSKStore>(&keys[..])?;
+    let mut tsk_store = if keys.is_empty() {
+        TSKStore::default()
+    } else {
+        bincode::deserialize_from::<_, TSKStore>(&keys[..])?
+    };
     let txb = unsigned_tx.build(
         network,
         connection,
@@ -98,7 +102,6 @@ pub fn sign(
 
 #[c_export]
 pub async fn tx_broadcast(client: &mut Client, txbytes: &[u8]) -> Result<String> {
-    tracing::info!("TXBLen {}", txbytes.len());
     let bc_height = get_last_height(client).await?;
     let id = broadcast(client, bc_height, txbytes).await?;
     Ok(id)

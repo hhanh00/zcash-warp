@@ -108,9 +108,13 @@ struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(uint8_t coin)
 
 struct CResult_u32 c_get_last_height(uint8_t coin);
 
+struct CResult_u8 c_init_sapling_prover(uint8_t coin, struct CParam spend, struct CParam output);
+
 struct CResult_u8 c_retrieve_tx_details(uint8_t coin);
 
 void c_setup(void);
+
+struct CResult_u8 c_configure(uint8_t coin, struct CParam config);
 
 struct CResult_u8 c_encrypt_db(uint8_t coin, char *password, char *new_db_path);
 

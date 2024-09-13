@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use fee::FeeManager;
 use orchard::circuit::ProvingKey;
+use parking_lot::Mutex;
 use rand::{CryptoRng, RngCore};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -281,7 +282,7 @@ impl std::ops::Sub for PoolBalance {
 }
 
 lazy_static::lazy_static! {
-    pub static ref PROVER: LocalTxProver = LocalTxProver::with_default_location().unwrap();
+    pub static ref PROVER: Mutex<Option<LocalTxProver>> = Mutex::new(LocalTxProver::with_default_location());
     pub static ref ORCHARD_PROVER: ProvingKey = ProvingKey::build();
 }
 
