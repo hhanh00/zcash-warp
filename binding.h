@@ -86,9 +86,17 @@ struct CResult_u8 c_edit_contact_address(uint8_t coin, uint32_t id, char *addres
 
 struct CResult_u8 c_delete_contact(uint8_t coin, uint32_t id);
 
+struct CResult_u32 c_get_sync_height(uint8_t coin);
+
+struct CResult_u8 c_rewind(uint8_t coin, uint32_t height);
+
+struct CResult______u8 c_list_checkpoints(uint8_t coin);
+
 struct CResult______u8 c_get_unspent_notes(uint8_t coin, uint32_t account, uint32_t bc_height);
 
-struct CResult_u32 c_get_sync_height(uint8_t coin);
+struct CResult_u8 c_exclude_note(uint8_t coin, uint32_t id, bool reverse);
+
+struct CResult_u8 c_reverse_note_exclusion(uint8_t coin, uint32_t account);
 
 struct CResult______u8 c_list_messages(uint8_t coin, uint32_t account);
 
@@ -100,11 +108,17 @@ struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(uint8_t coin)
 
 struct CResult_u32 c_get_last_height(uint8_t coin);
 
+struct CResult_u8 c_retrieve_tx_details(uint8_t coin);
+
 void c_setup(void);
+
+struct CResult_u8 c_encrypt_db(uint8_t coin, char *password, char *new_db_path);
 
 struct CResult______u8 c_create_backup(uint8_t coin, uint32_t account);
 
 struct CResult_____c_char c_get_address(uint8_t coin, uint32_t account, uint8_t mask);
+
+struct CResult_u8 c_set_db_password(uint8_t coin, char *password);
 
 struct CResult______u8 c_decode_address(uint8_t coin, char *address);
 
@@ -172,7 +186,14 @@ struct CResult______u8 c_save_contacts(uint8_t coin,
 struct CResult______u8 c_prepare_sweep_tx(uint8_t coin,
                                           uint32_t account,
                                           uint32_t confirmations,
-                                          char *destination_address);
+                                          char *destination_address,
+                                          uintptr_t gap_limit);
+
+struct CResult______u8 c_prepare_sweep_tx_by_sk(uint8_t coin,
+                                                uint32_t account,
+                                                char *sk,
+                                                uint32_t confirmations,
+                                                char *destination_address);
 
 struct CResult______u8 c_fetch_tx_details(uint8_t coin, uint32_t account, uint32_t id);
 

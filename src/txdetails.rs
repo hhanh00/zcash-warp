@@ -17,14 +17,18 @@ use zcash_primitives::{
 
 use crate::{
     account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
-    coin::connect_lwd,
+    coin::{connect_lwd, COINS},
     data::fb::{
         InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT, ShieldedMessageT,
         TransactionInfoExtendedT,
     },
     db::{
-        account::get_account_info, messages::store_message, notes::{get_note_by_nf, store_tx_details}, tx::{get_tx, list_new_txids, update_tx_primary_address_memo}
+        account::get_account_info,
+        messages::store_message,
+        notes::get_note_by_nf,
+        tx::{get_tx, list_new_txids, store_tx_details, update_tx_primary_address_memo},
     },
+    ffi::{map_result, CResult},
     lwd::{get_transaction, get_txin_coins},
     types::{Addresses, PoolMask},
     utils::ua::ua_of_orchard,
@@ -271,7 +275,21 @@ pub fn analyze_raw_transaction(
     Ok(tx)
 }
 
-pub async fn retrieve_tx_details(
+#[no_mangle]
+#[tokio::main]
+pub async extern "C" fn c_retrieve_tx_details(coin: u8) -> CResult<u8> {
+    let res = async {
+        let coin = COINS[coin as usize].lock().clone();
+        let connection = coin.connection()?;
+        let connection = Mutex::new(connection);
+        retrieve_tx_details_inner(&coin.network, connection, coin.url.clone()).await?;
+        Ok(0)
+    };
+    let r = res.await;
+    map_result(r)
+}
+
+pub async fn retrieve_tx_details_inner(
     network: &Network,
     connection: Mutex<PooledSQLConnection>,
     url: String,

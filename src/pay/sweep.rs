@@ -6,7 +6,7 @@ use zcash_primitives::consensus::Network;
 
 use super::{Payment, PaymentBuilder, PaymentItem, UnsignedTransaction};
 use crate::{
-    coin::connect_lwd, db::notes::snap_to_checkpoint, keys::{Bip32KeyIterator, TSKStore}, lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter}, types::{AccountInfo, AccountType, PoolMask}, warp::{legacy::CommitmentTreeFrontier, UTXO}
+    coin::connect_lwd, db::chain::snap_to_checkpoint, keys::{Bip32KeyIterator, TSKStore}, lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter}, types::{AccountInfo, AccountType, PoolMask}, warp::{legacy::CommitmentTreeFrontier, UTXO}
 };
 
 pub async fn scan_utxo_by_address(

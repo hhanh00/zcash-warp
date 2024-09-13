@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 
 use crate::{
-    db::{account::get_account_info, notes::snap_to_checkpoint},
+    db::{account::get_account_info, chain::snap_to_checkpoint},
     keys::TSKStore,
     pay::{Payment, PaymentBuilder, PaymentItem},
     warp::legacy::CommitmentTreeFrontier, EXPIRATION_HEIGHT_DELTA,

@@ -29,32 +29,25 @@ use crate::{
         PacketT, PacketsT, PaymentRequestT, PaymentRequestsT, TransactionSummaryT,
     },
     db::{
-        account::{get_account_property, get_balance, list_accounts, set_account_property},
-        account_manager::{
+        account::{get_account_property, get_balance, list_accounts, set_account_property}, account_manager::{
             create_new_account, delete_account, edit_account_birth, edit_account_name,
             get_min_birth,
-        },
-        contacts::{
+        }, chain::{get_sync_height, list_checkpoints, rewind, snap_to_checkpoint, store_block, truncate_scan}, contacts::{
             delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts,
-        },
-        messages::{get_message, list_messages, mark_all_read, mark_read},
-        notes::{
-            exclude_note, get_sync_height, get_txid, get_unspent_notes, reverse_note_exclusion,
-            snap_to_checkpoint, store_block, store_tx_details, truncate_scan,
-        },
-        reset_tables,
-        tx::get_tx_details,
+        }, messages::{get_message, list_messages, mark_all_read, mark_read}, notes::{
+            exclude_note, get_unspent_notes, reverse_note_exclusion
+        }, reset_tables, tx::{get_tx_details, get_txid, store_tx_details}
     },
     keys::generate_random_mnemonic_phrase,
     lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
-    txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
+    txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details_inner},
     types::CheckpointHeight,
     utils::{
         chain::{get_activation_date, get_height_by_time},
         data_split::{merge, split},
         db::{create_backup, encrypt_db, get_address},
         messages::navigate_message,
-        pay::{prepare_payment, prepare_sweep_tx, sign},
+        pay::{prepare_payment, prepare_sweep_tx, prepare_sweep_tx_by_sk, sign},
         ua::{decode_address, get_account_diversified_address},
         uri::{make_payment_uri, parse_payment_uri},
         zip_db::{
@@ -194,6 +187,13 @@ pub struct Database {
 
 #[derive(Subcommand, Clone, Debug)]
 pub enum DatabaseCommand {
+    EncryptDb {
+        password: String,
+        new_db_path: String,
+    },
+    SetDbPassword {
+        password: String,
+    },
     GenerateKeys,
     Encrypt {
         directory: String,
@@ -206,6 +206,18 @@ pub enum DatabaseCommand {
         target_directory: String,
         secret_key: String,
     },
+}
+
+#[derive(Parser, Clone, Debug)]
+pub struct Checkpoint {
+    #[structopt(subcommand)]
+    command: CheckpointCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum CheckpointCommand {
+    List,
+    Rewind { height: u32 },
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -230,17 +242,11 @@ pub enum Command {
     Note(Note),
     Database(Database),
     QRData(QRData),
+    Checkpoint(Checkpoint),
     CreateDatabase,
     GenerateSeed,
     Backup {
         account: u32,
-    },
-    EncryptDb {
-        password: String,
-        new_db_path: String,
-    },
-    SetDbPassword {
-        password: String,
     },
     LastHeight,
     SyncHeight,
@@ -275,6 +281,11 @@ pub enum Command {
     },
     Sweep {
         account: u32,
+        destination_address: String,
+    },
+    SweepSecretKey {
+        account: u32,
+        secret_key: String,
         destination_address: String,
     },
     GetTxDetails {
@@ -329,16 +340,6 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         Command::CreateDatabase => {
             let connection = zec.connection().unwrap();
             reset_tables(&connection)?;
-        }
-        Command::EncryptDb {
-            password,
-            new_db_path,
-        } => {
-            let connection = zec.connection()?;
-            encrypt_db(&connection, &password, &new_db_path)?;
-        }
-        Command::SetDbPassword { password } => {
-            zec.db_password = Some(password);
         }
         Command::Account(account_cmd) => {
             let connection = zec.connection()?;
@@ -493,6 +494,16 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             }
         }
         Command::Database(database_command) => match database_command.command {
+            DatabaseCommand::EncryptDb {
+                password,
+                new_db_path,
+            } => {
+                let connection = zec.connection()?;
+                encrypt_db(&connection, &password, &new_db_path)?;
+            }
+            DatabaseCommand::SetDbPassword { password } => {
+                zec.db_password = Some(password);
+            }
             DatabaseCommand::Encrypt {
                 directory,
                 extension,
@@ -534,6 +545,19 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 println!("{:?}", data.data.map(|d| hex::encode(&d)));
             }
         },
+        Command::Checkpoint(checkpoint_command) => {
+            match checkpoint_command.command {
+                CheckpointCommand::List => {
+                    let connection = zec.connection()?;
+                    let checkpoints = list_checkpoints(&connection)?;
+                    println!("{checkpoints:?}");
+                }
+                CheckpointCommand::Rewind { height } => {
+                    let connection = zec.connection()?;
+                    rewind(&connection, height)?;
+                }
+            }
+        }
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
             println!("{seed}");
@@ -591,7 +615,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let end_height = (start_height + 100_000).min(end_height);
             warp_sync(&zec, CheckpointHeight(start_height), end_height).await?;
             let connection = Mutex::new(zec.connection()?);
-            retrieve_tx_details(network, connection, zec.url.clone()).await?;
+            retrieve_tx_details_inner(network, connection, zec.url.clone()).await?;
         },
         Command::Address { account, mask } => {
             let connection = zec.connection()?;
@@ -668,6 +692,25 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 &connection,
                 zec.url.clone(),
                 account,
+                CONFIG.confirmations,
+                &destination_address,
+                50,
+            )
+            .await?;
+            *txbytes = display_tx(network, &connection, summary)?;
+        }
+        Command::SweepSecretKey {
+            account,
+            secret_key,
+            destination_address,
+        } => {
+            let connection = zec.connection()?;
+            let summary = prepare_sweep_tx_by_sk(
+                network,
+                &connection,
+                zec.url.clone(),
+                account,
+                &secret_key,
                 CONFIG.confirmations,
                 &destination_address,
             )

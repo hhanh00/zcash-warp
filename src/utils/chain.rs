@@ -5,7 +5,7 @@ use zcash_protocol::consensus::{Network, NetworkUpgrade, Parameters};
 use crate::{
     db::{
         account_manager::get_min_birth,
-        notes::{store_block, truncate_scan},
+        chain::{store_block, truncate_scan},
     },
     lwd::{get_compact_block, get_last_height},
     warp::BlockHeader,

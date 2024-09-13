@@ -1,16 +1,18 @@
 use crate::{
-    data::fb::ShieldedNoteT, types::CheckpointHeight, warp::{
+    data::fb::ShieldedNoteT,
+    types::CheckpointHeight,
+    warp::{
         sync::{PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
         BlockHeader, OutPoint, Witness, UTXO,
-    }, Hash
+    },
+    Hash,
 };
 use anyhow::{Error, Result};
 use rusqlite::{params, Connection, OptionalExtension, Transaction};
-use zcash_primitives::consensus::{Network, NetworkUpgrade, Parameters};
 
 use crate::{
     coin::COINS,
-    ffi::{map_result, map_result_bytes, CResult},
+    ffi::{map_result_bytes, map_result, CResult},
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
@@ -42,15 +44,6 @@ pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Optio
         })
         .transpose()?;
     Ok(r)
-}
-
-pub fn snap_to_checkpoint(connection: &Connection,
-    height: u32,
-) -> Result<CheckpointHeight> {
-    let height = connection.query_row(
-        "SELECT MAX(height) FROM blcks WHERE height <= ?1", [height], |r| r.get::<_, Option<u32>>(0))?;
-    let height = height.ok_or(anyhow::anyhow!("No suitable checkpoint"))?;
-    Ok(CheckpointHeight(height))
 }
 
 pub fn list_received_notes(
@@ -217,35 +210,6 @@ pub fn store_witness(
     Ok(())
 }
 
-pub fn get_block_header(connection: &Connection, height: u32) -> Result<BlockHeader> {
-    let (hash, prev_hash, timestamp) = connection.query_row(
-        "SELECT hash, prev_hash, timestamp FROM blcks WHERE height = ?1",
-        [height],
-        |r| {
-            Ok((
-                r.get::<_, Vec<u8>>(0)?,
-                r.get::<_, Vec<u8>>(1)?,
-                r.get::<_, u32>(2)?,
-            ))
-        },
-    )?;
-    Ok(BlockHeader {
-        height,
-        hash: hash.try_into().unwrap(),
-        prev_hash: prev_hash.try_into().unwrap(),
-        timestamp,
-    })
-}
-
-pub fn store_block(connection: &Transaction, bh: &BlockHeader) -> Result<()> {
-    let mut s = connection.prepare_cached(
-        "INSERT INTO blcks
-        (height, hash, prev_hash, timestamp) VALUES (?1, ?2, ?3, ?4)",
-    )?;
-    s.execute(params![bh.height, bh.hash, bh.prev_hash, bh.timestamp,])?;
-    Ok(())
-}
-
 pub fn list_utxos(connection: &Connection, height: CheckpointHeight) -> Result<Vec<UTXO>> {
     let height: u32 = height.into();
     let mut s = connection.prepare(
@@ -336,18 +300,26 @@ pub fn update_tx_timestamp<'a, I: IntoIterator<Item = &'a Option<BlockHeader>>>(
 }
 
 #[c_export]
-pub fn get_unspent_notes(connection: &Connection, account: u32, bc_height: u32) -> Result<Vec<ShieldedNoteT>> {
+pub fn get_unspent_notes(
+    connection: &Connection,
+    account: u32,
+    bc_height: u32,
+) -> Result<Vec<ShieldedNoteT>> {
     let mut s = connection.prepare(
         "SELECT n.height, t.timestamp, n.value, n.orchard, n.excluded
         FROM notes n JOIN txs t ON n.tx = t.id_tx
-        WHERE n.account = ?1 AND spent IS NULL")?;
-    let rows = s.query_map([account], |r| Ok((
-        r.get::<_, u32>(0)?,
-        r.get::<_, u32>(1)?,
-        r.get::<_, u64>(2)?,
-        r.get::<_, bool>(3)?,
-        r.get::<_, bool>(4)?,
-    )))?;
+        WHERE n.account = ?1 AND spent IS NULL
+        ORDER BY n.height DESC",
+    )?;
+    let rows = s.query_map([account], |r| {
+        Ok((
+            r.get::<_, u32>(0)?,
+            r.get::<_, u32>(1)?,
+            r.get::<_, u64>(2)?,
+            r.get::<_, bool>(3)?,
+            r.get::<_, bool>(4)?,
+        ))
+    })?;
     let mut notes = vec![];
     for r in rows {
         let (height, timestamp, value, orchard, excluded) = r?;
@@ -365,94 +337,19 @@ pub fn get_unspent_notes(connection: &Connection, account: u32, bc_height: u32) 
 }
 
 #[c_export]
-pub fn get_sync_height(connection: &Connection) -> Result<u32> {
-    let height = connection.query_row("SELECT MAX(height) FROM blcks", [], |r| {
-        r.get::<_, Option<u32>>(0)
-    })?;
-    Ok(height.unwrap_or_default())
-}
-
-pub fn truncate_scan(connection: &Connection) -> Result<()> {
-    connection.execute("DELETE FROM blcks", [])?;
-    connection.execute("DELETE FROM txs", [])?;
-    connection.execute("DELETE FROM txdetails", [])?;
-    connection.execute("DELETE FROM notes", [])?;
-    connection.execute("DELETE FROM witnesses", [])?;
-    connection.execute("DELETE FROM utxos", [])?;
-    connection.execute("DELETE FROM contacts", [])?;
-    connection.execute("DELETE FROM msgs", [])?;
-
-    Ok(())
-}
-
-// TODO: Reset rest of the tables
-#[allow(dead_code)]
-pub fn reset_scan(network: &Network, connection: &Connection, height: Option<u32>) -> Result<u32> {
-    let activation: u32 = network
-        .activation_height(NetworkUpgrade::Sapling)
-        .unwrap()
-        .into();
-    let height = height.unwrap_or(activation + 1) - 1;
-
-    connection.execute("DELETE FROM blcks WHERE height >= ?1", [height])?;
-    connection.execute("DELETE FROM txs WHERE height >= ?1", [height])?;
-    connection.execute("DELETE FROM notes WHERE height >= ?1", [height])?;
-    connection.execute("DELETE FROM witnesses WHERE height >= ?1", [height])?;
-    connection.execute("DELETE FROM txdetails", [])?;
-    connection.execute("DELETE FROM msgs", [])?;
-    connection.execute("UPDATE notes SET spent = NULL WHERE spent >= ?1", [height])?;
-
-    Ok(height)
-}
-
-pub fn rewind_checkpoint(connection: &Connection) -> Result<()> {
-    let checkpoint = get_sync_height(connection)?;
-    if checkpoint > 0 {
-        rewind(connection, checkpoint - 1)?;
-    }
-    Ok(())
-}
-
-pub fn rewind(connection: &Connection, height: u32) -> Result<()> {
-    let height = connection.query_row(
-        "SELECT height FROM blcks WHERE height <= ?1 ORDER BY height DESC LIMIT 1", [height], |r| r.get::<_, u32>(0))?;
-    tracing::info!("Dropping sync data after @{height}");
-    connection.execute("DELETE FROM blcks WHERE height > ?1", [height])?;
-    connection.execute("DELETE FROM txs WHERE height > ?1", [height])?;
-    connection.execute("DELETE FROM notes WHERE height > ?1", [height])?;
-    connection.execute("DELETE FROM witnesses WHERE height > ?1", [height])?;
-    connection.execute("DELETE FROM txdetails WHERE height > ?1", [height])?;
-    connection.execute("DELETE FROM msgs WHERE height > ?1", [height])?;
-    connection.execute("UPDATE notes SET spent = NULL WHERE spent > ?1", [height])?;
-    Ok(())
-}
-
-pub fn get_txid(connection: &Connection, id: u32) -> Result<(Vec<u8>, u32)> {
-    let (txid, timestamp) = connection.query_row(
-        "SELECT txid, timestamp FROM txs WHERE id_tx = ?1",
-        [id],
-        |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, u32>(1)?)),
-    )?;
-    Ok((txid, timestamp))
-}
-
-pub fn store_tx_details(connection: &Connection, id: u32, height: u32, txid: &Hash, data: &[u8]) -> Result<()> {
-    connection.execute(
-        "INSERT INTO txdetails(id_tx, height, txid, data)
-        VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
-        params![id, height, txid, data],
-    )?;
-    Ok(())
-}
-
 pub fn exclude_note(connection: &Connection, id: u32, reverse: bool) -> Result<()> {
-    connection.execute("UPDATE notes SET excluded = ?2 WHERE id_note = ?1",
-        params![id, !reverse])?;
+    connection.execute(
+        "UPDATE notes SET excluded = ?2 WHERE id_note = ?1",
+        params![id, !reverse],
+    )?;
     Ok(())
 }
 
+#[c_export]
 pub fn reverse_note_exclusion(connection: &Connection, account: u32) -> Result<()> {
-    connection.execute("UPDATE notes SET excluded = NOT excluded WHERE account = ?1",
-        [account])?;
+    connection.execute(
+        "UPDATE notes SET excluded = NOT excluded WHERE account = ?1",
+        [account],
+    )?;
     Ok(())
 }

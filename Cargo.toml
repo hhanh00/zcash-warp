@@ -4,10 +4,6 @@ version = "1.0.0"
 edition = "2021"
 authors = ["Hanh <hanh425@gmail.com>"]
 
-[[bin]]
-name = "ctest"
-path = "src/ctest.rs"
-
 [lib]
 name = "zcash_warp"
 crate-type = ["cdylib", "rlib", "staticlib"]

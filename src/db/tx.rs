@@ -31,7 +31,7 @@ pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Has
 pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedReceivedTx>> {
     let mut s = connection.prepare(
         "SELECT id_tx, txid, height, timestamp, value, address, memo FROM txs
-        WHERE account = ?1",
+        WHERE account = ?1 ORDER BY height DESC",
     )?;
     let rows = s.query_map([account], |r| {
         Ok((
@@ -137,4 +137,28 @@ pub fn update_tx_primary_address_memo(
         params![id_tx, address, memo],
     )?;
     Ok(())
+}
+
+pub fn store_tx_details(
+    connection: &Connection,
+    id: u32,
+    height: u32,
+    txid: &Hash,
+    data: &[u8],
+) -> Result<()> {
+    connection.execute(
+        "INSERT INTO txdetails(id_tx, height, txid, data)
+        VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
+        params![id, height, txid, data],
+    )?;
+    Ok(())
+}
+
+pub fn get_txid(connection: &Connection, id: u32) -> Result<(Vec<u8>, u32)> {
+    let (txid, timestamp) = connection.query_row(
+        "SELECT txid, timestamp FROM txs WHERE id_tx = ?1",
+        [id],
+        |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, u32>(1)?)),
+    )?;
+    Ok((txid, timestamp))
 }

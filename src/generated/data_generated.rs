@@ -4564,5 +4564,181 @@ impl PacketsT {
     })
   }
 }
+pub enum CheckpointOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Checkpoint<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Checkpoint<'a> {
+  type Inner = Checkpoint<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Checkpoint<'a> {
+  pub const VT_HEIGHT: flatbuffers::VOffsetT = 4;
+  pub const VT_HASH: flatbuffers::VOffsetT = 6;
+  pub const VT_TIMESTAMP: flatbuffers::VOffsetT = 8;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Checkpoint { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args CheckpointArgs<'args>
+  ) -> flatbuffers::WIPOffset<Checkpoint<'bldr>> {
+    let mut builder = CheckpointBuilder::new(_fbb);
+    builder.add_timestamp(args.timestamp);
+    if let Some(x) = args.hash { builder.add_hash(x); }
+    builder.add_height(args.height);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> CheckpointT {
+    let height = self.height();
+    let hash = self.hash().map(|x| {
+      x.into_iter().collect()
+    });
+    let timestamp = self.timestamp();
+    CheckpointT {
+      height,
+      hash,
+      timestamp,
+    }
+  }
+
+  #[inline]
+  pub fn height(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Checkpoint::VT_HEIGHT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn hash(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(Checkpoint::VT_HASH, None)}
+  }
+  #[inline]
+  pub fn timestamp(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(Checkpoint::VT_TIMESTAMP, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for Checkpoint<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("hash", Self::VT_HASH, false)?
+     .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct CheckpointArgs<'a> {
+    pub height: u32,
+    pub hash: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    pub timestamp: u32,
+}
+impl<'a> Default for CheckpointArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    CheckpointArgs {
+      height: 0,
+      hash: None,
+      timestamp: 0,
+    }
+  }
+}
+
+pub struct CheckpointBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> CheckpointBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_height(&mut self, height: u32) {
+    self.fbb_.push_slot::<u32>(Checkpoint::VT_HEIGHT, height, 0);
+  }
+  #[inline]
+  pub fn add_hash(&mut self, hash: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Checkpoint::VT_HASH, hash);
+  }
+  #[inline]
+  pub fn add_timestamp(&mut self, timestamp: u32) {
+    self.fbb_.push_slot::<u32>(Checkpoint::VT_TIMESTAMP, timestamp, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> CheckpointBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    CheckpointBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Checkpoint<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Checkpoint<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Checkpoint");
+      ds.field("height", &self.height());
+      ds.field("hash", &self.hash());
+      ds.field("timestamp", &self.timestamp());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct CheckpointT {
+  pub height: u32,
+  pub hash: Option<Vec<u8>>,
+  pub timestamp: u32,
+}
+impl Default for CheckpointT {
+  fn default() -> Self {
+    Self {
+      height: 0,
+      hash: None,
+      timestamp: 0,
+    }
+  }
+}
+impl CheckpointT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<Checkpoint<'b>> {
+    let height = self.height;
+    let hash = self.hash.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
+    let timestamp = self.timestamp;
+    Checkpoint::create(_fbb, &CheckpointArgs{
+      height,
+      hash,
+      timestamp,
+    })
+  }
+}
 }  // pub mod fb
 

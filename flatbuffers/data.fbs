@@ -159,12 +159,8 @@ table Packets {
   len: uint32;
 }
 
-// table TransparentKey {
-//   address: string;
-//   sk: [uint8];
-// }
-
-// table SweepTransaction {
-//   utx: TransactionSummary;
-//   keys: [TransparentKey];
-// }
+table Checkpoint {
+  height: uint32;
+  hash: [uint8];
+  timestamp: uint32;
+}

@@ -2,9 +2,10 @@ use crate::{
     cli::CONFIG,
     coin::{connect_lwd, CoinDef, COINS},
     db::{
+        chain::{get_block_header, get_sync_height, rewind_checkpoint, store_block},
         notes::{
-            get_block_header, get_sync_height, mark_shielded_spent, mark_transparent_spent,
-            rewind_checkpoint, store_block, store_received_note, store_utxo, update_tx_timestamp,
+            mark_shielded_spent, mark_transparent_spent,
+            store_received_note, store_utxo, update_tx_timestamp,
         },
         tx::add_tx_value,
     },

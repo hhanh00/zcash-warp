@@ -6,6 +6,7 @@ use crate::{coin::COINS, ffi::{map_result, CResult}};
 pub mod account;
 pub mod account_manager;
 pub mod contacts;
+pub mod chain;
 pub mod notes;
 pub mod tx;
 pub mod witnesses;
