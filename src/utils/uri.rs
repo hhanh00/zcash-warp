@@ -50,7 +50,7 @@ pub fn parse_payment_uri(uri: &str) -> Result<PaymentRequestsT> {
         .map(|(_, p)| PaymentRequestT {
             address: Some(p.recipient_address().encode()),
             amount: p.amount().into(),
-            memo_string: None,
+            memo: None,
             memo_bytes: p.memo().cloned().map(|m| m.as_slice().to_vec()),
         })
         .collect::<Vec<_>>();

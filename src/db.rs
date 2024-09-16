@@ -14,15 +14,17 @@ pub mod messages;
 
 #[c_export]
 pub fn reset_tables(connection: &Connection) -> Result<()> {
-    connection.execute("DROP TABLE IF EXISTS props", [])?;
-    connection.execute("DROP TABLE IF EXISTS txs", [])?;
-    connection.execute("DROP TABLE IF EXISTS notes", [])?;
-    connection.execute("DROP TABLE IF EXISTS witnesses", [])?;
-    connection.execute("DROP TABLE IF EXISTS utxos", [])?;
-    connection.execute("DROP TABLE IF EXISTS blcks", [])?;
-    connection.execute("DROP TABLE IF EXISTS txdetails", [])?;
-    connection.execute("DROP TABLE IF EXISTS msgs", [])?;
-    connection.execute("DROP TABLE IF EXISTS contacts", [])?;
+    tracing::info!("Reset Tables");
+    // TODO Schema versioning
+    // connection.execute("DROP TABLE IF EXISTS props", [])?;
+    // connection.execute("DROP TABLE IF EXISTS txs", [])?;
+    // connection.execute("DROP TABLE IF EXISTS notes", [])?;
+    // connection.execute("DROP TABLE IF EXISTS witnesses", [])?;
+    // connection.execute("DROP TABLE IF EXISTS utxos", [])?;
+    // connection.execute("DROP TABLE IF EXISTS blcks", [])?;
+    // connection.execute("DROP TABLE IF EXISTS txdetails", [])?;
+    // connection.execute("DROP TABLE IF EXISTS msgs", [])?;
+    // connection.execute("DROP TABLE IF EXISTS contacts", [])?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS props(
@@ -37,12 +39,12 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS accounts(
         id_account INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
+        key_type INTEGER NOT NULL,
+        fingerprint BLOB NOT NULL UNIQUE,
         seed TEXT,
         aindex INTEGER NOT NULL,
-        sk TEXT,
-        vk TEXT NOT NULL,
-        address TEXT NOT NULL UNIQUE,
         birth INTEGER NOT NULL,
+        balance INTEGER NOT NULL,
         saved BOOL NOT NULL)",
         [],
     )?;
@@ -50,7 +52,28 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS t_accounts(
         account INTEGER PRIMARY KEY,
+        addr_index INTEGER NOT NULL,
         sk TEXT NOT NULL,
+        address TEXT NOT NULL)",
+        [],
+    )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS t_subaccounts(
+        id_subaccount INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        addr_index INTEGER NOT NULL,
+        sk TEXT NOT NULL,
+        address TEXT NOT NULL,
+        UNIQUE (account, addr_index))",
+        [],
+    )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS s_accounts(
+        account INTEGER PRIMARY KEY,
+        sk TEXT NOT NULL,
+        vk TEXT NOT NULL,
         address TEXT NOT NULL)",
         [],
     )?;
@@ -116,6 +139,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS utxos(
         id_utxo INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,
+        addr_index INTEGER NOT NULL,
         height INTEGER NOT NULL,
         timestamp INTEGER NOT NULL,
         txid BLOB NOT NULL,

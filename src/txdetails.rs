@@ -17,10 +17,10 @@ use zcash_primitives::{
 
 use crate::{
     account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
-    coin::{connect_lwd, COINS},
+    coin::connect_lwd,
     data::fb::{
         InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT, ShieldedMessageT,
-        TransactionInfoExtendedT,
+        TransactionInfoExtendedT, UserMemoT,
     },
     db::{
         account::get_account_info,
@@ -28,7 +28,6 @@ use crate::{
         notes::get_note_by_nf,
         tx::{get_tx, list_new_txids, store_tx_details, update_tx_primary_address_memo},
     },
-    ffi::{map_result, CResult},
     lwd::{get_transaction, get_txin_coins},
     types::{Addresses, PoolMask},
     utils::ua::ua_of_orchard,
@@ -36,8 +35,11 @@ use crate::{
         sync::{FullPlainNote, PlainNote, ReceivedTx},
         OutPoint, TxOut2,
     },
-    Hash, PooledSQLConnection,
+    Hash,
 };
+
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CResult}};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TransparentInput {
@@ -275,25 +277,13 @@ pub fn analyze_raw_transaction(
     Ok(tx)
 }
 
-#[no_mangle]
-#[tokio::main]
-pub async extern "C" fn c_retrieve_tx_details(coin: u8) -> CResult<u8> {
-    let res = async {
-        let coin = COINS[coin as usize].lock().clone();
-        let connection = coin.connection()?;
-        let connection = Mutex::new(connection);
-        retrieve_tx_details_inner(&coin.network, connection, coin.url.clone()).await?;
-        Ok(0)
-    };
-    let r = res.await;
-    map_result(r)
-}
-
-pub async fn retrieve_tx_details_inner(
+#[c_export]
+pub async fn retrieve_tx_details(
     network: &Network,
-    connection: Mutex<PooledSQLConnection>,
+    connection: &Connection,
     url: String,
 ) -> Result<()> {
+    let connection = Mutex::new(connection);
     let txids = list_new_txids(&connection.lock())?;
     let mut client = connect_lwd(&url).await?;
     for (id_tx, account, timestamp, txid) in txids {
@@ -447,43 +437,18 @@ fn parse_memo_text(
     recipient: String,
     memo: &str,
 ) -> Result<ShieldedMessageT> {
-    let memo_lines: Vec<_> = memo.splitn(4, '\n').collect();
-    let msg = if memo_lines.len() == 4 && memo_lines[0] == "\u{1F6E1}MSG" {
-        ShieldedMessageT {
-            id_msg: 0,
-            account,
-            id_tx,
-            txid: Some(txid.to_vec()),
-            nout,
-            height,
-            timestamp,
-            incoming,
-            sender: if memo_lines[1].is_empty() {
-                sender
-            } else {
-                Some(memo_lines[1].to_string())
-            },
-            recipient: Some(recipient.to_string()),
-            subject: Some(memo_lines[2].to_string()),
-            body: Some(memo_lines[3].to_string()),
-            read: false,
-        }
-    } else {
-        ShieldedMessageT {
-            id_msg: 0,
-            account,
-            id_tx,
-            txid: Some(txid.to_vec()),
-            height,
-            timestamp,
-            incoming,
-            nout,
-            sender: None,
-            recipient: Some(recipient.to_string()),
-            subject: Some(String::new()),
-            body: Some(memo.to_string()),
-            read: false,
-        }
+    let memo = UserMemoT::from_text(sender.as_deref(), &recipient, &memo);
+    let msg = ShieldedMessageT {
+        id_msg: 0,
+        account,
+        id_tx,
+        txid: Some(txid.to_vec()),
+        nout,
+        height,
+        timestamp,
+        incoming,
+        memo: Some(Box::new(memo)),
+        read: false,
     };
     Ok(msg)
 }

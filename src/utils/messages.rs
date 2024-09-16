@@ -1,15 +1,19 @@
 use anyhow::Result;
 use rusqlite::Connection;
+use zcash_protocol::memo::Memo;
 
 use crate::{
-    data::fb::ShieldedMessageT,
+    data::fb::{ShieldedMessageT, UserMemoT},
     db::messages::{navigate_message_by_height, navigate_message_by_subject},
 };
 
-use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result_bytes, CResult}};
+use crate::{
+    coin::COINS,
+    ffi::{map_result_bytes, CResult},
+};
 use flatbuffers::FlatBufferBuilder;
-use std::ffi::{CStr, c_char};
+use std::{ffi::{c_char, CStr}, str::FromStr as _};
+use warp_macros::c_export;
 
 pub fn navigate_message(
     connection: &Connection,
@@ -49,7 +53,8 @@ pub fn prev_message_thread(
     height: u32,
     subject: &str,
 ) -> Result<ShieldedMessageT> {
-    navigate_message(connection, account, height, Some(subject.to_string()), true).map(|m| m.unwrap_or_default())
+    navigate_message(connection, account, height, Some(subject.to_string()), true)
+        .map(|m| m.unwrap_or_default())
 }
 
 #[c_export]
@@ -59,5 +64,59 @@ pub fn next_message_thread(
     height: u32,
     subject: &str,
 ) -> Result<ShieldedMessageT> {
-    navigate_message(connection, account, height, Some(subject.to_string()), false).map(|m| m.unwrap_or_default())
+    navigate_message(
+        connection,
+        account,
+        height,
+        Some(subject.to_string()),
+        false,
+    )
+    .map(|m| m.unwrap_or_default())
+}
+
+impl UserMemoT {
+    pub fn from_text(sender: Option<&str>, recipient: &str, text: &str) -> Self {
+        let memo_lines: Vec<_> = text.splitn(4, '\n').collect();
+        let msg = if memo_lines.len() == 4 && memo_lines[0] == "\u{1F6E1}MSG" {
+            UserMemoT {
+                sender: if memo_lines[1].is_empty() {
+                    sender.map(str::to_string)
+                } else {
+                    Some(memo_lines[1].to_string())
+                },
+                recipient: Some(recipient.to_string()),
+                subject: Some(memo_lines[2].to_string()),
+                body: Some(memo_lines[3].to_string()),
+                reply_to: false,
+            }
+        } else {
+            UserMemoT {
+                sender: None,
+                recipient: Some(recipient.to_string()),
+                subject: Some(String::new()),
+                body: Some(text.to_string()),
+                reply_to: false,
+            }
+        };
+        msg
+    }
+
+    pub fn to_memo(&self) -> Result<Memo> {
+        let sender = if self.reply_to {
+            self.sender.clone()
+        } else {
+            None
+        };
+        let sender = sender.unwrap_or_default();
+        let memo_text = match &self.subject {
+            Some(subject) => {
+                format!("\u{1F6E1}MSG\n{}\n{}\n{}", sender,
+                subject, self.body.as_ref().unwrap())
+            }
+            None => {
+                self.body.clone().unwrap_or_default()
+            }
+        };
+        Ok(Memo::from_str(&memo_text)?)
+    }
 }

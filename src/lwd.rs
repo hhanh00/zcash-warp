@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use anyhow::Result;
 use rpc::{
     BlockId, BlockRange, CompactBlock, Empty, RawTransaction, TransparentAddressBlockFilter,
@@ -18,6 +20,7 @@ use crate::{
 
 use warp_macros::c_export;
 use crate::{coin::COINS, ffi::{map_result, CResult}};
+use std::ffi::{c_char, CStr};
 
 #[path = "./generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod rpc;
@@ -128,13 +131,16 @@ pub async fn get_transparent(
     network: &Network,
     client: &mut Client,
     account: u32,
+    addr_index: u32,
     taddr: TransparentAddress,
     start: u32,
     end: u32,
 ) -> Result<Vec<TransparentTx>> {
+    let taddr_string = taddr.encode(network);
+    tracing::info!("get_transparent {taddr_string}");
     let mut txs = client
         .get_taddress_txids(Request::new(TransparentAddressBlockFilter {
-            address: taddr.encode(network),
+            address: taddr_string,
             range: Some(BlockRange {
                 start: Some(BlockId {
                     height: start as u64,
@@ -180,6 +186,8 @@ pub async fn get_transparent(
         let ttx = TransparentTx {
             account,
             height,
+            addr_index,
+            address: taddr.clone(),
             timestamp: 0, // TODO: Resolve timestamp from block header
             txid: tx.txid().as_ref().clone().try_into().unwrap(),
             vins,
@@ -254,4 +262,13 @@ pub async fn get_transaction(
         BranchId::for_height(network, BlockHeight::from_u32(height)),
     )?;
     Ok((height, tx))
+}
+
+#[c_export]
+pub async fn ping(lwd_url: &str) -> Result<u64> {
+    let start = Instant::now();
+    let mut client = connect_lwd(lwd_url).await?;
+    client.get_lightd_info(Request::new(Empty {})).await?;
+    let elapsed = Instant::now().duration_since(start);
+    Ok(elapsed.as_millis() as u64)
 }

@@ -1,13 +1,32 @@
 use anyhow::Result;
-use rusqlite::Connection;
+use rusqlite::{Connection, OptionalExtension as _};
 use zcash_protocol::consensus::Network;
 
 use crate::{data::fb::BackupT, db::account::get_account_info, types::PoolMask};
 
-use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, map_result_bytes, map_result_string, CResult}};
+use crate::{
+    coin::COINS,
+    ffi::{map_result, map_result_bytes, map_result_string, CResult},
+};
 use flatbuffers::FlatBufferBuilder;
 use std::ffi::{c_char, CStr};
+use warp_macros::c_export;
+
+#[no_mangle]
+pub extern "C" fn c_check_db_password(coin: u8, password: *mut c_char) -> CResult<u8> {
+    let password = unsafe { CStr::from_ptr(password).to_string_lossy() };
+    let coin_def = COINS[coin as usize].lock();
+    let pool = coin_def.pool.as_ref().expect("No db path set");
+    let connection = pool.get().unwrap();
+    let _ = connection
+        .query_row(&format!("PRAGMA key = '{}'", password), [], |_| Ok(()))
+        .optional();
+    let c = connection.query_row("SELECT COUNT(*) FROM sqlite_master", [], |r| {
+        r.get::<_, u32>(0)
+    });
+    let r = if c.is_ok() { 1 } else { 0 };
+    CResult::new(r)
+}
 
 #[c_export]
 pub fn encrypt_db(connection: &Connection, password: &str, new_db_path: &str) -> Result<()> {
@@ -28,7 +47,12 @@ pub fn create_backup(network: &Network, connection: &Connection, account: u32) -
 }
 
 #[c_export]
-pub fn get_address(network: &Network, connection: &Connection, account: u32, mask: u8) -> Result<String> {
+pub fn get_address(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    mask: u8,
+) -> Result<String> {
     let ai = get_account_info(network, &connection, account)?;
     let address = ai
         .to_address(network, PoolMask(mask))

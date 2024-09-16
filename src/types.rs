@@ -78,6 +78,7 @@ pub enum AccountType {
 
 #[derive(Debug)]
 pub struct TransparentAccountInfo {
+    pub index: Option<u32>,
     pub sk: secp256k1::SecretKey,
     pub addr: TransparentAddress,
 }

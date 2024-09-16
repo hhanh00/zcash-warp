@@ -1,36 +1,46 @@
 use anyhow::Result;
 use rusqlite::Connection;
 use zcash_client_backend::encoding::AddressCodec;
+use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{consensus::Network, legacy::TransparentAddress};
 
 use crate::{
     db::{
-        account::{get_account_info, list_accounts},
+        account::list_transparent_addresses,
         notes::list_utxos,
-    }, types::CheckpointHeight, warp::{OutPoint, TransparentTx, UTXO}
+    },
+    types::CheckpointHeight,
+    warp::{OutPoint, TransparentTx, UTXO},
 };
 
 use super::{ReceivedTx, TxValueUpdate};
 
 pub struct TransparentSync {
     pub network: Network,
-    pub addresses: Vec<(u32, TransparentAddress)>,
+    pub addresses: Vec<(u32, u32, TransparentAddress)>,
     pub utxos: Vec<UTXO>,
     pub txs: Vec<(ReceivedTx, OutPoint, u64)>,
     pub tx_updates: Vec<TxValueUpdate<OutPoint>>,
 }
 
 impl TransparentSync {
-    pub fn new(network: &Network, connection: &Connection, height: CheckpointHeight) -> Result<Self> {
-        let accounts = list_accounts(connection)?;
-        let mut addresses = vec![];
-        for a in accounts.iter() {
-            let ai = get_account_info(network, connection, a.id)?;
-            let taddr = ai.transparent.as_ref().map(|ti| ti.addr);
-            if let Some(taddr) = taddr {
-                addresses.push((a.id, taddr));
-            }
-        }
+    pub fn new(
+        _coin: u8,
+        network: &Network,
+        connection: &Connection,
+        height: CheckpointHeight,
+    ) -> Result<Self> {
+        let addresses = list_transparent_addresses(connection)?
+            .iter()
+            .map(|(account, addr_index, address)| {
+                let RecipientAddress::Transparent(ta) =
+                    RecipientAddress::decode(network, &address).unwrap()
+                else {
+                    unreachable!()
+                };
+                (*account, *addr_index, ta)
+            })
+            .collect::<Vec<_>>();
         let utxos = list_utxos(connection, height)?;
 
         Ok(Self {
@@ -84,16 +94,12 @@ impl TransparentSync {
                     txout.value,
                 ));
                 // outputs are filtered for our account
-                let (_, ta) = self
-                    .addresses
-                    .iter()
-                    .find(|(account, _)| *account == tx.account)
-                    .unwrap();
-                let address = ta.encode(&self.network);
+                let address = tx.address.encode(&self.network);
                 self.utxos.push(UTXO {
                     is_new: true,
                     id: 0,
                     account: tx.account,
+                    addr_index: tx.addr_index,
                     height: tx.height,
                     timestamp: tx.timestamp,
                     txid: tx.txid,

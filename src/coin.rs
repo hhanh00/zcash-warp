@@ -4,52 +4,48 @@ use parking_lot::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OptionalExtension;
-use std::{path::Path, time::Duration};
+use std::time::Duration;
 use tonic::transport::{Certificate, ClientTlsConfig};
 
 use zcash_primitives::consensus::Network;
 
-use crate::{cli::CONFIG, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client};
+use crate::{data::fb::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client};
 
 type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 
 #[derive(Clone, Debug)]
 pub struct CoinDef {
+    pub coin: u8,
     pub network: Network,
-    pub url: String,
-    pub warp: String,
     pub pool: Option<Pool<SqliteConnectionManager>>,
     pub db_password: Option<String>,
+    pub config: ConfigT,
 }
 
 impl CoinDef {
-    pub fn from_network(network: Network) -> Self {
+    pub fn from_network(coin: u8, network: Network) -> Self {
         Self {
+            coin,
             network,
-            url: "".to_string(),
-            warp: "".to_string(),
             pool: None,
             db_password: None,
+            config: ConfigT::default(),
         }
     }
 
-    pub fn set_db_path<P: AsRef<Path>>(&mut self, path: P) -> Result<()> {
-        let manager = r2d2_sqlite::SqliteConnectionManager::file(path);
-        let pool = r2d2::Pool::new(manager)?;
-        self.pool = Some(pool);
+    pub fn set_config(&mut self, config: &ConfigT) -> Result<()> {
+        self.config.merge(config);
+        if let Some(path) = self.config.db_path.as_ref() {
+            tracing::info!("Setting pool");
+            let manager = r2d2_sqlite::SqliteConnectionManager::file(path);
+            let pool = r2d2::Pool::new(manager)?;
+            self.pool = Some(pool);
+        }
         Ok(())
     }
 
     pub fn set_password(&mut self, password: &str) {
         self.db_password = Some(password.to_string());
-    }
-
-    pub fn set_url(&mut self, url: &str) {
-        self.url = url.to_string();
-    }
-
-    pub fn set_warp(&mut self, warp: &str) {
-        self.warp = warp.to_string();
     }
 
     pub fn connection(&self) -> Result<Connection> {
@@ -73,7 +69,7 @@ impl CoinDef {
     }
 
     pub async fn connect_lwd(&self) -> Result<Client> {
-        connect_lwd(&self.url).await
+        connect_lwd(self.config.lwd_url.as_ref().unwrap()).await
     }
 }
 
@@ -89,17 +85,15 @@ pub async fn connect_lwd(url: &str) -> Result<Client> {
     Ok(client)
 }
 
-pub fn init_coin() -> Result<()> {
+pub fn cli_init_coin(config: &ConfigT) -> Result<()> {
     let mut zec = COINS[0].lock();
-    zec.set_db_path(&CONFIG.db_path)?;
-    zec.set_url(&CONFIG.lwd_url);
-    zec.set_warp(&CONFIG.warp_url);
+    zec.set_config(config)?;
     Ok(())
 }
 
 lazy_static! {
     pub static ref COINS: [Mutex<CoinDef>; 1] = [
-        Mutex::new(CoinDef::from_network(Network::MainNetwork)),
+        Mutex::new(CoinDef::from_network(0, Network::MainNetwork)),
         // Mutex::new(CoinDef::from_network(Network::YCashMainNetwork)),
     ];
 }

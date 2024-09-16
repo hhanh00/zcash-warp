@@ -7,6 +7,7 @@ mod sapling;
 pub mod sync;
 
 use crate::{lwd::rpc::CompactBlock, Hash};
+use secp256k1::SecretKey;
 use serde::{Deserialize, Serialize};
 
 pub(crate) const MERKLE_DEPTH: u8 = 32;
@@ -71,9 +72,11 @@ pub struct TxOut2 {
     pub vout: u32,
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct TransparentTx {
     pub account: u32,
+    pub addr_index: u32,
+    pub address: TransparentAddress,
     pub height: u32,
     pub timestamp: u32,
     pub txid: Hash,
@@ -86,12 +89,19 @@ pub struct UTXO {
     pub is_new: bool,
     pub id: u32,
     pub account: u32,
+    pub addr_index: u32,
     pub height: u32,
     pub timestamp: u32,
     pub txid: Hash,
     pub vout: u32,
     pub address: String,
     pub value: u64,
+}
+
+#[derive(Debug)]
+pub struct TransparentSK {
+    pub address: String,
+    pub sk: SecretKey,
 }
 
 pub use decrypter::{try_orchard_decrypt, try_sapling_decrypt};

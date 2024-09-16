@@ -1,6 +1,11 @@
-use crate::{cli::init_config, coin::{init_coin, COINS}, data::fb::AppConfig, ffi::{CParam, CResult}, Hash};
+use anyhow::Result;
+use crate::{cli::init_config, data::fb::{Config, ConfigT}, Hash};
 use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
 
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CParam, CResult}};
+
+pub mod keys;
 pub mod db;
 pub mod ua;
 pub mod uri;
@@ -12,17 +17,16 @@ pub mod pay;
 pub mod tx;
 
 pub fn init_tracing() {
-    tracing_subscriber::registry()
+    let _ = tracing_subscriber::registry()
         .with(fmt::layer().with_ansi(false).compact())
         .with(EnvFilter::from_default_env())
-        .init();
+        .try_init();
+    tracing::info!("Tracing initialized");
 }
 
 #[no_mangle]
 pub extern "C" fn c_setup() {
     init_tracing();
-    init_config();
-    init_coin().unwrap();
 }
 
 #[macro_export]
@@ -62,25 +66,30 @@ pub fn to_txid_str(txid: &Hash) -> String {
     hex::encode(&txid)
 }
 
-#[no_mangle]
-pub extern "C" fn c_configure(coin: u8, config: CParam) -> CResult<u8> {
-    let config_bytes = config.value;
-    let config_len = config.len as usize;
-    let config = unsafe {
-        Vec::from_raw_parts(config_bytes, config_len, config_len)
-    };
-    let config = flatbuffers::root::<AppConfig>(&config).unwrap();
-    let config = config.unpack();
+#[c_export]
+pub fn configure(coin: u8, config: &ConfigT) -> Result<()> {
     tracing::info!("{:?}", config);
     let mut coin_def = COINS[coin as usize].lock();
-    if let Some(db) = config.db { 
-        coin_def.set_db_path(&db).unwrap();
+    coin_def.set_config(config)?;
+    Ok(())
+}
+
+impl ConfigT {
+    pub fn merge(&mut self, other: &ConfigT) {
+        if other.db_path.is_some() {
+            self.db_path = other.db_path.clone();
+        }
+        if other.lwd_url.is_some() {
+            self.lwd_url = other.lwd_url.clone();
+        }
+        if other.warp_url.is_some() {
+            self.warp_url = other.warp_url.clone();
+        }
+        if other.confirmations > 0 {
+            self.confirmations = other.confirmations;
+        }
+        if other.warp_end_height > 0 {
+            self.warp_end_height = other.warp_end_height;
+        }
     }
-    if let Some(url) = config.url { 
-        coin_def.set_url(&url);
-    }
-    if let Some(warp) = config.warp { 
-        coin_def.set_warp(&warp);
-    }
-    CResult::new(0)
 }

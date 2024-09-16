@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
@@ -50,14 +48,16 @@ pub async fn prepare_payment(
         .unwrap()
         .iter()
         .map(|p| {
-            let memo = Memo::from_str(p.memo_string.as_ref().unwrap()).unwrap();
-            PaymentItem {
+            let memo = p.memo.clone().map(|m| m.to_memo()).transpose()?;
+            let memo2 = p.memo_bytes.clone().map(|mb| Memo::from_bytes(&mb)).transpose()?;
+            let memo = memo.or(memo2).map(|m| m.into());
+            Ok(PaymentItem {
                 address: p.address.clone().unwrap(),
                 amount: p.amount,
-                memo: Some(memo.into()),
-            }
+                memo,
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>>>()?;
     let p = Payment { recipients };
     let unsigned_tx = make_payment(
         network,
@@ -173,7 +173,7 @@ pub async fn prepare_sweep_tx_by_sk(
     destination_address: &str,
 ) -> Result<TransactionSummaryT> {
     let sk = import_sk_bip38(sk)?;
-    let ti = TransparentAccountInfo::from_secret_key(sk, true);
+    let ti = TransparentAccountInfo::from_secret_key(&sk, true);
     let address = ti.addr.encode(network);
     let mut client = connect_lwd(&url).await?;
     let bc_height = get_last_height(&mut client).await?;

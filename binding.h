@@ -43,6 +43,12 @@ typedef struct CResult_____c_char {
   uint32_t len;
 } CResult_____c_char;
 
+typedef struct CResult_u64 {
+  uint64_t value;
+  char *error;
+  uint32_t len;
+} CResult_u64;
+
 struct CResult_u8 c_add_contact(uint8_t coin,
                                 uint32_t account,
                                 char *name,
@@ -64,6 +70,8 @@ struct CResult_u8 c_set_account_property(uint8_t coin,
                                          char *name,
                                          struct CParam value);
 
+struct CResult______u8 c_get_spendings(uint8_t coin, uint32_t account, uint32_t timestamp);
+
 struct CResult_u32 c_create_new_account(uint8_t coin,
                                         char *name,
                                         char *key,
@@ -75,6 +83,10 @@ struct CResult_u8 c_edit_account_name(uint8_t coin, uint32_t account, char *name
 struct CResult_u8 c_edit_account_birth(uint8_t coin, uint32_t account, uint32_t birth);
 
 struct CResult_u8 c_delete_account(uint8_t coin, uint32_t account);
+
+struct CResult_u8 c_set_backup_reminder(uint8_t coin, uint32_t account, bool saved);
+
+struct CResult_u32 c_store_contact(uint8_t coin, struct CParam contact);
 
 struct CResult______u8 c_list_contact_cards(uint8_t coin);
 
@@ -108,6 +120,8 @@ struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(uint8_t coin)
 
 struct CResult_u32 c_get_last_height(uint8_t coin);
 
+struct CResult_u64 c_ping(uint8_t coin, char *lwd_url);
+
 struct CResult_u8 c_init_sapling_prover(uint8_t coin, struct CParam spend, struct CParam output);
 
 struct CResult_u8 c_retrieve_tx_details(uint8_t coin);
@@ -115,6 +129,10 @@ struct CResult_u8 c_retrieve_tx_details(uint8_t coin);
 void c_setup(void);
 
 struct CResult_u8 c_configure(uint8_t coin, struct CParam config);
+
+struct CResult______u8 c_derive_zip32_keys(uint8_t coin, uint32_t account, uint32_t acc_index);
+
+struct CResult_u8 c_check_db_password(uint8_t coin, char *password);
 
 struct CResult_u8 c_encrypt_db(uint8_t coin, char *password, char *new_db_path);
 

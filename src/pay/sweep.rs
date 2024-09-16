@@ -51,7 +51,8 @@ pub async fn scan_utxo_by_address(
         let utxo = UTXO {
             is_new: false,
             id: 0,
-            account,
+            account, // TODO Should we set account to 0 to indicate this not coming from us?
+            addr_index: 0,
             height,
             timestamp: 0, // no need to retrieve block timestamp for a sweep
             txid: utxo.txid.try_into().unwrap(),

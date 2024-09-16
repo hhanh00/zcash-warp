@@ -12,7 +12,7 @@ use rusqlite::{params, Connection, OptionalExtension, Transaction};
 
 use crate::{
     coin::COINS,
-    ffi::{map_result_bytes, map_result, CResult},
+    ffi::{map_result, map_result_bytes, CResult},
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
@@ -213,9 +213,11 @@ pub fn store_witness(
 pub fn list_utxos(connection: &Connection, height: CheckpointHeight) -> Result<Vec<UTXO>> {
     let height: u32 = height.into();
     let mut s = connection.prepare(
-        "SELECT u.id_utxo, u.account, u.height, u.timestamp, u.txid, u.vout, t.address,
-        u.value FROM utxos u, t_accounts t WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
-        AND u.account = t.account",
+        "SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
+        u.value FROM utxos u
+        JOIN t_accounts t ON u.account = t.account
+        JOIN t_subaccounts s ON s.account = t.account AND s.addr_index = u.addr_index
+        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)",
     )?;
     let rows = s.query_map([height], |r| {
         Ok((
@@ -223,19 +225,21 @@ pub fn list_utxos(connection: &Connection, height: CheckpointHeight) -> Result<V
             r.get::<_, u32>(1)?,
             r.get::<_, u32>(2)?,
             r.get::<_, u32>(3)?,
-            r.get::<_, Vec<u8>>(4)?,
-            r.get::<_, u32>(5)?,
-            r.get::<_, String>(6)?,
-            r.get::<_, u64>(7)?,
+            r.get::<_, u32>(4)?,
+            r.get::<_, Vec<u8>>(5)?,
+            r.get::<_, u32>(6)?,
+            r.get::<_, String>(7)?,
+            r.get::<_, u64>(8)?,
         ))
     })?;
     let mut utxos = vec![];
     for r in rows {
-        let (id_utxo, account, height, timestamp, txid, vout, address, value) = r?;
+        let (id_utxo, account, addr_index, height, timestamp, txid, vout, address, value) = r?;
         let utxo = UTXO {
             is_new: false,
             id: id_utxo,
             account,
+            addr_index,
             height,
             timestamp,
             txid: txid.try_into().unwrap(),
@@ -252,15 +256,12 @@ pub fn list_utxos(connection: &Connection, height: CheckpointHeight) -> Result<V
 pub fn store_utxo(
     connection: &Transaction,
     utxo: &UTXO,
-    // tx: &ReceivedTx,
-    // outpoint: &OutPoint,
-    // value: u64,
 ) -> Result<()> {
     if utxo.is_new {
         let mut s = connection.prepare_cached(
             "INSERT INTO utxos
-            (account, height, timestamp, txid, vout, value, spent)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            (account, height, timestamp, txid, vout, addr_index, value, spent)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
             ON CONFLICT DO NOTHING",
         )?;
         s.execute(params![
@@ -269,6 +270,7 @@ pub fn store_utxo(
             utxo.timestamp,
             utxo.txid,
             utxo.vout,
+            utxo.addr_index,
             utxo.value,
             None::<u32>
         ])?;
@@ -299,6 +301,20 @@ pub fn update_tx_timestamp<'a, I: IntoIterator<Item = &'a Option<BlockHeader>>>(
     Ok(())
 }
 
+pub fn update_account_balances(connection: &Transaction, height: u32) -> Result<()> {
+    connection.execute(
+        "UPDATE accounts SET balance = coins.balance FROM 
+        (WITH coins AS
+        (SELECT account, value, spent FROM notes UNION 
+        SELECT account, value, spent FROM utxos)
+        SELECT account, SUM(value) AS balance FROM coins 
+        WHERE spent IS NULL OR spent > ?1 GROUP BY account)
+        AS coins WHERE coins.account = accounts.id_account",
+        [height],
+    )?;
+    Ok(())
+}
+
 #[c_export]
 pub fn get_unspent_notes(
     connection: &Connection,
@@ -306,7 +322,7 @@ pub fn get_unspent_notes(
     bc_height: u32,
 ) -> Result<Vec<ShieldedNoteT>> {
     let mut s = connection.prepare(
-        "SELECT n.height, t.timestamp, n.value, n.orchard, n.excluded
+        "SELECT n.id_note, n.height, t.timestamp, n.value, n.orchard, n.excluded
         FROM notes n JOIN txs t ON n.tx = t.id_tx
         WHERE n.account = ?1 AND spent IS NULL
         ORDER BY n.height DESC",
@@ -315,15 +331,17 @@ pub fn get_unspent_notes(
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, u32>(1)?,
-            r.get::<_, u64>(2)?,
-            r.get::<_, bool>(3)?,
+            r.get::<_, u32>(2)?,
+            r.get::<_, u64>(3)?,
             r.get::<_, bool>(4)?,
+            r.get::<_, bool>(5)?,
         ))
     })?;
     let mut notes = vec![];
     for r in rows {
-        let (height, timestamp, value, orchard, excluded) = r?;
+        let (id, height, timestamp, value, orchard, excluded) = r?;
         let note = ShieldedNoteT {
+            id_note: id,
             height,
             confirmations: bc_height - height + 1,
             timestamp,

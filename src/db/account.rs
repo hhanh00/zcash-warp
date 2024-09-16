@@ -5,42 +5,66 @@ use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address,
     AddressCodec as _,
 };
+use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::consensus::{Network, NetworkConstants as _};
 use zcash_primitives::legacy::TransparentAddress;
 
-use warp_macros::c_export;
+use crate::account::contacts::recipient_contains;
 use crate::coin::COINS;
-use crate::data::fb::{AccountNameT, BalanceT};
-use crate::ffi::{map_result, map_result_bytes, CResult, CParam};
+use crate::data::fb::{AccountNameT, BalanceT, SpendingT};
+use crate::db::contacts::list_contacts;
+use crate::ffi::{map_result, map_result_bytes, CParam, CResult};
 use crate::keys::import_sk_bip38;
 use crate::types::{AccountInfo, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
+use crate::warp::TransparentSK;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use std::ffi::{c_char, CStr};
+use warp_macros::c_export;
 
 #[c_export]
-pub fn list_accounts(connection: &Connection) -> Result<Vec<AccountNameT>> {
-    let mut s = connection
-        .prepare("SELECT id_account, name, address, birth FROM accounts ORDER BY id_account")?;
+pub fn list_accounts(coin: u8, connection: &Connection) -> Result<Vec<AccountNameT>> {
+    let mut s = connection.prepare(
+        "SELECT id_account, key_type, name, birth, balance FROM accounts ORDER BY id_account",
+    )?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
-            r.get::<_, String>(1)?,
+            r.get::<_, u8>(1)?,
             r.get::<_, String>(2)?,
             r.get::<_, u32>(3)?,
+            r.get::<_, u64>(4)?,
         ))
     })?;
     let mut accounts = vec![];
     for r in rows {
-        let (id, name, address, birth) = r?;
+        let (id, key_type, name, birth, balance) = r?;
         accounts.push(AccountNameT {
+            coin,
             id,
+            key_type,
             name: Some(name),
-            sapling_address: Some(address),
             birth,
+            balance,
         });
     }
 
     Ok(accounts)
+}
+
+pub fn list_transparent_addresses(connection: &Connection) -> Result<Vec<(u32, u32, String)>> {
+    let mut s = connection.prepare("SELECT account, addr_index, address FROM t_subaccounts")?;
+    let rows = s.query_map([], |r| {
+        Ok((
+            r.get::<_, u32>(0)?,
+            r.get::<_, u32>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
+    let mut res = vec![];
+    for r in rows {
+        res.push(r?);
+    }
+    Ok(res)
 }
 
 pub fn get_account_info(
@@ -49,13 +73,14 @@ pub fn get_account_info(
     account: u32,
 ) -> Result<AccountInfo> {
     let ai = connection.query_row(
-        "SELECT a.name, a.seed, a.aindex, a.sk as ssk, a.vk as svk, a.address as saddr,
-        a.birth,
-        t.sk as tsk, t.address as taddr,
+        "SELECT a.name, a.seed, a.aindex, a.birth,
+        t.addr_index as tidx, t.sk as tsk, t.address as taddr,
+        s.sk as ssk, s.vk as svk, s.address as saddr,
         o.sk as osk, o.vk as ovk,
         a.saved
         FROM accounts a
         LEFT JOIN t_accounts t ON t.account = a.id_account
+        LEFT JOIN s_accounts s ON s.account = a.id_account
         LEFT JOIN o_accounts o ON o.account = a.id_account
         WHERE id_account = ?1",
         [account],
@@ -64,10 +89,11 @@ pub fn get_account_info(
             let ti = match taddr {
                 None => None,
                 Some(taddr) => {
+                    let index = r.get::<_, Option<u32>>("tidx")?;
                     let tsk = r.get::<_, String>("tsk")?;
                     let sk = import_sk_bip38(&tsk).unwrap();
                     let addr = TransparentAddress::decode(network, &taddr).unwrap();
-                    let ti = TransparentAccountInfo { sk, addr };
+                    let ti = TransparentAccountInfo { index, sk, addr };
                     Some(ti)
                 }
             };
@@ -122,6 +148,20 @@ pub fn get_account_info(
         },
     )?;
     Ok(ai)
+}
+
+pub fn list_account_tsk(connection: &Connection, account: u32) -> Result<Vec<TransparentSK>> {
+    let mut s = connection.prepare("SELECT address, sk FROM t_subaccounts WHERE account = ?1")?;
+    let rows = s.query_map([account], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })?;
+    let mut tsks = vec![];
+    for r in rows {
+        let (address, sk) = r?;
+        let sk = import_sk_bip38(&sk)?;
+        tsks.push(TransparentSK { address, sk });
+    }
+    Ok(tsks)
 }
 
 #[c_export]
@@ -185,4 +225,39 @@ pub fn set_account_property(
         params![account, name, value],
     )?;
     Ok(())
+}
+
+#[c_export]
+pub fn get_spendings(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    timestamp: u32,
+) -> Result<Vec<SpendingT>> {
+    let contacts = list_contacts(network, connection)?;
+    let mut s = connection.prepare(
+        "SELECT -SUM(value) as v, t.address FROM txs t
+        WHERE account = ?1 AND timestamp >= ?2 AND value < 0
+        AND t.address IS NOT NULL GROUP BY t.address ORDER BY v ASC LIMIT 5",
+    )?;
+    let rows = s.query_map(params![account, timestamp], |r| {
+        Ok((r.get::<_, u64>(0)?, r.get::<_, Option<String>>(1)?))
+    })?;
+    let mut spendings = vec![];
+    for r in rows {
+        let (value, mut address) = r?;
+        if let Some(a) = &address {
+            let ra = RecipientAddress::decode(network, a).unwrap();
+            for c in contacts.iter() {
+                if recipient_contains(&c.address, &ra)? {
+                    address = c.card.name.clone();
+                }
+            }
+        }
+        spendings.push(SpendingT {
+            recipient: address,
+            amount: value,
+        });
+    }
+    Ok(spendings)
 }

@@ -13,10 +13,8 @@ use figment::{
     Figment,
 };
 use hex::FromHexError;
-use parking_lot::Mutex;
 use rand::rngs::OsRng;
 use rusqlite::{Connection, DropBehavior};
-use serde::Deserialize;
 use zcash_protocol::consensus::{Network, NetworkUpgrade, Parameters};
 
 use crate::{
@@ -25,22 +23,28 @@ use crate::{
         txs::get_txs,
     },
     coin::CoinDef,
-    data::fb::{
-        PacketT, PacketsT, PaymentRequestT, PaymentRequestsT, TransactionSummaryT,
-    },
+    data::fb::{ConfigT, PacketT, PacketsT, PaymentRequestT, PaymentRequestsT, TransactionSummaryT},
     db::{
-        account::{get_account_property, get_balance, list_accounts, set_account_property}, account_manager::{
+        account::{get_account_property, get_balance, list_accounts, set_account_property},
+        account_manager::{
             create_new_account, delete_account, edit_account_birth, edit_account_name,
-            get_min_birth,
-        }, chain::{get_sync_height, list_checkpoints, rewind, snap_to_checkpoint, store_block, truncate_scan}, contacts::{
+            get_min_birth, new_transparent_address,
+        },
+        chain::{
+            get_sync_height, list_checkpoints, rewind, snap_to_checkpoint, store_block,
+            truncate_scan,
+        },
+        contacts::{
             delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts,
-        }, messages::{get_message, list_messages, mark_all_read, mark_read}, notes::{
-            exclude_note, get_unspent_notes, reverse_note_exclusion
-        }, reset_tables, tx::{get_tx_details, get_txid, store_tx_details}
+        },
+        messages::{get_message, list_messages, mark_all_read, mark_read},
+        notes::{exclude_note, get_unspent_notes, reverse_note_exclusion},
+        reset_tables,
+        tx::{get_tx_details, get_txid, store_tx_details},
     },
     keys::generate_random_mnemonic_phrase,
     lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
-    txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details_inner},
+    txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::CheckpointHeight,
     utils::{
         chain::{get_activation_date, get_height_by_time},
@@ -58,16 +62,6 @@ use crate::{
     EXPIRATION_HEIGHT_DELTA,
 };
 
-#[derive(Deserialize)]
-pub struct Config {
-    pub db_path: String,
-    pub lwd_url: String,
-    pub warp_url: String,
-    pub warp_end_height: u32,
-    pub seed: String,
-    pub confirmations: u32,
-}
-
 #[derive(Parser, Clone, Debug)]
 pub struct Account {
     #[structopt(subcommand)]
@@ -78,7 +72,7 @@ pub struct Account {
 pub enum AccountCommand {
     List,
     Create {
-        key: Option<String>,
+        key: String,
         name: Option<String>,
         birth: Option<u32>,
     },
@@ -91,6 +85,9 @@ pub enum AccountCommand {
         birth: u32,
     },
     Delete {
+        account: u32,
+    },
+    NewTransparentAddress {
         account: u32,
     },
     SetProperty {
@@ -345,16 +342,18 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let connection = zec.connection()?;
             match account_cmd.command {
                 AccountCommand::List => {
-                    let accounts = list_accounts(&connection)?;
+                    let accounts = list_accounts(zec.coin, &connection)?;
                     println!("{}", serde_json::to_string_pretty(&accounts)?);
                 }
                 AccountCommand::Create { key, name, birth } => {
                     let mut client = zec.connect_lwd().await?;
                     let bc_height = get_last_height(&mut client).await?;
-                    let key = key.unwrap_or(CONFIG.seed.clone());
                     let name = name.unwrap_or("<unnamed>".to_string());
                     let birth = birth.unwrap_or(bc_height);
                     create_new_account(network, &connection, &name, &key, 0, birth)?;
+                }
+                AccountCommand::NewTransparentAddress { account } => {
+                    new_transparent_address(network, &connection, account)?;
                 }
                 AccountCommand::EditName { account, name } => {
                     edit_account_name(&connection, account, &name)?;
@@ -410,7 +409,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                     let mut client = zec.connect_lwd().await?;
                     let bc_height = get_last_height(&mut client).await?;
                     let cp_height =
-                        snap_to_checkpoint(&connection, bc_height - CONFIG.confirmations + 1)?;
+                        snap_to_checkpoint(&connection, bc_height - zec.config.confirmations + 1)?;
                     let (s_tree, o_tree) = get_tree_state(&mut client, cp_height).await?;
                     let summary = commit_unsaved_contacts(
                         network,
@@ -454,11 +453,13 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 }
                 MessageCommand::PrevInThread { id } => {
                     let m = get_message(&connection, id)?;
-                    navigate_message(&connection, m.account, m.height, m.subject, true)
+                    let subject = m.memo.as_ref().and_then(|m| m.subject.clone());
+                    navigate_message(&connection, m.account, m.height, subject, true)
                 }
                 MessageCommand::NextInThread { id } => {
                     let m = get_message(&connection, id)?;
-                    navigate_message(&connection, m.account, m.height, m.subject, false)
+                    let subject = m.memo.as_ref().and_then(|m| m.subject.clone());
+                    navigate_message(&connection, m.account, m.height, subject, false)
                 }
                 MessageCommand::List { account } => {
                     let msgs = list_messages(&connection, account)?;
@@ -545,19 +546,17 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 println!("{:?}", data.data.map(|d| hex::encode(&d)));
             }
         },
-        Command::Checkpoint(checkpoint_command) => {
-            match checkpoint_command.command {
-                CheckpointCommand::List => {
-                    let connection = zec.connection()?;
-                    let checkpoints = list_checkpoints(&connection)?;
-                    println!("{checkpoints:?}");
-                }
-                CheckpointCommand::Rewind { height } => {
-                    let connection = zec.connection()?;
-                    rewind(&connection, height)?;
-                }
+        Command::Checkpoint(checkpoint_command) => match checkpoint_command.command {
+            CheckpointCommand::List => {
+                let connection = zec.connection()?;
+                let checkpoints = list_checkpoints(&connection)?;
+                println!("{checkpoints:?}");
             }
-        }
+            CheckpointCommand::Rewind { height } => {
+                let connection = zec.connection()?;
+                rewind(&connection, height)?;
+            }
+        },
         Command::GenerateSeed => {
             let seed = generate_random_mnemonic_phrase(&mut OsRng);
             println!("{seed}");
@@ -614,8 +613,8 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             }
             let end_height = (start_height + 100_000).min(end_height);
             warp_sync(&zec, CheckpointHeight(start_height), end_height).await?;
-            let connection = Mutex::new(zec.connection()?);
-            retrieve_tx_details_inner(network, connection, zec.url.clone()).await?;
+            let connection = zec.connection()?;
+            retrieve_tx_details(network, &connection, zec.config.lwd_url.clone().unwrap()).await?;
         },
         Command::Address { account, mask } => {
             let connection = zec.connection()?;
@@ -640,7 +639,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let p = PaymentRequestT {
                 address: Some(address.clone()),
                 amount,
-                memo_string: Some(String::new()),
+                memo: None,
                 memo_bytes: None,
             };
             let recipients = PaymentRequestsT {
@@ -654,7 +653,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 &recipients,
                 pools,
                 fee_paid_by_sender != 0,
-                CONFIG.confirmations,
+                zec.config.confirmations,
             )
             .await?;
             *txbytes = display_tx(network, &connection, summary)?;
@@ -667,7 +666,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let tx = analyze_raw_transaction(
                 network,
                 &connection,
-                zec.url.clone(),
+                zec.config.lwd_url.clone().unwrap(),
                 height,
                 timestamp,
                 account,
@@ -690,9 +689,9 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let summary = prepare_sweep_tx(
                 network,
                 &connection,
-                zec.url.clone(),
+                zec.config.lwd_url.clone().unwrap(),
                 account,
-                CONFIG.confirmations,
+                zec.config.confirmations,
                 &destination_address,
                 50,
             )
@@ -708,10 +707,10 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let summary = prepare_sweep_tx_by_sk(
                 network,
                 &connection,
-                zec.url.clone(),
+                zec.config.lwd_url.clone().unwrap(),
                 account,
                 &secret_key,
-                CONFIG.confirmations,
+                zec.config.confirmations,
                 &destination_address,
             )
             .await?;
@@ -754,7 +753,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 &recipients,
                 7,
                 true,
-                CONFIG.confirmations,
+                zec.config.confirmations,
             )
             .await?;
             *txbytes = display_tx(network, &connection, summary)?;
@@ -763,6 +762,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let clear = clear.unwrap_or(1);
             if clear != 0 {
                 if !txbytes.is_empty() {
+                    tracing::info!("{}", hex::encode(&txbytes));
                     let mut client = zec.connect_lwd().await?;
                     let bc_height = get_last_height(&mut client).await?;
                     let r = broadcast(&mut client, bc_height, &txbytes).await?;
@@ -774,11 +774,9 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
     Ok(())
 }
 
-pub fn cli_main() -> Result<()> {
-    let mut zec = CoinDef::from_network(zcash_primitives::consensus::Network::MainNetwork);
-    zec.set_db_path(&CONFIG.db_path).unwrap();
-    zec.set_url(&CONFIG.lwd_url);
-    zec.set_warp(&CONFIG.warp_url);
+pub fn cli_main(config: &ConfigT) -> Result<()> {
+    let mut zec = CoinDef::from_network(0, zcash_primitives::consensus::Network::MainNetwork);
+    zec.set_config(config)?;
     let prompt = DefaultPrompt {
         left_prompt: DefaultPromptSegment::Basic("zcash-warp".to_owned()),
         ..DefaultPrompt::default()
@@ -802,15 +800,11 @@ pub fn cli_main() -> Result<()> {
     Ok(())
 }
 
-pub fn init_config() -> Config {
-    let config: Config = Figment::new()
+pub fn init_config() -> ConfigT {
+    let config: ConfigT = Figment::new()
         .merge(Toml::file("App.toml"))
         .merge(Env::prefixed("ZCASH_WARP_"))
         .extract()
         .unwrap();
     config
-}
-
-lazy_static::lazy_static! {
-    pub static ref CONFIG: Config = init_config();
 }

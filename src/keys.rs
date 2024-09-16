@@ -79,11 +79,11 @@ pub fn derive_bip32(
     );
     let ext = ExtendedPrivKey::derive(seed.as_bytes(), &*bip44_path).unwrap();
     let sk = SecretKey::from_slice(&ext.secret()).unwrap();
-    TransparentAccountInfo::from_secret_key(sk, compressed)
+    TransparentAccountInfo::from_secret_key(&sk, compressed)
 }
 
 impl TransparentAccountInfo {
-    pub fn from_secret_key(sk: SecretKey, compressed: bool) -> Self {
+    pub fn from_secret_key(sk: &SecretKey, compressed: bool) -> Self {
         let secp = Secp256k1::<All>::new();
         let pub_key = PublicKey::from_secret_key(&secp, &sk);
         let pub_key = if compressed {
@@ -93,7 +93,7 @@ impl TransparentAccountInfo {
         };
         let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
         let addr = TransparentAddress::PublicKeyHash(pub_key.into());
-        TransparentAccountInfo { sk, addr }
+        TransparentAccountInfo { index: None, sk: sk.clone(), addr }
     }
 }
 

@@ -1,11 +1,17 @@
 use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension as _, Row};
 
-use crate::{data::fb::ShieldedMessageT, txdetails::TransactionDetails};
+use crate::{
+    data::fb::{ShieldedMessageT, UserMemoT},
+    txdetails::TransactionDetails,
+};
 
-use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result_bytes, map_result, CResult}};
+use crate::{
+    coin::COINS,
+    ffi::{map_result, map_result_bytes, CResult},
+};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use warp_macros::c_export;
 
 pub fn navigate_message_by_height(
     connection: &Connection,
@@ -77,10 +83,36 @@ pub fn navigate_message_by_subject(
 }
 
 pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT> {
-    let r = connection.query_row("SELECT m.id_msg, m.account, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
+    let r = connection.query_row(
+        "SELECT m.id_msg, m.account, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
         m.recipient, m.subject, m.body, m.read, t.id_tx FROM msgs m JOIN txs t
-        ON m.txid = t.txid WHERE m.id_msg = ?1", [id], select_message)?;
-    let (id_msg, account, height, timestamp, txid, nout, incoming, sender, recipient, subject, body, read, id_tx) = r;
+        ON m.txid = t.txid WHERE m.id_msg = ?1",
+        [id],
+        select_message,
+    )?;
+    let (
+        id_msg,
+        account,
+        height,
+        timestamp,
+        txid,
+        nout,
+        incoming,
+        sender,
+        recipient,
+        subject,
+        body,
+        read,
+        id_tx,
+    ) = r;
+    let memo = UserMemoT {
+        reply_to: false,
+        sender,
+        recipient,
+        subject: Some(subject),
+        body: Some(body),
+    };
+
     let msg = ShieldedMessageT {
         id_msg,
         account,
@@ -90,10 +122,7 @@ pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT>
         timestamp,
         incoming,
         nout,
-        sender,
-        recipient,
-        subject: Some(subject),
-        body: Some(body),
+        memo: Some(Box::new(memo)),
         read,
     };
     Ok(msg)
@@ -109,7 +138,30 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
     let rows = s.query_map([account], select_message)?;
     let mut msgs = vec![];
     for r in rows {
-        let (id_msg, account, height, timestamp, txid, nout, incoming, sender, recipient, subject, body, read, id_tx) = r?;
+        let (
+            id_msg,
+            account,
+            height,
+            timestamp,
+            txid,
+            nout,
+            incoming,
+            sender,
+            recipient,
+            subject,
+            body,
+            read,
+            id_tx,
+        ) = r?;
+
+        let memo = UserMemoT {
+            reply_to: false,
+            sender,
+            recipient,
+            subject: Some(subject),
+            body: Some(body),
+        };
+
         let msg = ShieldedMessageT {
             id_msg,
             account,
@@ -119,10 +171,7 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
             timestamp,
             incoming,
             nout,
-            sender,
-            recipient,
-            subject: Some(subject),
-            body: Some(body),
+            memo: Some(Box::new(memo)),
             read,
         };
         msgs.push(msg);
@@ -130,8 +179,23 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
     Ok(msgs)
 }
 
-fn select_message(r: &Row) -> rusqlite::Result<(u32, u32, u32, u32, Vec<u8>, u32,
-    bool, Option<String>, Option<String>, String, String, bool, u32)> {
+fn select_message(
+    r: &Row,
+) -> rusqlite::Result<(
+    u32,
+    u32,
+    u32,
+    u32,
+    Vec<u8>,
+    u32,
+    bool,
+    Option<String>,
+    Option<String>,
+    String,
+    String,
+    bool,
+    u32,
+)> {
     Ok((
         r.get(0)?,
         r.get(1)?,
@@ -163,6 +227,7 @@ pub fn store_message(
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, false)
         ON CONFLICT DO NOTHING",
     )?;
+    let memo = message.memo.as_ref().unwrap();
     s.execute(params![
         account,
         tx.height,
@@ -170,10 +235,10 @@ pub fn store_message(
         tx.txid,
         nout,
         message.incoming,
-        message.sender,
-        message.recipient,
-        message.subject,
-        message.body
+        memo.sender,
+        memo.recipient,
+        memo.subject,
+        memo.body
     ])?;
     Ok(())
 }

@@ -5,11 +5,12 @@ use zcash_primitives::consensus::Network;
 
 use warp_macros::c_export;
 use crate::coin::COINS;
-use crate::ffi::{map_result, map_result_bytes, CResult};
-use crate::{data::fb::ContactCardT, types::Contact};
+use crate::ffi::{map_result, map_result_bytes, CParam, CResult};
+use crate::{data::fb::{ContactCard, ContactCardT}, types::Contact};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use std::ffi::{CStr, c_char};
 
+#[c_export]
 pub fn store_contact(connection: &Connection, contact: &ContactCardT) -> Result<u32> {
     let id = connection.query_row(
         "INSERT INTO contacts(account, name, address, saved)

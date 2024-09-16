@@ -47,13 +47,14 @@ struct BridgeExt<'a> {
 
 impl Synchronizer {
     pub fn new(
+        coin: u8,
         network: &Network,
         connection: &Connection,
         start: CheckpointHeight,
         position: u32,
         tree_state: Edge,
     ) -> Result<Self> {
-        let accounts = list_accounts(connection)?;
+        let accounts = list_accounts(coin, connection)?;
         let mut account_infos = vec![];
         for a in accounts {
             let ai = get_account_info(network, connection, a.id)?;

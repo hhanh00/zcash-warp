@@ -1,11 +1,9 @@
 use crate::{
-    cli::CONFIG,
     coin::{connect_lwd, CoinDef, COINS},
     db::{
         chain::{get_block_header, get_sync_height, rewind_checkpoint, store_block},
         notes::{
-            mark_shielded_spent, mark_transparent_spent,
-            store_received_note, store_utxo, update_tx_timestamp,
+            mark_shielded_spent, mark_transparent_spent, store_received_note, store_utxo, update_account_balances, update_tx_timestamp
         },
         tx::add_tx_value,
     },
@@ -122,6 +120,7 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
 
     let sap_hasher = SaplingHasher::default();
     let mut sap_dec = SaplingSync::new(
+        coin.coin,
         &coin.network,
         &connection,
         start,
@@ -131,6 +130,7 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
 
     let orch_hasher = OrchardHasher::default();
     let mut orch_dec = OrchardSync::new(
+        coin.coin,
         &coin.network,
         &connection,
         start,
@@ -138,14 +138,15 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
         orchard_state.to_edge(&orch_hasher),
     )?;
 
-    let mut trp_dec = TransparentSync::new(&coin.network, &connection, start)?;
+    let mut trp_dec = TransparentSync::new(coin.coin, &coin.network, &connection, start)?;
 
     let addresses = trp_dec.addresses.clone();
-    for (account, taddr) in addresses.into_iter() {
+    for (account, addr_index, taddr) in addresses.into_iter() {
         let txs = get_transparent(
             &coin.network,
             &mut client,
             account,
+            addr_index,
             taddr,
             start.into(),
             end,
@@ -164,11 +165,12 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
     let bh = get_block_header(&connection, start.into())?;
     let mut prev_hash = bh.hash;
 
-    let block_url = if end < CONFIG.warp_end_height {
-        &coin.warp
+    let block_url = if end < coin.config.warp_end_height {
+        coin.config.warp_url.as_ref().unwrap()
     } else {
-        &coin.url
+        coin.config.lwd_url.as_ref().unwrap()
     };
+    tracing::info!("Using LWD block server {block_url}");
     let mut block_client = connect_lwd(block_url).await?;
     let mut blocks = get_compact_block_range(&mut block_client, u32::from(start) + 1, end).await?;
     let mut bs = vec![];
@@ -252,6 +254,7 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
         update_tx_timestamp(&db_tx, header_dec.heights.values())?;
 
         store_block(&db_tx, &bh)?;
+        update_account_balances(&db_tx, bh.height)?;
         db_tx.commit().map_err(anyhow::Error::new)?;
     }
 

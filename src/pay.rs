@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use fee::FeeManager;
 use orchard::circuit::ProvingKey;
 use parking_lot::Mutex;
@@ -10,7 +8,6 @@ use thiserror::Error;
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 use zcash_proofs::prover::LocalTxProver;
-use zcash_protocol::memo::Memo;
 
 use self::conv::MemoBytesProxy;
 use crate::{
@@ -49,14 +46,9 @@ pub struct PaymentItem {
 impl TryFrom<&PaymentRequestT> for PaymentItem {
     fn try_from(p: &PaymentRequestT) -> Result<Self> {
         let memo = p
-            .memo_string
+            .memo
             .as_ref()
-            .map_or_else(
-                || p.memo_bytes.as_ref().map(|b| Memo::from_bytes(&*b)),
-                |s| Some(Memo::from_str(&s)),
-            )
-            .transpose()
-            .map_err(anyhow::Error::new)?;
+            .map(|m| m.to_memo()).transpose()?;
         let memo = memo.map(|memo| MemoBytes::from(&memo));
         Ok(Self {
             address: p.address.clone().unwrap(),

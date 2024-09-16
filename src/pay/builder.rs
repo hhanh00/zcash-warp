@@ -1,5 +1,5 @@
 use crate::{
-    db::account::get_account_info,
+    db::account::{get_account_info, list_account_tsk},
     keys::TSKStore,
     warp::{
         hasher::{empty_roots, OrchardHasher, SaplingHasher},
@@ -40,6 +40,8 @@ use zcash_proofs::prover::LocalTxProver;
 use warp_macros::c_export;
 use crate::{coin::COINS, ffi::{map_result, CParam, CResult}};
 
+const DUST: u64 = 54;
+
 impl UnsignedTransaction {
     pub fn build<R: RngCore + CryptoRng>(
         &self,
@@ -56,8 +58,11 @@ impl UnsignedTransaction {
         let sks = ai.to_secret_keys();
         sks.sapling.ok_or(anyhow::anyhow!("No Secret Keys"))?;
 
-        if let Some(ti) = ai.transparent.as_ref() {
-            tsk_store.0.insert(ti.addr.encode(network), ti.sk.clone());
+        if let Some(_ti) = ai.transparent.as_ref() {
+            let tsks = list_account_tsk(connection, self.account)?;
+            for tsk in tsks.iter() {
+                tsk_store.0.insert(tsk.address.clone(), tsk.sk.clone());
+            }
         }
 
         let er = [
@@ -94,6 +99,7 @@ impl UnsignedTransaction {
                         anyhow::bail!("No Secret Key for address {}", address);
                     };
                     let ta = TransparentAddress::decode(network, address)?;
+                    tracing::info!("{} {}", address, txin.amount);
                     transparent_builder
                         .add_input(
                             sk.clone(),
@@ -173,6 +179,7 @@ impl UnsignedTransaction {
         }
 
         for txout in self.tx_outputs.iter() {
+            if txout.change && txout.amount < DUST { continue; }
             match &txout.note {
                 OutputNote::Transparent { pkh, address } => {
                     let taddr = if *pkh {

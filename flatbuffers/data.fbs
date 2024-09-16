@@ -67,6 +67,7 @@ table OutputShielded {
 }
 
 table ShieldedNote {
+  id_note: uint32;
   height: uint32;
   confirmations: uint32;
   timestamp: uint32;
@@ -84,10 +85,7 @@ table ShieldedMessage {
   timestamp: uint32;
   incoming: bool;
   nout: uint32;
-  sender: string;
-  recipient: string;
-  subject: string;
-  body: string;
+  memo: UserMemo;
   read: bool;
 }
 
@@ -100,7 +98,7 @@ table UAReceivers {
 table PaymentRequest {
   address: string;
   amount: uint64;
-  memo_string: string;
+  memo: UserMemo;
   memo_bytes: [uint8];
 }
 
@@ -109,10 +107,12 @@ table PaymentRequests {
 }
 
 table AccountName {
+  coin: uint8;
   id: uint32;
+  key_type: uint8;
   name: string;
-  sapling_address: string;
   birth: uint32;
+  balance: uint64;
 }
 
 table ContactCard {
@@ -165,8 +165,37 @@ table Checkpoint {
   timestamp: uint32;
 }
 
-table AppConfig {
-  url: string;
-  warp: string;
-  db: string;
+table Spending {
+  recipient: string;
+  amount: uint64;
+}
+
+table Progress {
+  trial_decryptions: uint32;
+  downloaded: uint64;
+  height: uint32;
+  timestamp: uint32;
+}
+
+table UserMemo {
+  reply_to: bool;
+  sender: string;
+  recipient: string;
+  body: string;
+  subject: string;
+}
+
+table ZIP32Keys {
+  tsk: string;
+  taddress: string;
+  zsk: string;
+  zaddress: string;
+}
+
+table Config {
+  db_path: string;
+  lwd_url: string;
+  warp_url: string;
+  warp_end_height: uint32;
+  confirmations: uint32;
 }
