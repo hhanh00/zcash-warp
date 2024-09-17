@@ -152,6 +152,8 @@ struct CResult_____c_char c_make_payment_uri(uint8_t coin, struct CParam recipie
 
 struct CResult______u8 c_parse_payment_uri(uint8_t coin, char *uri);
 
+struct CResult_u8 c_is_valid_address_or_uri(uint8_t coin, char *s);
+
 struct CResult_u32 c_get_activation_date(uint8_t coin);
 
 struct CResult_u32 c_get_height_by_time(uint8_t coin, uint32_t time);

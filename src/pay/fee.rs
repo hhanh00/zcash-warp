@@ -1,7 +1,9 @@
-#[derive(Debug, Default)]
+use serde::{Serialize, Deserialize};
+
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct FeeManager {
-    num_inputs: [u8; 3],
-    num_outputs: [u8; 3],
+    pub num_inputs: [u8; 3],
+    pub num_outputs: [u8; 3],
 }
 
 impl FeeManager {

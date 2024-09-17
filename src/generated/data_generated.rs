@@ -2508,9 +2508,10 @@ impl<'a> flatbuffers::Follow<'a> for UAReceivers<'a> {
 }
 
 impl<'a> UAReceivers<'a> {
-  pub const VT_TRANSPARENT: flatbuffers::VOffsetT = 4;
-  pub const VT_SAPLING: flatbuffers::VOffsetT = 6;
-  pub const VT_ORCHARD: flatbuffers::VOffsetT = 8;
+  pub const VT_TEX: flatbuffers::VOffsetT = 4;
+  pub const VT_TRANSPARENT: flatbuffers::VOffsetT = 6;
+  pub const VT_SAPLING: flatbuffers::VOffsetT = 8;
+  pub const VT_ORCHARD: flatbuffers::VOffsetT = 10;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2525,10 +2526,12 @@ impl<'a> UAReceivers<'a> {
     if let Some(x) = args.orchard { builder.add_orchard(x); }
     if let Some(x) = args.sapling { builder.add_sapling(x); }
     if let Some(x) = args.transparent { builder.add_transparent(x); }
+    builder.add_tex(args.tex);
     builder.finish()
   }
 
   pub fn unpack(&self) -> UAReceiversT {
+    let tex = self.tex();
     let transparent = self.transparent().map(|x| {
       x.to_string()
     });
@@ -2539,12 +2542,20 @@ impl<'a> UAReceivers<'a> {
       x.to_string()
     });
     UAReceiversT {
+      tex,
       transparent,
       sapling,
       orchard,
     }
   }
 
+  #[inline]
+  pub fn tex(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(UAReceivers::VT_TEX, Some(false)).unwrap()}
+  }
   #[inline]
   pub fn transparent(&self) -> Option<&'a str> {
     // Safety:
@@ -2575,6 +2586,7 @@ impl flatbuffers::Verifiable for UAReceivers<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
+     .visit_field::<bool>("tex", Self::VT_TEX, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("transparent", Self::VT_TRANSPARENT, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("sapling", Self::VT_SAPLING, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("orchard", Self::VT_ORCHARD, false)?
@@ -2583,6 +2595,7 @@ impl flatbuffers::Verifiable for UAReceivers<'_> {
   }
 }
 pub struct UAReceiversArgs<'a> {
+    pub tex: bool,
     pub transparent: Option<flatbuffers::WIPOffset<&'a str>>,
     pub sapling: Option<flatbuffers::WIPOffset<&'a str>>,
     pub orchard: Option<flatbuffers::WIPOffset<&'a str>>,
@@ -2591,6 +2604,7 @@ impl<'a> Default for UAReceiversArgs<'a> {
   #[inline]
   fn default() -> Self {
     UAReceiversArgs {
+      tex: false,
       transparent: None,
       sapling: None,
       orchard: None,
@@ -2603,6 +2617,10 @@ pub struct UAReceiversBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UAReceiversBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_tex(&mut self, tex: bool) {
+    self.fbb_.push_slot::<bool>(UAReceivers::VT_TEX, tex, false);
+  }
   #[inline]
   pub fn add_transparent(&mut self, transparent: flatbuffers::WIPOffset<&'b  str>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(UAReceivers::VT_TRANSPARENT, transparent);
@@ -2633,6 +2651,7 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UAReceiversBuilder<'a, 'b, A> {
 impl core::fmt::Debug for UAReceivers<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("UAReceivers");
+      ds.field("tex", &self.tex());
       ds.field("transparent", &self.transparent());
       ds.field("sapling", &self.sapling());
       ds.field("orchard", &self.orchard());
@@ -2642,6 +2661,7 @@ impl core::fmt::Debug for UAReceivers<'_> {
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct UAReceiversT {
+  pub tex: bool,
   pub transparent: Option<String>,
   pub sapling: Option<String>,
   pub orchard: Option<String>,
@@ -2649,6 +2669,7 @@ pub struct UAReceiversT {
 impl Default for UAReceiversT {
   fn default() -> Self {
     Self {
+      tex: false,
       transparent: None,
       sapling: None,
       orchard: None,
@@ -2660,6 +2681,7 @@ impl UAReceiversT {
     &self,
     _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
   ) -> flatbuffers::WIPOffset<UAReceivers<'b>> {
+    let tex = self.tex;
     let transparent = self.transparent.as_ref().map(|x|{
       _fbb.create_string(x)
     });
@@ -2670,6 +2692,7 @@ impl UAReceiversT {
       _fbb.create_string(x)
     });
     UAReceivers::create(_fbb, &UAReceiversArgs{
+      tex,
       transparent,
       sapling,
       orchard,
@@ -3659,8 +3682,11 @@ impl<'a> TransactionSummary<'a> {
   pub const VT_SAPLING_NET: flatbuffers::VOffsetT = 10;
   pub const VT_ORCHARD_NET: flatbuffers::VOffsetT = 12;
   pub const VT_FEE: flatbuffers::VOffsetT = 14;
-  pub const VT_DATA: flatbuffers::VOffsetT = 16;
-  pub const VT_KEYS: flatbuffers::VOffsetT = 18;
+  pub const VT_PRIVACY_LEVEL: flatbuffers::VOffsetT = 16;
+  pub const VT_NUM_INPUTS: flatbuffers::VOffsetT = 18;
+  pub const VT_NUM_OUTPUTS: flatbuffers::VOffsetT = 20;
+  pub const VT_DATA: flatbuffers::VOffsetT = 22;
+  pub const VT_KEYS: flatbuffers::VOffsetT = 24;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -3678,8 +3704,11 @@ impl<'a> TransactionSummary<'a> {
     builder.add_transparent_ins(args.transparent_ins);
     if let Some(x) = args.keys { builder.add_keys(x); }
     if let Some(x) = args.data { builder.add_data(x); }
+    if let Some(x) = args.num_outputs { builder.add_num_outputs(x); }
+    if let Some(x) = args.num_inputs { builder.add_num_inputs(x); }
     if let Some(x) = args.recipients { builder.add_recipients(x); }
     builder.add_height(args.height);
+    builder.add_privacy_level(args.privacy_level);
     builder.finish()
   }
 
@@ -3692,6 +3721,13 @@ impl<'a> TransactionSummary<'a> {
     let sapling_net = self.sapling_net();
     let orchard_net = self.orchard_net();
     let fee = self.fee();
+    let privacy_level = self.privacy_level();
+    let num_inputs = self.num_inputs().map(|x| {
+      x.into_iter().collect()
+    });
+    let num_outputs = self.num_outputs().map(|x| {
+      x.into_iter().collect()
+    });
     let data = self.data().map(|x| {
       x.into_iter().collect()
     });
@@ -3705,6 +3741,9 @@ impl<'a> TransactionSummary<'a> {
       sapling_net,
       orchard_net,
       fee,
+      privacy_level,
+      num_inputs,
+      num_outputs,
       data,
       keys,
     }
@@ -3753,6 +3792,27 @@ impl<'a> TransactionSummary<'a> {
     unsafe { self._tab.get::<u64>(TransactionSummary::VT_FEE, Some(0)).unwrap()}
   }
   #[inline]
+  pub fn privacy_level(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(TransactionSummary::VT_PRIVACY_LEVEL, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn num_inputs(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionSummary::VT_NUM_INPUTS, None)}
+  }
+  #[inline]
+  pub fn num_outputs(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionSummary::VT_NUM_OUTPUTS, None)}
+  }
+  #[inline]
   pub fn data(&self) -> Option<flatbuffers::Vector<'a, u8>> {
     // Safety:
     // Created from valid Table for this object
@@ -3781,6 +3841,9 @@ impl flatbuffers::Verifiable for TransactionSummary<'_> {
      .visit_field::<i64>("sapling_net", Self::VT_SAPLING_NET, false)?
      .visit_field::<i64>("orchard_net", Self::VT_ORCHARD_NET, false)?
      .visit_field::<u64>("fee", Self::VT_FEE, false)?
+     .visit_field::<u8>("privacy_level", Self::VT_PRIVACY_LEVEL, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("num_inputs", Self::VT_NUM_INPUTS, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("num_outputs", Self::VT_NUM_OUTPUTS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("data", Self::VT_DATA, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("keys", Self::VT_KEYS, false)?
      .finish();
@@ -3794,6 +3857,9 @@ pub struct TransactionSummaryArgs<'a> {
     pub sapling_net: i64,
     pub orchard_net: i64,
     pub fee: u64,
+    pub privacy_level: u8,
+    pub num_inputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    pub num_outputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub keys: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
 }
@@ -3807,6 +3873,9 @@ impl<'a> Default for TransactionSummaryArgs<'a> {
       sapling_net: 0,
       orchard_net: 0,
       fee: 0,
+      privacy_level: 0,
+      num_inputs: None,
+      num_outputs: None,
       data: None,
       keys: None,
     }
@@ -3843,6 +3912,18 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionSummaryBuilder<'a, '
     self.fbb_.push_slot::<u64>(TransactionSummary::VT_FEE, fee, 0);
   }
   #[inline]
+  pub fn add_privacy_level(&mut self, privacy_level: u8) {
+    self.fbb_.push_slot::<u8>(TransactionSummary::VT_PRIVACY_LEVEL, privacy_level, 0);
+  }
+  #[inline]
+  pub fn add_num_inputs(&mut self, num_inputs: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_NUM_INPUTS, num_inputs);
+  }
+  #[inline]
+  pub fn add_num_outputs(&mut self, num_outputs: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_NUM_OUTPUTS, num_outputs);
+  }
+  #[inline]
   pub fn add_data(&mut self, data: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_DATA, data);
   }
@@ -3874,6 +3955,9 @@ impl core::fmt::Debug for TransactionSummary<'_> {
       ds.field("sapling_net", &self.sapling_net());
       ds.field("orchard_net", &self.orchard_net());
       ds.field("fee", &self.fee());
+      ds.field("privacy_level", &self.privacy_level());
+      ds.field("num_inputs", &self.num_inputs());
+      ds.field("num_outputs", &self.num_outputs());
       ds.field("data", &self.data());
       ds.field("keys", &self.keys());
       ds.finish()
@@ -3888,6 +3972,9 @@ pub struct TransactionSummaryT {
   pub sapling_net: i64,
   pub orchard_net: i64,
   pub fee: u64,
+  pub privacy_level: u8,
+  pub num_inputs: Option<Vec<u8>>,
+  pub num_outputs: Option<Vec<u8>>,
   pub data: Option<Vec<u8>>,
   pub keys: Option<Vec<u8>>,
 }
@@ -3900,6 +3987,9 @@ impl Default for TransactionSummaryT {
       sapling_net: 0,
       orchard_net: 0,
       fee: 0,
+      privacy_level: 0,
+      num_inputs: None,
+      num_outputs: None,
       data: None,
       keys: None,
     }
@@ -3918,6 +4008,13 @@ impl TransactionSummaryT {
     let sapling_net = self.sapling_net;
     let orchard_net = self.orchard_net;
     let fee = self.fee;
+    let privacy_level = self.privacy_level;
+    let num_inputs = self.num_inputs.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
+    let num_outputs = self.num_outputs.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
     let data = self.data.as_ref().map(|x|{
       _fbb.create_vector(x)
     });
@@ -3931,6 +4028,9 @@ impl TransactionSummaryT {
       sapling_net,
       orchard_net,
       fee,
+      privacy_level,
+      num_inputs,
+      num_outputs,
       data,
       keys,
     })

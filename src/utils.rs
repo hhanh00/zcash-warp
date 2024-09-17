@@ -1,5 +1,5 @@
 use anyhow::Result;
-use crate::{cli::init_config, data::fb::{Config, ConfigT}, Hash};
+use crate::{data::fb::{Config, ConfigT}, Hash};
 use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
 
 use warp_macros::c_export;

@@ -31,22 +31,26 @@ pub fn decode_address(network: &Network, address: &str) -> Result<UAReceiversT> 
                 .orchard()
                 .map(|o| ua_of_orchard(&o.to_raw_address_bytes()).encode(network));
             UAReceiversT {
+                tex: false,
                 transparent: t,
                 sapling: s,
                 orchard: o,
             }
         }
         RecipientAddress::Sapling(s) => UAReceiversT {
+            tex: false,
             transparent: None,
             sapling: Some(s.encode(network)),
             orchard: None,
         },
         RecipientAddress::Transparent(t) => UAReceiversT {
+            tex: false,
             transparent: Some(t.encode(network)),
             sapling: None,
             orchard: None,
         },
         RecipientAddress::Tex(pkh) => UAReceiversT {
+            tex: true,
             transparent: Some(TransparentAddress::PublicKeyHash(pkh).encode(network)),
             sapling: None,
             orchard: None,

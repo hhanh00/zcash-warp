@@ -11,7 +11,11 @@ use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::{PaymentRequestT, TransactionRecipientT, TransactionSummaryT}, keys::TSKStore, types::{AccountInfo, CheckpointHeight, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
+    data::fb::{PaymentRequestT, TransactionRecipientT, TransactionSummaryT},
+    keys::TSKStore,
+    types::{AccountInfo, CheckpointHeight, PoolMask},
+    warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO},
+    Hash,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -45,10 +49,7 @@ pub struct PaymentItem {
 
 impl TryFrom<&PaymentRequestT> for PaymentItem {
     fn try_from(p: &PaymentRequestT) -> Result<Self> {
-        let memo = p
-            .memo
-            .as_ref()
-            .map(|m| m.to_memo()).transpose()?;
+        let memo = p.memo.as_ref().map(|m| m.to_memo()).transpose()?;
         let memo = memo.map(|memo| MemoBytes::from(&memo));
         Ok(Self {
             address: p.address.clone().unwrap(),
@@ -60,6 +61,7 @@ impl TryFrom<&PaymentRequestT> for PaymentItem {
     type Error = Error;
 }
 
+#[derive(Debug)]
 pub struct Payment {
     pub recipients: Vec<PaymentItem>,
 }
@@ -69,7 +71,7 @@ pub struct ExtendedPayment {
     pub payment: PaymentItem,
     pub amount: u64,
     pub remaining: u64,
-    pub pool: PoolMask,
+    pub pool_mask: PoolMask,
     pub is_change: bool,
 }
 
@@ -94,7 +96,7 @@ impl ExtendedPayment {
             amount: payment.amount,
             remaining: payment.amount,
             payment,
-            pool: PoolMask(pool),
+            pool_mask: PoolMask(pool),
             is_change: false,
         })
     }
@@ -153,6 +155,7 @@ pub enum OutputNote {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TxOutput {
     pub address_string: String,
+    pub pool: u8,
     pub amount: u64,
     pub note: OutputNote,
     pub change: bool,
@@ -195,37 +198,56 @@ pub struct UnsignedTransaction {
     pub tx_outputs: Vec<TxOutput>,
     pub roots: [Hash; 2],
     pub edges: [AuthPath; 2],
+    pub fees: FeeManager,
 }
 
 impl UnsignedTransaction {
     pub fn to_summary(&self, keys: Vec<u8>) -> Result<TransactionSummaryT> {
-        let recipients = self.tx_outputs.iter().filter_map(|o| {
-            if !o.change {
-                Some(TransactionRecipientT {
-                    address: Some(o.address_string.clone()),
-                    amount: o.amount,
-                })
-            } else {
-                None
-            }
-        }).collect::<Vec<_>>();
-        let ins = self.tx_notes.iter().map(|i| {
-            match i.note {
+        let recipients = self
+            .tx_outputs
+            .iter()
+            .filter_map(|o| {
+                if !o.change {
+                    Some(TransactionRecipientT {
+                        address: Some(o.address_string.clone()),
+                        amount: o.amount,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let ins = self
+            .tx_notes
+            .iter()
+            .map(|i| match i.note {
                 InputNote::Transparent { .. } => PoolBalance(i.amount as i64, 0, 0),
                 InputNote::Sapling { .. } => PoolBalance(0, i.amount as i64, 0),
                 InputNote::Orchard { .. } => PoolBalance(0, 0, i.amount as i64),
-            }
-        }).sum::<PoolBalance>();
-        let outs = self.tx_outputs.iter().map(|o| {
-            match o.note {
+            })
+            .sum::<PoolBalance>();
+        let outs = self
+            .tx_outputs
+            .iter()
+            .map(|o| match o.note {
                 OutputNote::Transparent { .. } => PoolBalance(o.amount as i64, 0, 0),
                 OutputNote::Sapling { .. } => PoolBalance(0, o.amount as i64, 0),
                 OutputNote::Orchard { .. } => PoolBalance(0, 0, o.amount as i64),
-            }
-        }).sum::<PoolBalance>();
+            })
+            .sum::<PoolBalance>();
         let net = ins - outs;
         let fee = (net.0 + net.1 + net.2) as u64;
         let data = bincode::serialize(&self).unwrap();
+        let privacy_level = if self.fees.num_inputs[0] != 0 && self.fees.num_outputs[0] != 0 {
+            0 // both transparent in and out
+        } else if self.fees.num_inputs[0] != 0 || self.fees.num_outputs[0] != 0 {
+            1 // either transparent in or out
+        } else if net.1.abs() as u64 > fee || net.2.abs() as u64 > fee {
+            2 // shielded net > fee 
+        } else {
+            3 // fully shielded
+        };
+
         Ok(TransactionSummaryT {
             height: self.height,
             recipients: Some(recipients),
@@ -233,6 +255,9 @@ impl UnsignedTransaction {
             sapling_net: net.1,
             orchard_net: net.2,
             fee,
+            num_inputs: Some(self.fees.num_inputs.to_vec()),
+            num_outputs: Some(self.fees.num_outputs.to_vec()),
+            privacy_level,
             data: Some(data),
             keys: Some(keys),
         })
@@ -252,8 +277,7 @@ struct PoolBalance(i64, i64, i64);
 
 impl std::iter::Sum for PoolBalance {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(PoolBalance(0, 0, 0), |a, b| 
-        a + b)
+        iter.fold(PoolBalance(0, 0, 0), |a, b| a + b)
     }
 }
 

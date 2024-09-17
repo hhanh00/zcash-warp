@@ -72,7 +72,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS s_accounts(
         account INTEGER PRIMARY KEY,
-        sk TEXT NOT NULL,
+        sk TEXT,
         vk TEXT NOT NULL,
         address TEXT NOT NULL)",
         [],

@@ -39,6 +39,7 @@ pub async fn prepare_payment(
     fee_paid_by_sender: bool,
     confirmations: u32,
 ) -> Result<TransactionSummaryT> {
+    tracing::info!("{:?}", recipients);
     let bc_height = get_last_height(client).await?;
     let cp_height = snap_to_checkpoint(&connection, bc_height - confirmations + 1)?;
     let (s_tree, o_tree) = get_tree_state(client, cp_height).await?;

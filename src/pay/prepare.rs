@@ -184,19 +184,21 @@ impl PaymentBuilder {
             // add a change output in first position
             // Determine which pool to use for the change output
             // 1. pick one of the output pools if they are supported by our account
-            let o_pools = self.outputs.iter().map(|o| o.pool.0).fold(0, |a, b| a | b);
+            let o_pools = self.outputs.iter().map(|o| o.pool_mask.0).fold(0, |a, b| a | b);
             // 2. Use a pool in common between our account's and the recipients
-            let change_pools = self.account_pools.0 & o_pools & 6; // but not the transparent pool
+            let change_pools = self.account_pools.0 & o_pools;
             let change_pools = if change_pools != 0 {
                 change_pools
             } else {
                 // fallback to the account's best pool if there is nothing
                 self.account_pools.0
             };
+            // but not the transparent pool if shielded is possible
+            let change_pools = if change_pools != 1 { change_pools & 6 } else { change_pools };
             let change_pools = PoolMask(change_pools);
 
-            let change_address = self.ai.to_address(&self.network, change_pools).unwrap();
             tracing::info!("Use pool {change_pools:?} for change");
+            let change_address = self.ai.to_address(&self.network, change_pools).unwrap();
             let change = ExtendedPayment {
                 payment: PaymentItem {
                     address: change_address,
@@ -205,7 +207,7 @@ impl PaymentBuilder {
                 },
                 amount: 0,
                 remaining: 0,
-                pool: change_pools,
+                pool_mask: change_pools,
                 is_change: true,
             };
             self.outputs.insert(0, change);
@@ -228,7 +230,7 @@ impl PaymentBuilder {
                     continue;
                 }
                 let src_pool: u8;
-                let out_pool_mask = output.pool.0;
+                let out_pool_mask = output.pool_mask.0;
                 assert!(
                     out_pool_mask == 1
                         || out_pool_mask == 2
@@ -266,7 +268,7 @@ impl PaymentBuilder {
                         assert!(out_pool_mask == 6);
 
                         src_pool = Self::select_pool(&used, &self.available);
-                        output.pool = PoolMask::from_pool(src_pool);
+                        output.pool_mask = PoolMask::from_pool(src_pool);
                         // Only T/S/O possible from now
                         self.fee += self.fee_manager.add_output(src_pool);
                     }
@@ -318,7 +320,7 @@ impl PaymentBuilder {
                 tracing::debug!(
                     "src {} out {:?} amount {}",
                     src_pool,
-                    output.pool,
+                    output.pool_mask,
                     output.remaining
                 );
                 for n in self.inputs[src_pool as usize].iter_mut() {
@@ -362,7 +364,7 @@ impl PaymentBuilder {
                 amount,
                 ..
             } = pi;
-            let address = single_receiver_address(&self.network, &address, n.pool)?.unwrap();
+            let address = single_receiver_address(&self.network, &address, n.pool_mask)?.unwrap();
             let note = OutputNote::from_address(
                 &self.network,
                 &address,
@@ -370,6 +372,7 @@ impl PaymentBuilder {
             )?;
             tx_outputs.push(TxOutput {
                 address_string: address,
+                pool: n.pool_mask.to_pool().unwrap(),
                 amount,
                 note,
                 change: false,
@@ -426,6 +429,7 @@ impl PaymentBuilder {
             ],
             tx_notes: utx.tx_notes,
             tx_outputs: utx.tx_outputs,
+            fees: self.fee_manager,
         };
 
         Ok(utx)

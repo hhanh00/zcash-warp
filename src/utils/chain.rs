@@ -49,7 +49,7 @@ pub async fn get_height_by_time(network: &Network, client: &mut Client, time: u3
             }
         }
     }
-    unreachable!()
+    Ok(s)
 }
 
 #[c_export]

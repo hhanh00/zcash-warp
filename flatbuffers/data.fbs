@@ -90,6 +90,7 @@ table ShieldedMessage {
 }
 
 table UAReceivers {
+  tex: bool;
   transparent: string;
   sapling: string;
   orchard: string;
@@ -135,6 +136,9 @@ table TransactionSummary {
   sapling_net: int64;
   orchard_net: int64;
   fee: uint64;
+  privacy_level: uint8;
+  num_inputs: [uint8];
+  num_outputs: [uint8];
   data: [uint8];
   keys: [uint8];
 }

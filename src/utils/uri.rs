@@ -1,11 +1,11 @@
 use anyhow::Result;
 use zcash_address::ZcashAddress;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
-use zcash_protocol::value::Zatoshis;
+use zcash_protocol::{consensus::Network, value::Zatoshis};
 
 use crate::{
     coin::COINS,
-    ffi::{map_result_string, map_result_bytes, CParam, CResult},
+    ffi::{map_result, map_result_bytes, map_result_string, CParam, CResult},
 };
 use crate::{
     data::fb::{PaymentRequestT, PaymentRequests, PaymentRequestsT},
@@ -14,6 +14,8 @@ use crate::{
 use flatbuffers::FlatBufferBuilder;
 use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
+
+use super::ua::decode_address;
 
 #[c_export]
 pub fn make_payment_uri(recipients: &PaymentRequestsT) -> Result<String> {
@@ -58,4 +60,16 @@ pub fn parse_payment_uri(uri: &str) -> Result<PaymentRequestsT> {
         payments: Some(recipients),
     };
     Ok(p)
+}
+
+#[c_export]
+pub fn is_valid_address_or_uri(network: &Network, s: &str) -> Result<u8> {
+    let res = if decode_address(network, s).is_ok() {
+        1
+    } else if parse_payment_uri(s).is_ok() {
+        2
+    } else {
+        0
+    };
+    Ok(res)
 }
