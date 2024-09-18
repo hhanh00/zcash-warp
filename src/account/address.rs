@@ -13,7 +13,7 @@ pub fn get_diversified_address(
     account: u32,
     time: u32,
     pools: PoolMask,
-) -> Result<String> {
+) -> Result<Option<String>> {
     let ai = get_account_info(network, connection, account)?;
     let ai = ai.select_pools(pools);
     let saddr = ai
@@ -34,9 +34,8 @@ pub fn get_diversified_address(
         let di = orchard::keys::DiversifierIndex::from(time);
         oi.vk.address_at(di, Scope::External)
     });
-    let ua = zcash_client_backend::address::UnifiedAddress::from_receivers(oaddr, saddr, None)
-        .ok_or(anyhow::anyhow!("Cannot build UA"))?;
-    let address = ua.encode(network);
+    let ua = zcash_client_backend::address::UnifiedAddress::from_receivers(oaddr, saddr, None);
+    let address = ua.map(|ua| ua.encode(network));
     Ok(address)
 }
 

@@ -2,6 +2,7 @@ use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension as _};
 use zcash_protocol::consensus::Network;
 
+use crate::account::address::get_diversified_address;
 use crate::{data::fb::BackupT, db::account::get_account_info, types::PoolMask};
 
 use crate::{
@@ -51,13 +52,16 @@ pub fn get_address(
     network: &Network,
     connection: &Connection,
     account: u32,
+    time: u32,
     mask: u8,
 ) -> Result<String> {
-    let ai = get_account_info(network, &connection, account)?;
-    let address = ai
-        .to_address(network, PoolMask(mask))
-        .ok_or(anyhow::anyhow!("Invalid mask"))?;
-    Ok(address)
+    let address = if mask & 8 != 0 {
+        get_diversified_address(network, connection, account, time, PoolMask(mask))
+    } else {
+        let ai = get_account_info(network, &connection, account)?;
+        Ok(ai.to_address(network, PoolMask(mask)))
+    }?;
+    Ok(address.unwrap_or_default())
 }
 
 #[no_mangle]

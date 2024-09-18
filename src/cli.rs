@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -52,7 +52,7 @@ use crate::{
         db::{create_backup, encrypt_db, get_address},
         messages::navigate_message,
         pay::{prepare_payment, prepare_sweep_tx, prepare_sweep_tx_by_sk, sign},
-        ua::{decode_address, get_account_diversified_address},
+        ua::decode_address,
         uri::{make_payment_uri, parse_payment_uri},
         zip_db::{
             decrypt_zip_database_files, encrypt_zip_database_files, generate_zip_database_keys,
@@ -264,10 +264,6 @@ pub enum Command {
     },
     Balance {
         account: u32,
-    },
-    GenDiversifiedAddress {
-        account: u32,
-        pools: u8,
     },
     Pay {
         account: u32,
@@ -617,8 +613,9 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             retrieve_tx_details(network, &connection, zec.config.lwd_url.clone().unwrap()).await?;
         },
         Command::Address { account, mask } => {
+            let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;
             let connection = zec.connection()?;
-            let address = get_address(network, &connection, account, mask)?;
+            let address = get_address(network, &connection, account, time, mask)?;
             println!("Address: {}", address);
         }
         Command::Balance { account } => {
@@ -675,11 +672,6 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let txb = serde_cbor::to_vec(&tx)?;
             println!("{}", hex::encode(&txb));
             store_tx_details(&connection, id, height, &tx.txid, &txb)?;
-        }
-        Command::GenDiversifiedAddress { account, pools } => {
-            let connection = zec.connection()?;
-            let address = get_account_diversified_address(network, &connection, account, pools)?;
-            println!("{}", address);
         }
         Command::Sweep {
             account,

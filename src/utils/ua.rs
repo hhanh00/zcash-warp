@@ -1,8 +1,5 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use anyhow::Result;
 use orchard::Address;
-use rusqlite::Connection;
 use zcash_keys::{
     address::{Address as RecipientAddress, UnifiedAddress},
     encoding::AddressCodec,
@@ -10,11 +7,11 @@ use zcash_keys::{
 use zcash_primitives::legacy::TransparentAddress;
 use zcash_protocol::consensus::Network;
 
-use crate::{account::address::get_diversified_address, data::fb::UAReceiversT, types::PoolMask};
+use crate::{data::fb::UAReceiversT, types::PoolMask};
 
 use crate::{
     coin::COINS,
-    ffi::{map_result_string, map_result_bytes, CResult},
+    ffi::{map_result_bytes, CResult},
 };
 use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
@@ -94,17 +91,4 @@ pub fn ua_of_orchard(address: &[u8; 43]) -> UnifiedAddress {
         zcash_client_backend::address::UnifiedAddress::from_receivers(Some(orchard), None, None)
             .unwrap();
     ua
-}
-
-#[c_export]
-pub fn get_account_diversified_address(
-    network: &Network,
-    connection: &Connection,
-    account: u32,
-    pools: u8,
-) -> Result<String> {
-    let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;
-    let address =
-        get_diversified_address(network, &connection, account, time, PoolMask(pools & 6))?; // remove transparent
-    Ok(address)
 }

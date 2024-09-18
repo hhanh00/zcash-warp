@@ -138,15 +138,14 @@ struct CResult_u8 c_encrypt_db(uint8_t coin, char *password, char *new_db_path);
 
 struct CResult______u8 c_create_backup(uint8_t coin, uint32_t account);
 
-struct CResult_____c_char c_get_address(uint8_t coin, uint32_t account, uint8_t mask);
+struct CResult_____c_char c_get_address(uint8_t coin,
+                                        uint32_t account,
+                                        uint32_t time,
+                                        uint8_t mask);
 
 struct CResult_u8 c_set_db_password(uint8_t coin, char *password);
 
 struct CResult______u8 c_decode_address(uint8_t coin, char *address);
-
-struct CResult_____c_char c_get_account_diversified_address(uint8_t coin,
-                                                            uint32_t account,
-                                                            uint8_t pools);
 
 struct CResult_____c_char c_make_payment_uri(uint8_t coin, struct CParam recipients);
 
