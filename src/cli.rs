@@ -671,7 +671,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             )?;
             let txb = serde_cbor::to_vec(&tx)?;
             println!("{}", hex::encode(&txb));
-            store_tx_details(&connection, id, height, &tx.txid, &txb)?;
+            store_tx_details(&connection, id, account, height, &tx.txid, &txb)?;
         }
         Command::Sweep {
             account,

@@ -203,3 +203,10 @@ table Config {
   warp_end_height: uint32;
   confirmations: uint32;
 }
+
+table AccountSigningCapabilities {
+  seed: bool;
+  transparent: uint8;
+  sapling: uint8;
+  orchard: uint8;
+}

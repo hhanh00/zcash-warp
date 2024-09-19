@@ -38,8 +38,11 @@ use crate::{
     Hash,
 };
 
+use crate::{
+    coin::COINS,
+    ffi::{map_result, CResult},
+};
 use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, CResult}};
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TransparentInput {
@@ -170,43 +173,44 @@ pub fn analyze_raw_transaction(
     let mut sins = vec![];
     let mut souts = vec![];
     if let Some(b) = data.sapling_bundle() {
-        let ivk =
-            sapling_crypto::keys::PreparedIncomingViewingKey::new(&ai.sapling.vk.fvk.vk.ivk());
-        let ovk = &ai.sapling.vk.fvk.ovk;
-        for sin in b.shielded_spends() {
-            let spend = get_note_by_nf(connection, &sin.nullifier().0)?;
-            sins.push(ShieldedInput {
-                note: spend,
-                nf: sin.nullifier().0.clone(),
-            });
-        }
-        for sout in b.shielded_outputs() {
-            let domain = SaplingDomain::new(zip212_enforcement);
-            let fnote = try_note_decryption(&domain, &ivk, sout)
-                .map(|(n, p, m)| (n, p, m, true))
-                .or_else(|| {
-                    try_output_recovery_with_ovk(
-                        &domain,
-                        ovk,
-                        sout,
-                        sout.cv(),
-                        sout.out_ciphertext(),
-                    )
-                    .map(|(n, p, m)| (n, p, m, false))
-                })
-                .map(|(n, p, m, incoming)| FullPlainNote {
-                    note: PlainNote {
-                        address: p.to_bytes(),
-                        value: n.value().inner(),
-                        rcm: n.rcm().to_bytes(),
-                        rho: None,
-                    },
-                    memo: CompressedMemo(m.as_slice().to_vec()),
-                    incoming,
+        if let Some(si) = ai.sapling.as_ref() {
+            let ivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(&si.vk.fvk.vk.ivk());
+            let ovk = &si.vk.fvk.ovk;
+            for sin in b.shielded_spends() {
+                let spend = get_note_by_nf(connection, &sin.nullifier().0)?;
+                sins.push(ShieldedInput {
+                    note: spend,
+                    nf: sin.nullifier().0.clone(),
                 });
-            let cmx = sout.cmu().to_bytes();
-            let output = ShieldedOutput { cmx, note: fnote };
-            souts.push(output);
+            }
+            for sout in b.shielded_outputs() {
+                let domain = SaplingDomain::new(zip212_enforcement);
+                let fnote = try_note_decryption(&domain, &ivk, sout)
+                    .map(|(n, p, m)| (n, p, m, true))
+                    .or_else(|| {
+                        try_output_recovery_with_ovk(
+                            &domain,
+                            ovk,
+                            sout,
+                            sout.cv(),
+                            sout.out_ciphertext(),
+                        )
+                        .map(|(n, p, m)| (n, p, m, false))
+                    })
+                    .map(|(n, p, m, incoming)| FullPlainNote {
+                        note: PlainNote {
+                            address: p.to_bytes(),
+                            value: n.value().inner(),
+                            rcm: n.rcm().to_bytes(),
+                            rho: None,
+                        },
+                        memo: CompressedMemo(m.as_slice().to_vec()),
+                        incoming,
+                    });
+                let cmx = sout.cmu().to_bytes();
+                let output = ShieldedOutput { cmx, note: fnote };
+                souts.push(output);
+            }
         }
     }
     let mut oins = vec![];
@@ -301,7 +305,7 @@ pub async fn retrieve_tx_details(
             tx,
         )?;
         let tx_bin = bincode::serialize(&txd)?;
-        store_tx_details(&connection.lock(), id_tx, height, &txid, &tx_bin)?;
+        store_tx_details(&connection.lock(), id_tx, account, height, &txid, &tx_bin)?;
         let (tx_address, tx_memo) =
             get_tx_primary_address_memo(network, &account_addrs, &rtx, &txd)?;
         update_tx_primary_address_memo(&connection.lock(), id_tx, tx_address, tx_memo)?;

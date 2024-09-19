@@ -192,7 +192,7 @@ pub struct AdjustableUnsignedTransaction {
 pub struct UnsignedTransaction {
     pub account: u32,
     pub account_name: String,
-    pub account_id: Hash,
+    pub account_id: Vec<u8>,
     pub height: u32,
     pub tx_notes: Vec<TxInput>,
     pub tx_outputs: Vec<TxOutput>,

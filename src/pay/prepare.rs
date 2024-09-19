@@ -417,7 +417,7 @@ impl PaymentBuilder {
         let utx = UnsignedTransaction {
             account: self.account,
             account_name: self.ai.name.clone(),
-            account_id: self.ai.to_account_unique_id(),
+            account_id: self.ai.fingerprint.clone(),
             height: self.height,
             edges: [
                 self.s_edge.to_auth_path(&SaplingHasher::default()),

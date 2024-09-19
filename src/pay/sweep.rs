@@ -89,7 +89,7 @@ pub async fn scan_utxo_by_seed(
             let mut funds =
                 scan_utxo_by_address(url.to_string(), ai.account, height, address).await?;
             if !funds.is_empty() {
-                tsk_store.0.insert(ti.addr.encode(network), ti.sk.clone());
+                tsk_store.0.insert(ti.addr.encode(network), ti.sk.clone().unwrap());
                 utxos.append(&mut funds);
             } else {
                 gap += 1;

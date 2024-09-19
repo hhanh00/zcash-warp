@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::{
-    ffi::{c_char, CString},
-    ptr,
+    ffi::{c_char, CString}, mem, ptr
 };
 
 #[repr(C)]
@@ -71,9 +70,10 @@ fn to_c_str(s: String) -> *mut c_char {
     CString::new(s).unwrap().into_raw()
 }
 
-fn to_bytes(b: Vec<u8>) -> (*const u8, u32) {
-    let ptr = b.as_ptr();
-    let len = b.len() as u32;
-    std::mem::forget(b);
+fn to_bytes(mut b: Vec<u8>) -> (*const u8, u32) {
+    b.shrink_to_fit();
+    let me = mem::ManuallyDrop::new(b);
+    let ptr = me.as_ptr();
+    let len = me.len() as u32;
     (ptr, len)
 }

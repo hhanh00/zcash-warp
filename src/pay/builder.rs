@@ -52,7 +52,7 @@ impl UnsignedTransaction {
         mut rng: R,
     ) -> Result<Vec<u8>> {
         let ai = get_account_info(network, connection, self.account)?;
-        if ai.to_account_unique_id() != self.account_id {
+        if ai.fingerprint != self.account_id {
             anyhow::bail!("Invalid Account");
         }
         let sks = ai.to_secret_keys();
@@ -117,7 +117,8 @@ impl UnsignedTransaction {
                     rseed,
                     witness,
                 } => {
-                    let extsk = ai.sapling.sk.as_ref().unwrap();
+                    let extsk = ai.sapling.as_ref().and_then(|si| si.sk.as_ref());
+                    let extsk = extsk.ok_or(anyhow::anyhow!("No sapling secret key"))?;
                     let recipient = PaymentAddress::from_bytes(address).unwrap();
                     let note = sapling_crypto::Note::from_parts(
                         recipient,
@@ -135,7 +136,7 @@ impl UnsignedTransaction {
                     )
                     .unwrap();
                     sapling_builder
-                        .add_spend(extsk, note, merkle_path)
+                        .add_spend(&extsk, note, merkle_path)
                         .map_err(anyhow::Error::msg)?;
                 }
 
@@ -192,12 +193,12 @@ impl UnsignedTransaction {
                         .map_err(anyhow::Error::msg)?;
                 }
                 OutputNote::Sapling { address, memo } => {
-                    let vk = &ai.sapling.vk;
-                    let ovk = vk.fvk.ovk;
+                    let vk = ai.sapling.as_ref().map(|si| &si.vk);
+                    let ovk = vk.map(|vk| vk.fvk.ovk);
                     let recipient = PaymentAddress::from_bytes(address).unwrap();
                     sapling_builder
                         .add_output(
-                            Some(ovk),
+                            ovk,
                             recipient,
                             sapling_crypto::value::NoteValue::from_raw(txout.amount),
                             Some(memo.as_array().clone()),
@@ -206,12 +207,11 @@ impl UnsignedTransaction {
                 }
                 OutputNote::Orchard { address, memo } => {
                     let vk = ai.orchard.as_ref().map(|oi| oi.vk.clone());
-                    let vk = vk.ok_or(anyhow::anyhow!("No Orchard Account"))?;
-                    let ovk = vk.to_ovk(Scope::External);
+                    let ovk = vk.map(|vk| vk.to_ovk(Scope::External));
                     let recipient = orchard::Address::from_raw_address_bytes(address).unwrap();
                     orchard_builder
                         .add_output(
-                            Some(ovk),
+                            ovk,
                             recipient,
                             orchard::value::NoteValue::from_raw(txout.amount),
                             Some(memo.as_array().clone()),
@@ -267,10 +267,14 @@ impl UnsignedTransaction {
             .transparent_bundle()
             .map(|tb| tb.clone().apply_signatures(&unauthed_tx, &txid_parts));
 
-        let ask = &ai.sapling.sk.as_ref().unwrap().expsk.ask;
+        let ask = ai.sapling.as_ref().and_then(|si| si.sk.as_ref().map(|sk| &sk.expsk.ask));
+        let mut signing_keys = vec![];
+        if let Some(ask) = ask {
+            signing_keys.push(ask.clone());
+        }
         let sapling_bundle = unauthed_tx.sapling_bundle().map(|sb| {
             sb.clone()
-                .apply_signatures(&mut rng, sig_hash, std::slice::from_ref(ask))
+                .apply_signatures(&mut rng, sig_hash, &signing_keys)
                 .unwrap()
         });
 

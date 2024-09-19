@@ -79,7 +79,9 @@ impl Synchronizer {
             .account_infos
             .iter()
             .filter_map(|ai| {
-                ai.orchard.as_ref().map(|oi| (ai.account, oi.vk.to_ivk(Scope::External)))
+                ai.orchard
+                    .as_ref()
+                    .map(|oi| (ai.account, oi.vk.to_ivk(Scope::External)))
             })
             .collect::<Vec<_>>();
 
@@ -218,7 +220,8 @@ impl Synchronizer {
                 tracing::debug!("{} {} {}", idx, be.s, be.e);
                 tracing::debug!("{:?}", b);
                 let h = &b.start.as_ref().unwrap().levels[depth].hash;
-                if !h.is_empty() { // fill the *right* node of the be.s pair
+                if !h.is_empty() {
+                    // fill the *right* node of the be.s pair
                     cmxs[((be.s - p) | 1) as usize] = Some(h.clone().try_into().unwrap())
                 }
                 let h = &b.end.as_ref().unwrap().levels[depth].hash;
@@ -240,15 +243,30 @@ impl Synchronizer {
                     n.witness.value = cmxs[nidx].unwrap();
                 }
 
-                if nidx % 2 == 0 { // left node
-                    if nidx + 1 < cmxs.len() { // ommer is right node if it exists
-                        assert!(cmxs[nidx + 1].is_some(), "{} {} {}", depth, n.position, nidx);
+                if nidx % 2 == 0 {
+                    // left node
+                    if nidx + 1 < cmxs.len() {
+                        // ommer is right node if it exists
+                        assert!(
+                            cmxs[nidx + 1].is_some(),
+                            "{} {} {}",
+                            depth,
+                            n.position,
+                            nidx
+                        );
                         n.witness.ommers.0[depth] = cmxs[nidx + 1];
                     } else {
                         n.witness.ommers.0[depth] = None;
                     }
-                } else { // right node
-                    assert!(cmxs[nidx - 1].is_some(), "{} {} {}", depth, n.position, nidx);
+                } else {
+                    // right node
+                    assert!(
+                        cmxs[nidx - 1].is_some(),
+                        "{} {} {}",
+                        depth,
+                        n.position,
+                        nidx
+                    );
                     n.witness.ommers.0[depth] = cmxs[nidx - 1]; // ommer is left node
                 }
             }
@@ -257,7 +275,8 @@ impl Synchronizer {
             if len >= 2 {
                 // loop on *old notes*
                 for n in self.notes.iter_mut() {
-                    if n.witness.ommers.0[depth].is_none() { // fill right ommer if
+                    if n.witness.ommers.0[depth].is_none() {
+                        // fill right ommer if
                         assert!(cmxs[1].is_some());
                         n.witness.ommers.0[depth] = cmxs[1]; // we just got it
                     }

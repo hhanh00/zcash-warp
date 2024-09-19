@@ -53,7 +53,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         "CREATE TABLE IF NOT EXISTS t_accounts(
         account INTEGER PRIMARY KEY,
         addr_index INTEGER NOT NULL,
-        sk TEXT NOT NULL,
+        sk TEXT,
         address TEXT NOT NULL)",
         [],
     )?;
@@ -63,7 +63,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         id_subaccount INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,
         addr_index INTEGER NOT NULL,
-        sk TEXT NOT NULL,
+        sk TEXT,
         address TEXT NOT NULL,
         UNIQUE (account, addr_index))",
         [],
@@ -81,7 +81,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS o_accounts(
         account INTEGER PRIMARY KEY,
-        sk BLOB NOT NULL,
+        sk BLOB,
         vk BLOB NOT NULL)",
         [],
     )?;
@@ -152,6 +152,7 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS txdetails(
         id_tx INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
         height INTEGER NOT NULL,
         txid BLOB NOT NULL UNIQUE,
         data BLOB NOT NULL)",

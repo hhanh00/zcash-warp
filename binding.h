@@ -49,6 +49,12 @@ typedef struct CResult_u64 {
   uint32_t len;
 } CResult_u64;
 
+typedef struct CResult_bool {
+  bool value;
+  char *error;
+  uint32_t len;
+} CResult_bool;
+
 struct CResult_u8 c_add_contact(uint8_t coin,
                                 uint32_t account,
                                 char *name,
@@ -62,6 +68,8 @@ struct CResult_u8 c_reset_tables(uint8_t coin);
 struct CResult______u8 c_list_accounts(uint8_t coin);
 
 struct CResult______u8 c_get_balance(uint8_t coin, uint32_t account, uint32_t height);
+
+struct CResult______u8 c_get_account_signing_capabilities(uint8_t coin, uint32_t account);
 
 struct CResult______u8 c_get_account_property(uint8_t coin, uint32_t account, char *name);
 
@@ -85,6 +93,8 @@ struct CResult_u8 c_edit_account_birth(uint8_t coin, uint32_t account, uint32_t 
 struct CResult_u8 c_delete_account(uint8_t coin, uint32_t account);
 
 struct CResult_u8 c_set_backup_reminder(uint8_t coin, uint32_t account, bool saved);
+
+struct CResult_u8 c_downgrade_account(uint8_t coin, uint32_t account, struct CParam capabilities);
 
 struct CResult_u32 c_store_contact(uint8_t coin, struct CParam contact);
 
@@ -157,6 +167,10 @@ struct CResult_u32 c_get_activation_date(uint8_t coin);
 
 struct CResult_u32 c_get_height_by_time(uint8_t coin, uint32_t time);
 
+struct CResult_u32 c_get_activation_height(uint8_t coin);
+
+struct CResult_u32 c_get_time_by_height(uint8_t coin, uint32_t height);
+
 struct CResult_u8 c_reset_chain(uint8_t coin, uint32_t height);
 
 struct CResult______u8 c_prev_message(uint8_t coin, uint32_t account, uint32_t height);
@@ -196,6 +210,8 @@ struct CResult______u8 c_prepare_payment(uint8_t coin,
                                          uint8_t src_pools,
                                          bool fee_paid_by_sender,
                                          uint32_t confirmations);
+
+struct CResult_bool c_can_sign(uint8_t coin, uint32_t account, struct CParam summary);
 
 struct CResult______u8 c_sign(uint8_t coin, struct CParam summary, uint32_t expiration_height);
 

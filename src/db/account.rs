@@ -11,7 +11,7 @@ use zcash_primitives::legacy::TransparentAddress;
 
 use crate::account::contacts::recipient_contains;
 use crate::coin::COINS;
-use crate::data::fb::{AccountNameT, BalanceT, SpendingT};
+use crate::data::fb::{AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendingT};
 use crate::db::contacts::list_contacts;
 use crate::ffi::{map_result, map_result_bytes, CParam, CResult};
 use crate::keys::import_sk_bip38;
@@ -73,7 +73,7 @@ pub fn get_account_info(
     account: u32,
 ) -> Result<AccountInfo> {
     let ai = connection.query_row(
-        "SELECT a.name, a.seed, a.aindex, a.birth,
+        "SELECT a.name, a.fingerprint, a.seed, a.aindex, a.birth,
         t.addr_index as tidx, t.sk as tsk, t.address as taddr,
         s.sk as ssk, s.vk as svk, s.address as saddr,
         o.sk as osk, o.vk as ovk,
@@ -85,47 +85,59 @@ pub fn get_account_info(
         WHERE id_account = ?1",
         [account],
         |r| {
+            let name = r.get::<_, String>("name")?;
+            let fingerprint = r.get::<_, Vec<u8>>("fingerprint")?;
+            let seed = r.get::<_, Option<String>>("seed")?;
+            let aindex = r.get::<_, u32>("aindex")?;
+            let birth = r.get::<_, u32>("birth")?;
+            let saved = r.get::<_, Option<bool>>("saved")?;
+
             let taddr = r.get::<_, Option<String>>("taddr")?;
             let ti = match taddr {
                 None => None,
                 Some(taddr) => {
                     let index = r.get::<_, Option<u32>>("tidx")?;
-                    let tsk = r.get::<_, String>("tsk")?;
-                    let sk = import_sk_bip38(&tsk).unwrap();
+                    let tsk = r.get::<_, Option<String>>("tsk")?;
+                    let sk = tsk.map(|tsk| import_sk_bip38(&tsk).unwrap());
                     let addr = TransparentAddress::decode(network, &taddr).unwrap();
                     let ti = TransparentAccountInfo { index, sk, addr };
                     Some(ti)
                 }
             };
 
-            let sk = r.get::<_, Option<String>>("ssk")?.map(|sk| {
-                decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)
-                    .unwrap()
-            });
-            let vk = r.get::<_, String>("svk")?;
-            let vk = decode_extended_full_viewing_key(
-                network.hrp_sapling_extended_full_viewing_key(),
-                &vk,
-            )
-            .unwrap();
-            let addr = r.get::<_, String>("saddr")?;
-            let addr =
-                decode_payment_address(network.hrp_sapling_payment_address(), &addr).unwrap();
-            let name = r.get::<_, String>("name")?;
-            let seed = r.get::<_, Option<String>>("seed")?;
-            let aindex = r.get::<_, u32>("aindex")?;
-            let birth = r.get::<_, u32>("birth")?;
-            let saved = r.get::<_, Option<bool>>("saved")?;
-            let si = SaplingAccountInfo { sk, vk, addr };
+            let saddr = r.get::<_, Option<String>>("saddr")?;
+            let si = match saddr {
+                None => None,
+                Some(saddr) => {
+                    let sk = r.get::<_, Option<String>>("ssk")?.map(|sk| {
+                        decode_extended_spending_key(
+                            network.hrp_sapling_extended_spending_key(),
+                            &sk,
+                        )
+                        .unwrap()
+                    });
+                    let vk = r.get::<_, String>("svk")?;
+                    let vk = decode_extended_full_viewing_key(
+                        network.hrp_sapling_extended_full_viewing_key(),
+                        &vk,
+                    )
+                    .unwrap();
+                    let addr =
+                        decode_payment_address(network.hrp_sapling_payment_address(), &saddr)
+                            .unwrap();
+                    let si = SaplingAccountInfo { sk, vk, addr };
+                    Some(si)
+                }
+            };
 
-            let sk = r.get::<_, Option<Vec<u8>>>("osk")?.map(|sk| {
-                let sk = SpendingKey::from_bytes(sk.try_into().unwrap()).unwrap();
-                sk
-            });
             let ovk = r.get::<_, Option<Vec<u8>>>("ovk")?;
             let oi = match ovk {
                 None => None,
                 Some(vk) => {
+                    let sk = r.get::<_, Option<Vec<u8>>>("osk")?.map(|sk| {
+                        let sk = SpendingKey::from_bytes(sk.try_into().unwrap()).unwrap();
+                        sk
+                    });
                     let vk = FullViewingKey::from_bytes(&vk.try_into().unwrap()).unwrap();
                     let addr = vk.address_at(0u64, Scope::External);
                     let oi = OrchardAccountInfo { sk, vk, addr };
@@ -136,6 +148,7 @@ pub fn get_account_info(
             let ai = AccountInfo {
                 account,
                 name,
+                fingerprint,
                 seed,
                 aindex,
                 birth,
@@ -199,6 +212,38 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
         orchard,
     };
     Ok(b)
+}
+
+#[c_export]
+pub fn get_account_signing_capabilities(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+) -> Result<AccountSigningCapabilitiesT> {
+    let ai = get_account_info(network, connection, account)?;
+    let seed = ai.seed.is_some();
+    let transparent: u8 = ai
+        .transparent
+        .as_ref()
+        .map(|ti| if ti.sk.is_some() { 3 } else { 1 })
+        .unwrap_or_default();
+    let sapling: u8 = ai
+        .sapling
+        .as_ref()
+        .map(|si| if si.sk.is_some() { 3 } else { 1 })
+        .unwrap_or_default();
+    let orchard: u8 = ai
+        .orchard
+        .as_ref()
+        .map(|oi| if oi.sk.is_some() { 3 } else { 1 })
+        .unwrap_or_default();
+    let account_caps = AccountSigningCapabilitiesT {
+        seed,
+        transparent,
+        sapling,
+        orchard,
+    };
+    Ok(account_caps)
 }
 
 #[c_export]

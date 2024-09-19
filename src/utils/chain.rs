@@ -53,6 +53,22 @@ pub async fn get_height_by_time(network: &Network, client: &mut Client, time: u3
 }
 
 #[c_export]
+pub fn get_activation_height(network: &Network) -> Result<u32> {
+    let h = network.activation_height(NetworkUpgrade::Sapling).unwrap();
+    let h: u32 = h.into();
+    Ok(h)
+}
+
+#[c_export]
+pub async fn get_time_by_height(network: &Network, client: &mut Client, height: u32) -> Result<u32> {
+    let ah = network.activation_height(NetworkUpgrade::Sapling).unwrap();
+    let height = height.max(u32::from(ah) + 1);
+
+    let block = get_compact_block(client, height).await?;
+    Ok(block.time)
+}
+
+#[c_export]
 pub async fn reset_chain(
     network: &Network,
     connection: &mut Connection,

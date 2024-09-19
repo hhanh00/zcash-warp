@@ -27,7 +27,7 @@ pub fn derive_zip32_keys(network: &Network, connection: &Connection, account: u3
         let si = derive_zip32(network, &seed, acc_index);
         let ti = derive_bip32(network, &seed, 0, acc_index, true);
         Ok::<_, anyhow::Error>(ZIP32KeysT {
-            tsk: Some(export_sk_bip38(&ti.sk)),
+            tsk: ti.sk.as_ref().map(|sk| export_sk_bip38(sk)),
             taddress: Some(ti.addr.encode(network)),
             zsk: si.sk.map(|sk| encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)),
             zaddress: Some(encode_payment_address(network.hrp_sapling_payment_address(), &si.addr)),

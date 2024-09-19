@@ -1,5 +1,6 @@
 use anyhow::Result;
 use bip39::{Mnemonic, Seed};
+use orchard::keys::Scope;
 use prost::bytes::BufMut;
 use rusqlite::{params, Connection};
 use sapling_crypto::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
@@ -12,23 +13,25 @@ use zcash_client_backend::{
     },
     keys::UnifiedFullViewingKey,
 };
-use zcash_keys::keys::UnifiedAddressRequest;
 use zcash_primitives::consensus::{Network, NetworkConstants as _};
 
 use crate::{
+    data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
     keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38},
     types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
 };
 
 use crate::{
     coin::COINS,
-    ffi::{map_result, CResult},
+    ffi::{map_result, CParam, CResult},
 };
 use std::{
     ffi::{c_char, CStr},
     io::Write,
 };
 use warp_macros::c_export;
+
+use super::account::get_account_signing_capabilities;
 
 pub fn parse_seed_phrase(phrase: &str) -> Result<Seed> {
     let words = phrase.split_whitespace().collect::<Vec<_>>();
@@ -58,19 +61,21 @@ pub enum KeyType {
 pub struct KeyFingerprint(pub Vec<u8>);
 
 const T_SK: u8 = 1;
-const S_SK: u8 = 2;
-const S_VK: u8 = 4;
-const O_SK: u8 = 8;
-const O_VK: u8 = 16;
+const T_VK: u8 = 2;
+const S_SK: u8 = 4;
+const S_VK: u8 = 8;
+const O_SK: u8 = 16;
+const O_VK: u8 = 32;
+const SEED: u8 = 64;
 
 impl From<&KeyType> for u8 {
     fn from(value: &KeyType) -> Self {
         match value {
-            KeyType::Seed(_, _, _) => T_SK | S_SK | S_VK | O_SK | O_VK,
+            KeyType::Seed(_, _, _) => T_SK | T_VK | S_SK | S_VK | O_SK | O_VK | SEED,
             KeyType::SaplingSK(_) => S_SK | S_VK,
             KeyType::SaplingVK(_) => S_VK,
             KeyType::UnifiedVK(_) => S_VK | O_VK,
-            KeyType::Transparent(_) => T_SK,
+            KeyType::Transparent(_) => T_SK | T_VK,
         }
     }
 }
@@ -95,10 +100,10 @@ impl KeyType {
                 fingerprint_buffer.write_all(&address.to_bytes()[..])?;
             }
             KeyType::UnifiedVK(vk) => {
-                let (ua, _) = vk.default_address(UnifiedAddressRequest::all().unwrap())?;
-                let Some(address) = ua.orchard() else {
+                let Some(fvk) = vk.orchard() else {
                     anyhow::bail!("UVK must have an orchard receiver")
                 };
+                let address = fvk.address_at(0u64, Scope::External);
                 fingerprint_buffer.put_u8(2);
                 fingerprint_buffer.write_all(&address.to_raw_address_bytes()[..])?;
             }
@@ -113,11 +118,7 @@ impl KeyType {
     }
 }
 
-pub fn detect_key(
-    network: &Network,
-    key: &str,
-    acc_index: u32,
-) -> Result<KeyType> {
+pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<KeyType> {
     if let Ok(seed) = parse_seed_phrase(key) {
         return Ok(KeyType::Seed(key.to_string(), seed, acc_index));
     }
@@ -173,43 +174,22 @@ pub fn create_new_account(
             account
         }
         KeyType::SaplingSK(sk) => {
-            let account = create_account(
-                connection,
-                (&kt).into(),
-                &fingerprint,
-                name,
-                None,
-                0,
-                birth,
-            )?;
+            let account =
+                create_account(connection, (&kt).into(), &fingerprint, name, None, 0, birth)?;
             let si = SaplingAccountInfo::from_sk(&sk);
             create_sapling_account(network, connection, account, &si)?;
             account
         }
         KeyType::SaplingVK(vk) => {
-            let account = create_account(
-                connection,
-                (&kt).into(),
-                &fingerprint,
-                name,
-                None,
-                0,
-                birth,
-            )?;
+            let account =
+                create_account(connection, (&kt).into(), &fingerprint, name, None, 0, birth)?;
             let si = SaplingAccountInfo::from_vk(&vk);
             create_sapling_account(network, connection, account, &si)?;
             account
         }
         KeyType::UnifiedVK(uvk) => {
-            let account = create_account(
-                connection,
-                (&kt).into(),
-                &fingerprint,
-                name,
-                None,
-                0,
-                birth,
-            )?;
+            let account =
+                create_account(connection, (&kt).into(), &fingerprint, name, None, 0, birth)?;
             let svk = uvk
                 .sapling()
                 .ok_or(anyhow::anyhow!("Missing sapling receiver"))?;
@@ -224,15 +204,8 @@ pub fn create_new_account(
             account
         }
         KeyType::Transparent(tsk) => {
-            let account = create_account(
-                connection,
-                (&kt).into(),
-                &fingerprint,
-                name,
-                None,
-                0,
-                birth,
-            )?;
+            let account =
+                create_account(connection, (&kt).into(), &fingerprint, name, None, 0, birth)?;
             let ti = TransparentAccountInfo::from_secret_key(tsk, true);
             create_transparent_account(network, connection, account, 0, &ti)?;
             create_transparent_subaccount(network, connection, account, 0, &ti)?;
@@ -290,7 +263,7 @@ pub fn create_transparent_account(
     addr_index: u32,
     ti: &TransparentAccountInfo,
 ) -> Result<()> {
-    let sk = export_sk_bip38(&ti.sk);
+    let sk = ti.sk.as_ref().map(|sk| export_sk_bip38(&sk));
     let addr = ti.addr.encode(network);
 
     connection.execute(
@@ -308,7 +281,7 @@ pub fn create_transparent_subaccount(
     addr_index: u32,
     ti: &TransparentAccountInfo,
 ) -> Result<()> {
-    let sk = export_sk_bip38(&ti.sk);
+    let sk = ti.sk.as_ref().map(|sk| export_sk_bip38(sk));
     let addr = ti.addr.encode(network);
 
     connection.execute(
@@ -319,7 +292,8 @@ pub fn create_transparent_subaccount(
     connection.execute(
         "UPDATE t_accounts SET addr_index = ?2, sk = ?3, address = ?4
         WHERE account = ?1",
-        params![account, addr_index, &sk, &addr])?;
+        params![account, addr_index, &sk, &addr],
+    )?;
     Ok(())
 }
 
@@ -341,21 +315,27 @@ pub fn create_orchard_account(
 }
 
 pub fn get_account_seed(connection: &Connection, account: u32) -> Result<(Seed, u32)> {
-    let (phrase, aindex) = connection.query_row("SELECT seed, aindex FROM accounts WHERE id_account = ?1", 
-    [account], |r| Ok((
-        r.get::<_, Option<String>>(0)?,
-        r.get::<_, u32>(1)?,
-    )))?;
+    let (phrase, aindex) = connection.query_row(
+        "SELECT seed, aindex FROM accounts WHERE id_account = ?1",
+        [account],
+        |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, u32>(1)?)),
+    )?;
     let phrase = phrase.ok_or(anyhow::anyhow!("No seed"))?;
     let seed = parse_seed_phrase(&phrase)?;
     Ok((seed, aindex))
 }
 
-pub fn new_transparent_address(network: &Network, connection: &Connection, account: u32) -> Result<()> {
+pub fn new_transparent_address(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+) -> Result<()> {
     let (seed, acc_index) = get_account_seed(connection, account)?;
     let addr_index = connection.query_row(
-        "SELECT MAX(addr_index) FROM t_subaccounts WHERE account = ?1", [account], |r| r.get::<_, u32>(0))?
-        + 1;
+        "SELECT MAX(addr_index) FROM t_subaccounts WHERE account = ?1",
+        [account],
+        |r| r.get::<_, u32>(0),
+    )? + 1;
     let ti = derive_bip32(network, &seed, acc_index, addr_index, true);
     create_transparent_subaccount(network, connection, account, addr_index, &ti)?;
     Ok(())
@@ -382,7 +362,10 @@ pub fn edit_account_birth(connection: &Connection, account: u32, birth: u32) -> 
 #[c_export]
 pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     connection.execute("DELETE FROM notes WHERE account = ?1", params![account])?;
+    connection.execute("DELETE FROM utxos WHERE account = ?1", params![account])?;
+    connection.execute("DELETE FROM witnesses WHERE account = ?1", params![account])?;
     connection.execute("DELETE FROM txs WHERE account = ?1", params![account])?;
+    connection.execute("DELETE FROM txdetails WHERE account = ?1", params![account])?;
     connection.execute(
         "DELETE FROM accounts WHERE id_account = ?1",
         params![account],
@@ -392,10 +375,20 @@ pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
         params![account],
     )?;
     connection.execute(
+        "DELETE FROM t_subaccounts WHERE account = ?1",
+        params![account],
+    )?;
+    connection.execute(
+        "DELETE FROM s_accounts WHERE account = ?1",
+        params![account],
+    )?;
+    connection.execute(
         "DELETE FROM o_accounts WHERE account = ?1",
         params![account],
     )?;
-    connection.execute("DELETE FROM messages WHERE account = ?1", params![account])?;
+    connection.execute("DELETE FROM msgs WHERE account = ?1", params![account])?;
+    connection.execute("DELETE FROM contacts WHERE account = ?1", params![account])?;
+    connection.execute("DELETE FROM props WHERE account = ?1", params![account])?;
     Ok(())
 }
 
@@ -406,6 +399,71 @@ pub fn set_backup_reminder(connection: &Connection, account: u32, saved: bool) -
         params![account, saved],
     )?;
     Ok(())
+}
+
+#[c_export]
+pub fn downgrade_account(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    capabilities: &AccountSigningCapabilitiesT,
+) -> Result<()> {
+    if capabilities.transparent == 0 && 
+    capabilities.sapling == 0 && capabilities.orchard == 0 {
+        anyhow::bail!("Account needs at least one key");
+    }
+
+    if !capabilities.seed {
+        connection.execute(
+            "UPDATE accounts SET seed = NULL WHERE id_account = ?1",
+            [account],
+        )?;
+    }
+    if capabilities.transparent == 1 {
+        connection.execute(
+            "UPDATE t_accounts SET sk = NULL WHERE account = ?1",
+            [account],
+        )?;
+        connection.execute(
+            "UPDATE t_subaccounts SET sk = NULL WHERE account = ?1",
+            [account],
+        )?;
+    } else if capabilities.transparent == 0 {
+        connection.execute("DELETE FROM t_accounts WHERE account = ?1", [account])?;
+        connection.execute("DELETE FROM t_subaccounts WHERE account = ?1", [account])?;
+    }
+    if capabilities.sapling == 1 {
+        connection.execute(
+            "UPDATE s_accounts SET sk = NULL WHERE account = ?1",
+            [account],
+        )?;
+    } else if capabilities.sapling == 0 {
+        connection.execute("DELETE FROM s_accounts WHERE account = ?1", [account])?;
+    }
+    if capabilities.orchard == 1 {
+        connection.execute(
+            "UPDATE o_accounts SET sk = NULL WHERE account = ?1",
+            [account],
+        )?;
+    } else if capabilities.orchard == 0 {
+        connection.execute("DELETE FROM o_accounts WHERE account = ?1", [account])?;
+    }
+    let capabilities = &get_account_signing_capabilities(network, connection, account)?;
+    let kt: u8 = capabilities.into();
+    connection.execute(
+        "UPDATE accounts SET key_type = ?2 WHERE id_account = ?1",
+        params![account, kt],
+    )?;
+    Ok(())
+}
+
+impl From<&AccountSigningCapabilitiesT> for u8 {
+    fn from(value: &AccountSigningCapabilitiesT) -> Self {
+        value.transparent
+            | value.sapling << 2
+            | value.orchard << 4
+            | if value.seed { 1 << 6 } else { 0 }
+    }
 }
 
 pub fn get_min_birth(connection: &Connection) -> Result<Option<u32>> {

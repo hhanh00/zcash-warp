@@ -29,7 +29,7 @@ pub async fn fetch_tx_details(
         tx,
     )?;
     let txb = serde_cbor::to_vec(&tx)?;
-    store_tx_details(&connection, id, height, &tx.txid, &txb)?;
+    store_tx_details(&connection, id, account, height, &tx.txid, &txb)?;
     let etx = tx.to_transaction_info_ext(network);
     Ok(etx)
 }

@@ -14,9 +14,9 @@ use crate::{
 };
 use anyhow::Result;
 use rayon::prelude::*;
+use sapling_crypto::{value::NoteValue, Note, PaymentAddress, Rseed};
 use tracing::info;
 use zcash_primitives::consensus::Network;
-use sapling_crypto::{value::NoteValue, Note, PaymentAddress, Rseed};
 
 use crate::warp::{hasher::SaplingHasher, Edge, Hasher, MERKLE_DEPTH};
 
@@ -74,7 +74,11 @@ impl Synchronizer {
         let ivks = self
             .account_infos
             .iter()
-            .map(|ai| (ai.account, ai.sapling.vk.fvk.vk.ivk()))
+            .filter_map(|ai| {
+                ai.sapling
+                    .as_ref()
+                    .map(|si| (ai.account, si.vk.fvk.vk.ivk()))
+            })
             .collect::<Vec<_>>();
 
         let outputs = blocks.into_par_iter().flat_map_iter(|b| {
@@ -140,20 +144,21 @@ impl Synchronizer {
                 .find(|&ai| ai.account == note.account)
                 .unwrap();
             let recipient = PaymentAddress::from_bytes(&note.address).unwrap();
-            let vk = &ai.sapling.vk.fvk.vk;
-            let n = Note::from_parts(
-                recipient,
-                NoteValue::from_raw(note.value),
-                Rseed::BeforeZip212(Fr::from_bytes(&note.rcm).unwrap()),
-            );
-            let nf = n.nf(&vk.nk, note.position as u64);
-            note.nf = nf.0;
-            note.tx.txid = cb.vtx[note.tx.ivtx as usize]
-                .hash
-                .clone()
-                .try_into()
-                .unwrap();
-            notes.push(note);
+            if let Some(vk) = ai.sapling.as_ref().map(|si| &si.vk.fvk.vk) {
+                let n = Note::from_parts(
+                    recipient,
+                    NoteValue::from_raw(note.value),
+                    Rseed::BeforeZip212(Fr::from_bytes(&note.rcm).unwrap()),
+                );
+                let nf = n.nf(&vk.nk, note.position as u64);
+                note.nf = nf.0;
+                note.tx.txid = cb.vtx[note.tx.ivtx as usize]
+                    .hash
+                    .clone()
+                    .try_into()
+                    .unwrap();
+                notes.push(note);
+            }
         }
 
         let mut bridges = vec![];
@@ -208,11 +213,12 @@ impl Synchronizer {
                 let b = be.b;
                 // tracing::info!("{depth} {i} {} {}", be.s, be.e);
                 // tracing::info!("{} {}", be.s - p, be.e - p);
-                // tracing::info!("{:?} {:?}", 
-                //     b.start.as_ref().unwrap().levels[depth], 
+                // tracing::info!("{:?} {:?}",
+                //     b.start.as_ref().unwrap().levels[depth],
                 //     b.end.as_ref().unwrap().levels[depth]);
                 let h = &b.start.as_ref().unwrap().levels[depth].hash;
-                if !h.is_empty() { // fill the *right* node of the be.s pair
+                if !h.is_empty() {
+                    // fill the *right* node of the be.s pair
                     cmxs[((be.s - p) | 1) as usize] = Some(h.clone().try_into().unwrap())
                 }
                 let h = &b.end.as_ref().unwrap().levels[depth].hash;
@@ -234,15 +240,30 @@ impl Synchronizer {
                     n.witness.value = cmxs[nidx].unwrap();
                 }
 
-                if nidx % 2 == 0 { // left node
-                    if nidx + 1 < cmxs.len() { // ommer is right node if it exists
-                        assert!(cmxs[nidx + 1].is_some(), "{} {} {}", depth, n.position, nidx);
+                if nidx % 2 == 0 {
+                    // left node
+                    if nidx + 1 < cmxs.len() {
+                        // ommer is right node if it exists
+                        assert!(
+                            cmxs[nidx + 1].is_some(),
+                            "{} {} {}",
+                            depth,
+                            n.position,
+                            nidx
+                        );
                         n.witness.ommers.0[depth] = cmxs[nidx + 1];
                     } else {
                         n.witness.ommers.0[depth] = None;
                     }
-                } else { // right node
-                    assert!(cmxs[nidx - 1].is_some(), "{} {} {}", depth, n.position, nidx);
+                } else {
+                    // right node
+                    assert!(
+                        cmxs[nidx - 1].is_some(),
+                        "{} {} {}",
+                        depth,
+                        n.position,
+                        nidx
+                    );
                     n.witness.ommers.0[depth] = cmxs[nidx - 1]; // ommer is left node
                 }
             }
@@ -251,7 +272,8 @@ impl Synchronizer {
             if len >= 2 {
                 // loop on *old notes*
                 for n in self.notes.iter_mut() {
-                    if n.witness.ommers.0[depth].is_none() { // fill right ommer if
+                    if n.witness.ommers.0[depth].is_none() {
+                        // fill right ommer if
                         assert!(cmxs[1].is_some());
                         n.witness.ommers.0[depth] = cmxs[1]; // we just got it
                     }

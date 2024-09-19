@@ -5847,5 +5847,200 @@ impl ConfigT {
     })
   }
 }
+pub enum AccountSigningCapabilitiesOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct AccountSigningCapabilities<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for AccountSigningCapabilities<'a> {
+  type Inner = AccountSigningCapabilities<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> AccountSigningCapabilities<'a> {
+  pub const VT_SEED: flatbuffers::VOffsetT = 4;
+  pub const VT_TRANSPARENT: flatbuffers::VOffsetT = 6;
+  pub const VT_SAPLING: flatbuffers::VOffsetT = 8;
+  pub const VT_ORCHARD: flatbuffers::VOffsetT = 10;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    AccountSigningCapabilities { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args AccountSigningCapabilitiesArgs
+  ) -> flatbuffers::WIPOffset<AccountSigningCapabilities<'bldr>> {
+    let mut builder = AccountSigningCapabilitiesBuilder::new(_fbb);
+    builder.add_orchard(args.orchard);
+    builder.add_sapling(args.sapling);
+    builder.add_transparent(args.transparent);
+    builder.add_seed(args.seed);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> AccountSigningCapabilitiesT {
+    let seed = self.seed();
+    let transparent = self.transparent();
+    let sapling = self.sapling();
+    let orchard = self.orchard();
+    AccountSigningCapabilitiesT {
+      seed,
+      transparent,
+      sapling,
+      orchard,
+    }
+  }
+
+  #[inline]
+  pub fn seed(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(AccountSigningCapabilities::VT_SEED, Some(false)).unwrap()}
+  }
+  #[inline]
+  pub fn transparent(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(AccountSigningCapabilities::VT_TRANSPARENT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn sapling(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(AccountSigningCapabilities::VT_SAPLING, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn orchard(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(AccountSigningCapabilities::VT_ORCHARD, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for AccountSigningCapabilities<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<bool>("seed", Self::VT_SEED, false)?
+     .visit_field::<u8>("transparent", Self::VT_TRANSPARENT, false)?
+     .visit_field::<u8>("sapling", Self::VT_SAPLING, false)?
+     .visit_field::<u8>("orchard", Self::VT_ORCHARD, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct AccountSigningCapabilitiesArgs {
+    pub seed: bool,
+    pub transparent: u8,
+    pub sapling: u8,
+    pub orchard: u8,
+}
+impl<'a> Default for AccountSigningCapabilitiesArgs {
+  #[inline]
+  fn default() -> Self {
+    AccountSigningCapabilitiesArgs {
+      seed: false,
+      transparent: 0,
+      sapling: 0,
+      orchard: 0,
+    }
+  }
+}
+
+pub struct AccountSigningCapabilitiesBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> AccountSigningCapabilitiesBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_seed(&mut self, seed: bool) {
+    self.fbb_.push_slot::<bool>(AccountSigningCapabilities::VT_SEED, seed, false);
+  }
+  #[inline]
+  pub fn add_transparent(&mut self, transparent: u8) {
+    self.fbb_.push_slot::<u8>(AccountSigningCapabilities::VT_TRANSPARENT, transparent, 0);
+  }
+  #[inline]
+  pub fn add_sapling(&mut self, sapling: u8) {
+    self.fbb_.push_slot::<u8>(AccountSigningCapabilities::VT_SAPLING, sapling, 0);
+  }
+  #[inline]
+  pub fn add_orchard(&mut self, orchard: u8) {
+    self.fbb_.push_slot::<u8>(AccountSigningCapabilities::VT_ORCHARD, orchard, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> AccountSigningCapabilitiesBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    AccountSigningCapabilitiesBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<AccountSigningCapabilities<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for AccountSigningCapabilities<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("AccountSigningCapabilities");
+      ds.field("seed", &self.seed());
+      ds.field("transparent", &self.transparent());
+      ds.field("sapling", &self.sapling());
+      ds.field("orchard", &self.orchard());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct AccountSigningCapabilitiesT {
+  pub seed: bool,
+  pub transparent: u8,
+  pub sapling: u8,
+  pub orchard: u8,
+}
+impl Default for AccountSigningCapabilitiesT {
+  fn default() -> Self {
+    Self {
+      seed: false,
+      transparent: 0,
+      sapling: 0,
+      orchard: 0,
+    }
+  }
+}
+impl AccountSigningCapabilitiesT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<AccountSigningCapabilities<'b>> {
+    let seed = self.seed;
+    let transparent = self.transparent;
+    let sapling = self.sapling;
+    let orchard = self.orchard;
+    AccountSigningCapabilities::create(_fbb, &AccountSigningCapabilitiesArgs{
+      seed,
+      transparent,
+      sapling,
+      orchard,
+    })
+  }
+}
 }  // pub mod fb
 

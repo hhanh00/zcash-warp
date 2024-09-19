@@ -142,14 +142,15 @@ pub fn update_tx_primary_address_memo(
 pub fn store_tx_details(
     connection: &Connection,
     id: u32,
+    account: u32,
     height: u32,
     txid: &Hash,
     data: &[u8],
 ) -> Result<()> {
     connection.execute(
-        "INSERT INTO txdetails(id_tx, height, txid, data)
-        VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO NOTHING",
-        params![id, height, txid, data],
+        "INSERT INTO txdetails(id_tx, account, height, txid, data)
+        VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT DO NOTHING",
+        params![id, account, height, txid, data],
     )?;
     Ok(())
 }

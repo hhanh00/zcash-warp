@@ -22,7 +22,7 @@ use crate::{
 
 use crate::{
     coin::COINS,
-    ffi::{map_result_bytes, map_result_string, CParam, CResult},
+    ffi::{map_result, map_result_bytes, map_result_string, CParam, CResult},
 };
 use flatbuffers::FlatBufferBuilder;
 use std::ffi::{c_char, CStr};
@@ -50,7 +50,11 @@ pub async fn prepare_payment(
         .iter()
         .map(|p| {
             let memo = p.memo.clone().map(|m| m.to_memo()).transpose()?;
-            let memo2 = p.memo_bytes.clone().map(|mb| Memo::from_bytes(&mb)).transpose()?;
+            let memo2 = p
+                .memo_bytes
+                .clone()
+                .map(|mb| Memo::from_bytes(&mb))
+                .transpose()?;
             let memo = memo.or(memo2).map(|m| m.into());
             Ok(PaymentItem {
                 address: p.address.clone().unwrap(),
@@ -73,6 +77,47 @@ pub async fn prepare_payment(
     )?;
     let summary = unsigned_tx.to_summary(vec![])?;
     Ok(summary)
+}
+
+#[c_export]
+pub fn can_sign(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+    summary: &TransactionSummaryT,
+) -> Result<bool> {
+    let utx = summary.data.as_ref().unwrap();
+    let utx = bincode::deserialize_from::<_, UnsignedTransaction>(&utx[..])?;
+    let ai = get_account_info(network, connection, account)?;
+    if utx.account_id != ai.fingerprint {
+        anyhow::bail!("Invalid fingerprint");
+    }
+    let mut pools_required = 0;
+    for n in utx.tx_notes.iter() {
+        match &n.note {
+            crate::pay::InputNote::Transparent { .. } => {
+                pools_required |= 1;
+            }
+            crate::pay::InputNote::Sapling { .. } => {
+                pools_required |= 2;
+            }
+            crate::pay::InputNote::Orchard { .. } => {
+                pools_required |= 4;
+            }
+        }
+    }
+    let mut pools_available = 0;
+    if ai.transparent.as_ref().and_then(|ti| ti.sk.as_ref()).is_some() {
+        pools_available |= 1;
+    }
+    if ai.sapling.as_ref().and_then(|si| si.sk.as_ref()).is_some() {
+        pools_available |= 2;
+    }
+    if ai.orchard.as_ref().and_then(|oi| oi.sk.as_ref()).is_some() {
+        pools_available |= 4;
+    }
+    let can_sign = (pools_available & pools_required) == pools_required;
+    Ok(can_sign)
 }
 
 #[c_export]

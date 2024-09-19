@@ -93,7 +93,7 @@ impl TransparentAccountInfo {
         };
         let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
         let addr = TransparentAddress::PublicKeyHash(pub_key.into());
-        TransparentAccountInfo { index: None, sk: sk.clone(), addr }
+        TransparentAccountInfo { index: None, sk: Some(sk.clone()), addr }
     }
 }
 
