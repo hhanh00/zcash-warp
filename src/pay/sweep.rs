@@ -4,9 +4,15 @@ use tonic::Request;
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_primitives::consensus::Network;
 
-use super::{Payment, PaymentBuilder, PaymentItem, UnsignedTransaction};
+use super::{PaymentBuilder, UnsignedTransaction};
 use crate::{
-    coin::connect_lwd, db::chain::snap_to_checkpoint, keys::{Bip32KeyIterator, TSKStore}, lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter}, types::{AccountInfo, AccountType, PoolMask}, warp::{legacy::CommitmentTreeFrontier, UTXO}
+    coin::connect_lwd,
+    data::fb::RecipientT,
+    db::chain::snap_to_checkpoint,
+    keys::{Bip32KeyIterator, TSKStore},
+    lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter},
+    types::{AccountInfo, AccountType, PoolMask},
+    warp::{legacy::CommitmentTreeFrontier, UTXO},
 };
 
 pub async fn scan_utxo_by_address(
@@ -89,7 +95,9 @@ pub async fn scan_utxo_by_seed(
             let mut funds =
                 scan_utxo_by_address(url.to_string(), ai.account, height, address).await?;
             if !funds.is_empty() {
-                tsk_store.0.insert(ti.addr.encode(network), ti.sk.clone().unwrap());
+                tsk_store
+                    .0
+                    .insert(ti.addr.encode(network), ti.sk.clone().unwrap());
                 utxos.append(&mut funds);
             } else {
                 gap += 1;
@@ -113,17 +121,25 @@ pub fn prepare_sweep(
 ) -> Result<UnsignedTransaction> {
     let amount = utxos.iter().map(|u| u.value).sum::<u64>();
 
-    let p = Payment {
-        recipients: vec![PaymentItem {
-            address: destination_address.to_string(),
-            amount,
-            memo: None,
-        }],
+    let recipient = RecipientT {
+        address: Some(destination_address.to_string()),
+        amount,
+        pools: 7,
+        memo: None,
+        memo_bytes: None,
     };
 
     let height = snap_to_checkpoint(connection, height)?;
-    let mut builder =
-        PaymentBuilder::new(network, connection, account, height, p, PoolMask(1), &s, &o)?;
+    let mut builder = PaymentBuilder::new(
+        network,
+        connection,
+        account,
+        height,
+        std::slice::from_ref(&recipient),
+        PoolMask(1),
+        &s,
+        &o,
+    )?;
     builder.add_utxos(&utxos)?;
     builder.set_use_change(false)?;
     let mut utx = builder.prepare()?;

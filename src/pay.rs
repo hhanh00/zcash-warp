@@ -11,7 +11,7 @@ use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::{PaymentRequestT, TransactionRecipientT, TransactionSummaryT},
+    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT},
     keys::TSKStore,
     types::{AccountInfo, CheckpointHeight, PoolMask},
     warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO},
@@ -41,62 +41,38 @@ pub enum Error {
 }
 
 #[derive(Clone, Debug)]
-pub struct PaymentItem {
-    pub address: String,
-    pub amount: u64,
-    pub memo: Option<MemoBytes>,
-}
-
-impl TryFrom<&PaymentRequestT> for PaymentItem {
-    fn try_from(p: &PaymentRequestT) -> Result<Self> {
-        let memo = p.memo.as_ref().map(|m| m.to_memo()).transpose()?;
-        let memo = memo.map(|memo| MemoBytes::from(&memo));
-        Ok(Self {
-            address: p.address.clone().unwrap(),
-            amount: p.amount,
-            memo,
-        })
-    }
-
-    type Error = Error;
-}
-
-#[derive(Debug)]
-pub struct Payment {
-    pub recipients: Vec<PaymentItem>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ExtendedPayment {
-    pub payment: PaymentItem,
+pub struct ExtendedRecipient {
+    pub recipient: RecipientT,
     pub amount: u64,
     pub remaining: u64,
     pub pool_mask: PoolMask,
     pub is_change: bool,
 }
 
-impl ExtendedPayment {
-    pub fn to_inner(self) -> PaymentItem {
-        self.payment
+impl ExtendedRecipient {
+    pub fn to_inner(self) -> RecipientT {
+        self.recipient
     }
-    fn to_extended(network: &Network, payment: PaymentItem) -> Result<Self> {
-        let ua = RecipientAddress::decode(network, &payment.address)
+    fn to_extended(network: &Network, recipient: RecipientT) -> Result<Self> {
+        let ua = RecipientAddress::decode(network, &recipient.address.as_ref().unwrap())
             .ok_or(anyhow::anyhow!("Invalid Address"))?;
-        let pool = match ua {
+        let pools = match ua {
             RecipientAddress::Sapling(_) => 2,
             RecipientAddress::Tex(_) => 1,
             RecipientAddress::Transparent(_) => 1,
             RecipientAddress::Unified(ua) => {
+                let t = if ua.transparent().is_some() { 1 } else { 0 };
                 let s = if ua.sapling().is_some() { 2 } else { 0 };
                 let o = if ua.orchard().is_some() { 4 } else { 0 };
-                s | o
+                t | s | o
             }
         };
-        Ok(ExtendedPayment {
-            amount: payment.amount,
-            remaining: payment.amount,
-            payment,
-            pool_mask: PoolMask(pool),
+        let pools = pools & recipient.pools;
+        Ok(ExtendedRecipient {
+            amount: recipient.amount,
+            remaining: recipient.amount,
+            recipient,
+            pool_mask: PoolMask(pools),
             is_change: false,
         })
     }
@@ -158,7 +134,7 @@ pub struct TxOutput {
     pub pool: u8,
     pub amount: u64,
     pub note: OutputNote,
-    pub change: bool,
+    pub is_change: bool,
 }
 
 pub struct PaymentBuilder {
@@ -167,7 +143,7 @@ pub struct PaymentBuilder {
     pub account: u32,
     pub ai: AccountInfo,
     pub inputs: [Vec<TxInput>; 3],
-    pub outputs: Vec<ExtendedPayment>,
+    pub outputs: Vec<ExtendedRecipient>,
     pub account_pools: PoolMask,
     pub src_pools: PoolMask,
 
@@ -175,6 +151,7 @@ pub struct PaymentBuilder {
     pub fee: u64,
 
     pub available: [u64; 3],
+    pub used: [bool; 3],
     pub use_change: bool,
 
     pub s_edge: Edge,
@@ -207,7 +184,7 @@ impl UnsignedTransaction {
             .tx_outputs
             .iter()
             .filter_map(|o| {
-                if !o.change {
+                if !o.is_change {
                     Some(TransactionRecipientT {
                         address: Some(o.address_string.clone()),
                         amount: o.amount,
@@ -306,20 +283,18 @@ pub fn make_payment(
     network: &Network,
     connection: &Connection,
     account: u32,
-    cp_height: CheckpointHeight,
-    p: Payment,
-    src_pools: PoolMask,
-    fee_paid_by_sender: bool,
+    payment: &PaymentRequestT,
     s_tree: &CommitmentTreeFrontier,
     o_tree: &CommitmentTreeFrontier,
 ) -> Result<UnsignedTransaction> {
     let mut pb = PaymentBuilder::new(
-        network, connection, account, cp_height, p, src_pools, s_tree, o_tree,
+        network, connection, account, CheckpointHeight(payment.height),
+        payment.recipients.as_ref().unwrap(), PoolMask(payment.src_pools), s_tree, o_tree,
     )?;
     pb.add_account_funds(&connection)?;
-    pb.set_use_change(true)?;
+    pb.set_use_change(payment.use_change)?;
     let mut utx = pb.prepare()?;
-    if !fee_paid_by_sender {
+    if !payment.sender_pay_fees {
         let fee = pb.fee_manager.fee();
         utx.add_to_change(fee as i64)?;
     }

@@ -2,21 +2,27 @@ use anyhow::Result;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
 use zcash_keys::encoding::AddressCodec as _;
-use zcash_protocol::{consensus::Network, memo::Memo};
+use zcash_protocol::{
+    consensus::Network,
+    memo::{Memo, MemoBytes},
+};
 
 use crate::{
     account::contacts::commit_unsaved_contacts,
     coin::connect_lwd,
-    data::fb::{PaymentRequests, PaymentRequestsT, TransactionSummary, TransactionSummaryT},
+    data::fb::{
+        PaymentRequest, PaymentRequestT, RecipientT, TransactionSummary,
+        TransactionSummaryT,
+    },
     db::{account::get_account_info, chain::snap_to_checkpoint},
     keys::{import_sk_bip38, TSKStore},
     lwd::{broadcast, get_last_height, get_tree_state},
     pay::{
         make_payment,
         sweep::{prepare_sweep, scan_utxo_by_address, scan_utxo_by_seed},
-        Payment, PaymentItem, UnsignedTransaction,
+        UnsignedTransaction,
     },
-    types::{PoolMask, TransparentAccountInfo},
+    types::TransparentAccountInfo,
     Client,
 };
 
@@ -28,50 +34,39 @@ use flatbuffers::FlatBufferBuilder;
 use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
+pub(crate) const COST_PER_ACTION: u64 = 5_000;
+
 #[c_export]
 pub async fn prepare_payment(
     network: &Network,
     connection: &Connection,
     client: &mut Client,
     account: u32,
-    recipients: &PaymentRequestsT,
-    src_pools: u8,
-    fee_paid_by_sender: bool,
-    confirmations: u32,
+    payment: &PaymentRequestT,
 ) -> Result<TransactionSummaryT> {
-    tracing::info!("{:?}", recipients);
-    let bc_height = get_last_height(client).await?;
-    let cp_height = snap_to_checkpoint(&connection, bc_height - confirmations + 1)?;
+    tracing::info!("{:?}", payment);
+    let cp_height = snap_to_checkpoint(&connection, payment.height)?;
     let (s_tree, o_tree) = get_tree_state(client, cp_height).await?;
-    let recipients = recipients
-        .payments
+    let recipients = payment
+        .recipients
         .as_ref()
         .unwrap()
         .iter()
-        .map(|p| {
-            let memo = p.memo.clone().map(|m| m.to_memo()).transpose()?;
-            let memo2 = p
-                .memo_bytes
-                .clone()
-                .map(|mb| Memo::from_bytes(&mb))
-                .transpose()?;
-            let memo = memo.or(memo2).map(|m| m.into());
-            Ok(PaymentItem {
-                address: p.address.clone().unwrap(),
-                amount: p.amount,
-                memo,
-            })
-        })
+        .map(|r| r.normalize_memo())
         .collect::<Result<Vec<_>>>()?;
-    let p = Payment { recipients };
+    let payment = PaymentRequestT {
+        recipients: Some(recipients),
+        src_pools: payment.src_pools,
+        sender_pay_fees: payment.sender_pay_fees,
+        use_change: payment.use_change,
+        height: cp_height.0,
+        expiration: payment.expiration,
+    };
     let unsigned_tx = make_payment(
         network,
         &connection,
         account,
-        cp_height,
-        p,
-        PoolMask(src_pools),
-        fee_paid_by_sender,
+        &payment,
         &s_tree,
         &o_tree,
     )?;
@@ -107,7 +102,12 @@ pub fn can_sign(
         }
     }
     let mut pools_available = 0;
-    if ai.transparent.as_ref().and_then(|ti| ti.sk.as_ref()).is_some() {
+    if ai
+        .transparent
+        .as_ref()
+        .and_then(|ti| ti.sk.as_ref())
+        .is_some()
+    {
         pools_available |= 1;
     }
     if ai.sapling.as_ref().and_then(|si| si.sk.as_ref()).is_some() {
@@ -241,4 +241,25 @@ pub async fn prepare_sweep_tx_by_sk(
     let keys = bincode::serialize(&tsk_store)?;
     let sweep_tx = unsigned_tx.to_summary(keys)?;
     Ok(sweep_tx)
+}
+
+impl RecipientT {
+    pub fn normalize_memo(&self) -> Result<Self> {
+        let memo = self.memo.clone().map(|m| m.to_memo()).transpose()?;
+        let memo2 = self
+            .memo_bytes
+            .as_ref()
+            .map(|mb| Memo::from_bytes(mb))
+            .transpose()?;
+        let memo = memo.or(memo2).unwrap_or(Memo::Empty);
+        let memo = MemoBytes::from(&memo);
+        let r = RecipientT {
+            address: self.address.clone(),
+            amount: self.amount,
+            pools: self.pools,
+            memo: None,
+            memo_bytes: Some(memo.as_slice().to_vec()),
+        };
+        Ok(r)
+    }
 }

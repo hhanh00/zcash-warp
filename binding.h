@@ -157,7 +157,7 @@ struct CResult_u8 c_set_db_password(uint8_t coin, char *password);
 
 struct CResult______u8 c_decode_address(uint8_t coin, char *address);
 
-struct CResult_____c_char c_make_payment_uri(uint8_t coin, struct CParam recipients);
+struct CResult_____c_char c_make_payment_uri(uint8_t coin, struct CParam payment);
 
 struct CResult______u8 c_parse_payment_uri(uint8_t coin, char *uri);
 
@@ -204,12 +204,7 @@ struct CResult______u8 c_split(uint8_t coin, struct CParam data, uint32_t thresh
 
 struct CResult______u8 c_merge(uint8_t coin, struct CParam parts);
 
-struct CResult______u8 c_prepare_payment(uint8_t coin,
-                                         uint32_t account,
-                                         struct CParam recipients,
-                                         uint8_t src_pools,
-                                         bool fee_paid_by_sender,
-                                         uint32_t confirmations);
+struct CResult______u8 c_prepare_payment(uint8_t coin, uint32_t account, struct CParam payment);
 
 struct CResult_bool c_can_sign(uint8_t coin, uint32_t account, struct CParam summary);
 

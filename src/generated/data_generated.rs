@@ -2699,6 +2699,236 @@ impl UAReceiversT {
     })
   }
 }
+pub enum RecipientOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Recipient<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Recipient<'a> {
+  type Inner = Recipient<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> Recipient<'a> {
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 4;
+  pub const VT_AMOUNT: flatbuffers::VOffsetT = 6;
+  pub const VT_POOLS: flatbuffers::VOffsetT = 8;
+  pub const VT_MEMO: flatbuffers::VOffsetT = 10;
+  pub const VT_MEMO_BYTES: flatbuffers::VOffsetT = 12;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Recipient { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args RecipientArgs<'args>
+  ) -> flatbuffers::WIPOffset<Recipient<'bldr>> {
+    let mut builder = RecipientBuilder::new(_fbb);
+    builder.add_amount(args.amount);
+    if let Some(x) = args.memo_bytes { builder.add_memo_bytes(x); }
+    if let Some(x) = args.memo { builder.add_memo(x); }
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.add_pools(args.pools);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> RecipientT {
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    let amount = self.amount();
+    let pools = self.pools();
+    let memo = self.memo().map(|x| {
+      Box::new(x.unpack())
+    });
+    let memo_bytes = self.memo_bytes().map(|x| {
+      x.into_iter().collect()
+    });
+    RecipientT {
+      address,
+      amount,
+      pools,
+      memo,
+      memo_bytes,
+    }
+  }
+
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Recipient::VT_ADDRESS, None)}
+  }
+  #[inline]
+  pub fn amount(&self) -> u64 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u64>(Recipient::VT_AMOUNT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn pools(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(Recipient::VT_POOLS, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn memo(&self) -> Option<UserMemo<'a>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<UserMemo>>(Recipient::VT_MEMO, None)}
+  }
+  #[inline]
+  pub fn memo_bytes(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(Recipient::VT_MEMO_BYTES, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for Recipient<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+     .visit_field::<u8>("pools", Self::VT_POOLS, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<UserMemo>>("memo", Self::VT_MEMO, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("memo_bytes", Self::VT_MEMO_BYTES, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct RecipientArgs<'a> {
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub amount: u64,
+    pub pools: u8,
+    pub memo: Option<flatbuffers::WIPOffset<UserMemo<'a>>>,
+    pub memo_bytes: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+}
+impl<'a> Default for RecipientArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    RecipientArgs {
+      address: None,
+      amount: 0,
+      pools: 0,
+      memo: None,
+      memo_bytes: None,
+    }
+  }
+}
+
+pub struct RecipientBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> RecipientBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Recipient::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn add_amount(&mut self, amount: u64) {
+    self.fbb_.push_slot::<u64>(Recipient::VT_AMOUNT, amount, 0);
+  }
+  #[inline]
+  pub fn add_pools(&mut self, pools: u8) {
+    self.fbb_.push_slot::<u8>(Recipient::VT_POOLS, pools, 0);
+  }
+  #[inline]
+  pub fn add_memo(&mut self, memo: flatbuffers::WIPOffset<UserMemo<'b >>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UserMemo>>(Recipient::VT_MEMO, memo);
+  }
+  #[inline]
+  pub fn add_memo_bytes(&mut self, memo_bytes: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Recipient::VT_MEMO_BYTES, memo_bytes);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> RecipientBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    RecipientBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Recipient<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Recipient<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Recipient");
+      ds.field("address", &self.address());
+      ds.field("amount", &self.amount());
+      ds.field("pools", &self.pools());
+      ds.field("memo", &self.memo());
+      ds.field("memo_bytes", &self.memo_bytes());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct RecipientT {
+  pub address: Option<String>,
+  pub amount: u64,
+  pub pools: u8,
+  pub memo: Option<Box<UserMemoT>>,
+  pub memo_bytes: Option<Vec<u8>>,
+}
+impl Default for RecipientT {
+  fn default() -> Self {
+    Self {
+      address: None,
+      amount: 0,
+      pools: 0,
+      memo: None,
+      memo_bytes: None,
+    }
+  }
+}
+impl RecipientT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<Recipient<'b>> {
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let amount = self.amount;
+    let pools = self.pools;
+    let memo = self.memo.as_ref().map(|x|{
+      x.pack(_fbb)
+    });
+    let memo_bytes = self.memo_bytes.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
+    Recipient::create(_fbb, &RecipientArgs{
+      address,
+      amount,
+      pools,
+      memo,
+      memo_bytes,
+    })
+  }
+}
 pub enum PaymentRequestOffset {}
 #[derive(Copy, Clone, PartialEq)]
 
@@ -2715,10 +2945,12 @@ impl<'a> flatbuffers::Follow<'a> for PaymentRequest<'a> {
 }
 
 impl<'a> PaymentRequest<'a> {
-  pub const VT_ADDRESS: flatbuffers::VOffsetT = 4;
-  pub const VT_AMOUNT: flatbuffers::VOffsetT = 6;
-  pub const VT_MEMO: flatbuffers::VOffsetT = 8;
-  pub const VT_MEMO_BYTES: flatbuffers::VOffsetT = 10;
+  pub const VT_RECIPIENTS: flatbuffers::VOffsetT = 4;
+  pub const VT_SRC_POOLS: flatbuffers::VOffsetT = 6;
+  pub const VT_SENDER_PAY_FEES: flatbuffers::VOffsetT = 8;
+  pub const VT_USE_CHANGE: flatbuffers::VOffsetT = 10;
+  pub const VT_HEIGHT: flatbuffers::VOffsetT = 12;
+  pub const VT_EXPIRATION: flatbuffers::VOffsetT = 14;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2730,59 +2962,75 @@ impl<'a> PaymentRequest<'a> {
     args: &'args PaymentRequestArgs<'args>
   ) -> flatbuffers::WIPOffset<PaymentRequest<'bldr>> {
     let mut builder = PaymentRequestBuilder::new(_fbb);
-    builder.add_amount(args.amount);
-    if let Some(x) = args.memo_bytes { builder.add_memo_bytes(x); }
-    if let Some(x) = args.memo { builder.add_memo(x); }
-    if let Some(x) = args.address { builder.add_address(x); }
+    builder.add_expiration(args.expiration);
+    builder.add_height(args.height);
+    if let Some(x) = args.recipients { builder.add_recipients(x); }
+    builder.add_use_change(args.use_change);
+    builder.add_sender_pay_fees(args.sender_pay_fees);
+    builder.add_src_pools(args.src_pools);
     builder.finish()
   }
 
   pub fn unpack(&self) -> PaymentRequestT {
-    let address = self.address().map(|x| {
-      x.to_string()
+    let recipients = self.recipients().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
     });
-    let amount = self.amount();
-    let memo = self.memo().map(|x| {
-      Box::new(x.unpack())
-    });
-    let memo_bytes = self.memo_bytes().map(|x| {
-      x.into_iter().collect()
-    });
+    let src_pools = self.src_pools();
+    let sender_pay_fees = self.sender_pay_fees();
+    let use_change = self.use_change();
+    let height = self.height();
+    let expiration = self.expiration();
     PaymentRequestT {
-      address,
-      amount,
-      memo,
-      memo_bytes,
+      recipients,
+      src_pools,
+      sender_pay_fees,
+      use_change,
+      height,
+      expiration,
     }
   }
 
   #[inline]
-  pub fn address(&self) -> Option<&'a str> {
+  pub fn recipients(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Recipient<'a>>>> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(PaymentRequest::VT_ADDRESS, None)}
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Recipient>>>>(PaymentRequest::VT_RECIPIENTS, None)}
   }
   #[inline]
-  pub fn amount(&self) -> u64 {
+  pub fn src_pools(&self) -> u8 {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<u64>(PaymentRequest::VT_AMOUNT, Some(0)).unwrap()}
+    unsafe { self._tab.get::<u8>(PaymentRequest::VT_SRC_POOLS, Some(0)).unwrap()}
   }
   #[inline]
-  pub fn memo(&self) -> Option<UserMemo<'a>> {
+  pub fn sender_pay_fees(&self) -> bool {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<UserMemo>>(PaymentRequest::VT_MEMO, None)}
+    unsafe { self._tab.get::<bool>(PaymentRequest::VT_SENDER_PAY_FEES, Some(false)).unwrap()}
   }
   #[inline]
-  pub fn memo_bytes(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+  pub fn use_change(&self) -> bool {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(PaymentRequest::VT_MEMO_BYTES, None)}
+    unsafe { self._tab.get::<bool>(PaymentRequest::VT_USE_CHANGE, Some(false)).unwrap()}
+  }
+  #[inline]
+  pub fn height(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(PaymentRequest::VT_HEIGHT, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn expiration(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(PaymentRequest::VT_EXPIRATION, Some(0)).unwrap()}
   }
 }
 
@@ -2793,28 +3041,34 @@ impl flatbuffers::Verifiable for PaymentRequest<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
-     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
-     .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
-     .visit_field::<flatbuffers::ForwardsUOffset<UserMemo>>("memo", Self::VT_MEMO, false)?
-     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("memo_bytes", Self::VT_MEMO_BYTES, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Recipient>>>>("recipients", Self::VT_RECIPIENTS, false)?
+     .visit_field::<u8>("src_pools", Self::VT_SRC_POOLS, false)?
+     .visit_field::<bool>("sender_pay_fees", Self::VT_SENDER_PAY_FEES, false)?
+     .visit_field::<bool>("use_change", Self::VT_USE_CHANGE, false)?
+     .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
+     .visit_field::<u32>("expiration", Self::VT_EXPIRATION, false)?
      .finish();
     Ok(())
   }
 }
 pub struct PaymentRequestArgs<'a> {
-    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
-    pub amount: u64,
-    pub memo: Option<flatbuffers::WIPOffset<UserMemo<'a>>>,
-    pub memo_bytes: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    pub recipients: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Recipient<'a>>>>>,
+    pub src_pools: u8,
+    pub sender_pay_fees: bool,
+    pub use_change: bool,
+    pub height: u32,
+    pub expiration: u32,
 }
 impl<'a> Default for PaymentRequestArgs<'a> {
   #[inline]
   fn default() -> Self {
     PaymentRequestArgs {
-      address: None,
-      amount: 0,
-      memo: None,
-      memo_bytes: None,
+      recipients: None,
+      src_pools: 0,
+      sender_pay_fees: false,
+      use_change: false,
+      height: 0,
+      expiration: 0,
     }
   }
 }
@@ -2825,20 +3079,28 @@ pub struct PaymentRequestBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
 }
 impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PaymentRequestBuilder<'a, 'b, A> {
   #[inline]
-  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentRequest::VT_ADDRESS, address);
+  pub fn add_recipients(&mut self, recipients: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<Recipient<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentRequest::VT_RECIPIENTS, recipients);
   }
   #[inline]
-  pub fn add_amount(&mut self, amount: u64) {
-    self.fbb_.push_slot::<u64>(PaymentRequest::VT_AMOUNT, amount, 0);
+  pub fn add_src_pools(&mut self, src_pools: u8) {
+    self.fbb_.push_slot::<u8>(PaymentRequest::VT_SRC_POOLS, src_pools, 0);
   }
   #[inline]
-  pub fn add_memo(&mut self, memo: flatbuffers::WIPOffset<UserMemo<'b >>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<UserMemo>>(PaymentRequest::VT_MEMO, memo);
+  pub fn add_sender_pay_fees(&mut self, sender_pay_fees: bool) {
+    self.fbb_.push_slot::<bool>(PaymentRequest::VT_SENDER_PAY_FEES, sender_pay_fees, false);
   }
   #[inline]
-  pub fn add_memo_bytes(&mut self, memo_bytes: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentRequest::VT_MEMO_BYTES, memo_bytes);
+  pub fn add_use_change(&mut self, use_change: bool) {
+    self.fbb_.push_slot::<bool>(PaymentRequest::VT_USE_CHANGE, use_change, false);
+  }
+  #[inline]
+  pub fn add_height(&mut self, height: u32) {
+    self.fbb_.push_slot::<u32>(PaymentRequest::VT_HEIGHT, height, 0);
+  }
+  #[inline]
+  pub fn add_expiration(&mut self, expiration: u32) {
+    self.fbb_.push_slot::<u32>(PaymentRequest::VT_EXPIRATION, expiration, 0);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> PaymentRequestBuilder<'a, 'b, A> {
@@ -2858,28 +3120,34 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PaymentRequestBuilder<'a, 'b, A
 impl core::fmt::Debug for PaymentRequest<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("PaymentRequest");
-      ds.field("address", &self.address());
-      ds.field("amount", &self.amount());
-      ds.field("memo", &self.memo());
-      ds.field("memo_bytes", &self.memo_bytes());
+      ds.field("recipients", &self.recipients());
+      ds.field("src_pools", &self.src_pools());
+      ds.field("sender_pay_fees", &self.sender_pay_fees());
+      ds.field("use_change", &self.use_change());
+      ds.field("height", &self.height());
+      ds.field("expiration", &self.expiration());
       ds.finish()
   }
 }
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PaymentRequestT {
-  pub address: Option<String>,
-  pub amount: u64,
-  pub memo: Option<Box<UserMemoT>>,
-  pub memo_bytes: Option<Vec<u8>>,
+  pub recipients: Option<Vec<RecipientT>>,
+  pub src_pools: u8,
+  pub sender_pay_fees: bool,
+  pub use_change: bool,
+  pub height: u32,
+  pub expiration: u32,
 }
 impl Default for PaymentRequestT {
   fn default() -> Self {
     Self {
-      address: None,
-      amount: 0,
-      memo: None,
-      memo_bytes: None,
+      recipients: None,
+      src_pools: 0,
+      sender_pay_fees: false,
+      use_change: false,
+      height: 0,
+      expiration: 0,
     }
   }
 }
@@ -2888,151 +3156,21 @@ impl PaymentRequestT {
     &self,
     _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
   ) -> flatbuffers::WIPOffset<PaymentRequest<'b>> {
-    let address = self.address.as_ref().map(|x|{
-      _fbb.create_string(x)
-    });
-    let amount = self.amount;
-    let memo = self.memo.as_ref().map(|x|{
-      x.pack(_fbb)
-    });
-    let memo_bytes = self.memo_bytes.as_ref().map(|x|{
-      _fbb.create_vector(x)
-    });
-    PaymentRequest::create(_fbb, &PaymentRequestArgs{
-      address,
-      amount,
-      memo,
-      memo_bytes,
-    })
-  }
-}
-pub enum PaymentRequestsOffset {}
-#[derive(Copy, Clone, PartialEq)]
-
-pub struct PaymentRequests<'a> {
-  pub _tab: flatbuffers::Table<'a>,
-}
-
-impl<'a> flatbuffers::Follow<'a> for PaymentRequests<'a> {
-  type Inner = PaymentRequests<'a>;
-  #[inline]
-  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    Self { _tab: flatbuffers::Table::new(buf, loc) }
-  }
-}
-
-impl<'a> PaymentRequests<'a> {
-  pub const VT_PAYMENTS: flatbuffers::VOffsetT = 4;
-
-  #[inline]
-  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
-    PaymentRequests { _tab: table }
-  }
-  #[allow(unused_mut)]
-  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
-    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
-    args: &'args PaymentRequestsArgs<'args>
-  ) -> flatbuffers::WIPOffset<PaymentRequests<'bldr>> {
-    let mut builder = PaymentRequestsBuilder::new(_fbb);
-    if let Some(x) = args.payments { builder.add_payments(x); }
-    builder.finish()
-  }
-
-  pub fn unpack(&self) -> PaymentRequestsT {
-    let payments = self.payments().map(|x| {
-      x.iter().map(|t| t.unpack()).collect()
-    });
-    PaymentRequestsT {
-      payments,
-    }
-  }
-
-  #[inline]
-  pub fn payments(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PaymentRequest<'a>>>> {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PaymentRequest>>>>(PaymentRequests::VT_PAYMENTS, None)}
-  }
-}
-
-impl flatbuffers::Verifiable for PaymentRequests<'_> {
-  #[inline]
-  fn run_verifier(
-    v: &mut flatbuffers::Verifier, pos: usize
-  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-    use self::flatbuffers::Verifiable;
-    v.visit_table(pos)?
-     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<PaymentRequest>>>>("payments", Self::VT_PAYMENTS, false)?
-     .finish();
-    Ok(())
-  }
-}
-pub struct PaymentRequestsArgs<'a> {
-    pub payments: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<PaymentRequest<'a>>>>>,
-}
-impl<'a> Default for PaymentRequestsArgs<'a> {
-  #[inline]
-  fn default() -> Self {
-    PaymentRequestsArgs {
-      payments: None,
-    }
-  }
-}
-
-pub struct PaymentRequestsBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
-  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
-  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
-}
-impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PaymentRequestsBuilder<'a, 'b, A> {
-  #[inline]
-  pub fn add_payments(&mut self, payments: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<PaymentRequest<'b >>>>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(PaymentRequests::VT_PAYMENTS, payments);
-  }
-  #[inline]
-  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> PaymentRequestsBuilder<'a, 'b, A> {
-    let start = _fbb.start_table();
-    PaymentRequestsBuilder {
-      fbb_: _fbb,
-      start_: start,
-    }
-  }
-  #[inline]
-  pub fn finish(self) -> flatbuffers::WIPOffset<PaymentRequests<'a>> {
-    let o = self.fbb_.end_table(self.start_);
-    flatbuffers::WIPOffset::new(o.value())
-  }
-}
-
-impl core::fmt::Debug for PaymentRequests<'_> {
-  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-    let mut ds = f.debug_struct("PaymentRequests");
-      ds.field("payments", &self.payments());
-      ds.finish()
-  }
-}
-#[non_exhaustive]
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct PaymentRequestsT {
-  pub payments: Option<Vec<PaymentRequestT>>,
-}
-impl Default for PaymentRequestsT {
-  fn default() -> Self {
-    Self {
-      payments: None,
-    }
-  }
-}
-impl PaymentRequestsT {
-  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
-    &self,
-    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
-  ) -> flatbuffers::WIPOffset<PaymentRequests<'b>> {
-    let payments = self.payments.as_ref().map(|x|{
+    let recipients = self.recipients.as_ref().map(|x|{
       let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();_fbb.create_vector(&w)
     });
-    PaymentRequests::create(_fbb, &PaymentRequestsArgs{
-      payments,
+    let src_pools = self.src_pools;
+    let sender_pay_fees = self.sender_pay_fees;
+    let use_change = self.use_change;
+    let height = self.height;
+    let expiration = self.expiration;
+    PaymentRequest::create(_fbb, &PaymentRequestArgs{
+      recipients,
+      src_pools,
+      sender_pay_fees,
+      use_change,
+      height,
+      expiration,
     })
   }
 }

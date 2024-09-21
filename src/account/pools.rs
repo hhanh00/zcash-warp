@@ -4,10 +4,12 @@ use rusqlite::Connection;
 use zcash_primitives::{consensus::Network, memo::MemoBytes};
 
 use crate::{
+    data::fb::RecipientT,
     db::{account::get_account_info, chain::snap_to_checkpoint},
     keys::TSKStore,
-    pay::{Payment, PaymentBuilder, PaymentItem},
-    warp::legacy::CommitmentTreeFrontier, EXPIRATION_HEIGHT_DELTA,
+    pay::PaymentBuilder,
+    warp::legacy::CommitmentTreeFrontier,
+    EXPIRATION_HEIGHT_DELTA,
 };
 
 pub fn transfer_pools<R: RngCore + CryptoRng>(
@@ -33,24 +35,26 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
         split_amount
     };
     let mut recipients = vec![];
+    let memo = memo.map(|memo| memo.as_slice().to_vec());
     while amount > 0 {
         let a = amount.min(split_amount);
-        let p = PaymentItem {
-            address: to_address.clone(),
+        let p = RecipientT {
+            address: Some(to_address.clone()),
             amount: a,
-            memo: memo.clone(),
+            pools: 7,
+            memo: None,
+            memo_bytes: memo.clone(),
         };
         recipients.push(p);
         amount -= a;
     }
-    let payment = Payment { recipients };
     let confirmation_height = snap_to_checkpoint(connection, height - confirmations + 1)?;
     let mut builder = PaymentBuilder::new(
         network,
         connection,
         account,
         confirmation_height,
-        payment,
+        &recipients,
         Some(from_pool).into(),
         &s,
         &o,
@@ -59,6 +63,12 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
     builder.set_use_change(true)?;
     let utx = builder.prepare()?;
     let utx = builder.finalize(utx)?;
-    let tx = utx.build(network, connection, height + EXPIRATION_HEIGHT_DELTA, &mut TSKStore::default(), rng)?;
+    let tx = utx.build(
+        network,
+        connection,
+        height + EXPIRATION_HEIGHT_DELTA,
+        &mut TSKStore::default(),
+        rng,
+    )?;
     Ok(tx)
 }

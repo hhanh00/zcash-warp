@@ -1,5 +1,7 @@
 use serde::{Serialize, Deserialize};
 
+use crate::utils::pay::COST_PER_ACTION;
+
 #[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct FeeManager {
     pub num_inputs: [u8; 3],
@@ -44,8 +46,13 @@ impl FeeManager {
             0
         };
         let f = t + s + o;
-        tracing::info!("fee: {t} {s} {o} -> {f}");
-        f as u64 * 5_000
+        tracing::debug!("fee: {}:{} {}:{} {}:{}", 
+            self.num_inputs[0], self.num_outputs[0],
+            self.num_inputs[1], self.num_outputs[1],
+            self.num_inputs[2], self.num_outputs[2],
+        );
+        tracing::debug!("fee: {t} {s} {o} -> {f}");
+        f as u64 * COST_PER_ACTION
     }
 
     #[allow(dead_code)]

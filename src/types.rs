@@ -58,7 +58,11 @@ impl PoolMask {
     }
 
     pub fn single_pool(&self) -> bool {
-        self.0 & (self.0 - 1) == 0
+        if self.0 != 0 {
+            (self.0 & (self.0 - 1)) == 0
+        } else {
+            false
+        }
     }
 }
 
@@ -215,7 +219,10 @@ impl AccountInfo {
         };
         let uvk = uvk.map(|uvk| uvk.encode(network));
 
-        let tsk = self.transparent.as_ref().and_then(|ti| ti.sk.map(|sk| export_sk_bip38(&sk)));
+        let tsk = self
+            .transparent
+            .as_ref()
+            .and_then(|ti| ti.sk.map(|sk| export_sk_bip38(&sk)));
 
         BackupT {
             name: Some(self.name.clone()),

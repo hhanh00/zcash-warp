@@ -180,7 +180,7 @@ impl UnsignedTransaction {
         }
 
         for txout in self.tx_outputs.iter() {
-            if txout.change && txout.amount < DUST { continue; }
+            if txout.is_change && txout.amount < DUST { continue; }
             match &txout.note {
                 OutputNote::Transparent { pkh, address } => {
                     let taddr = if *pkh {

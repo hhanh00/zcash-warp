@@ -36,6 +36,7 @@ clap.workspace = true
 clap-repl.workspace = true
 console.workspace = true
 chrono.workspace = true
+itertools.workspace = true
 
 tiny-bip39 = "0.8"
 tiny-hderive = "0.3.0"

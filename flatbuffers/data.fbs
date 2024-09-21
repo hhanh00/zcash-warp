@@ -96,15 +96,21 @@ table UAReceivers {
   orchard: string;
 }
 
-table PaymentRequest {
+table Recipient {
   address: string;
   amount: uint64;
+  pools: uint8;
   memo: UserMemo;
   memo_bytes: [uint8];
 }
 
-table PaymentRequests {
-  payments: [PaymentRequest];
+table PaymentRequest {
+  recipients: [Recipient];
+  src_pools: uint8;
+  sender_pay_fees: bool;
+  use_change: bool;
+  height: uint32;
+  expiration: uint32;
 }
 
 table AccountName {

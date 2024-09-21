@@ -14,22 +14,31 @@ use zcash_primitives::{
 use zcash_protocol::consensus::Network;
 
 use crate::{
-    data::fb::ContactCardT,
+    data::fb::{ContactCardT, PaymentRequestT, RecipientT},
     db::{
         account::get_account_info,
         contacts::{get_unsaved_contacts, store_contact},
     },
-    pay::{make_payment, Payment, PaymentItem, UnsignedTransaction},
+    pay::{make_payment, UnsignedTransaction},
     types::{CheckpointHeight, PoolMask},
     warp::legacy::CommitmentTreeFrontier,
 };
 
+use crate::{
+    coin::COINS,
+    ffi::{map_result, CResult},
+};
+use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, CResult}};
-use std::ffi::{CStr, c_char};
 
 #[c_export]
-pub fn add_contact(connection: &Connection, account: u32, name: &str, address: &str, saved: bool) -> Result<()> {
+pub fn add_contact(
+    connection: &Connection,
+    account: u32,
+    name: &str,
+    address: &str,
+    saved: bool,
+) -> Result<()> {
     let contact = ContactCardT {
         id: 0,
         account,
@@ -90,22 +99,28 @@ pub fn commit_unsaved_contacts(
         .iter()
         .map(|m| {
             let memo = MemoBytes::from(m);
-            PaymentItem {
-                address: address.clone(),
+            RecipientT {
+                address: Some(address.clone()),
                 amount: MIN_AMOUNT,
-                memo: Some(memo),
+                memo: None,
+                pools: 7,
+                memo_bytes: Some(memo.as_slice().to_vec()),
             }
         })
         .collect::<Vec<_>>();
-    let payment = Payment { recipients };
+    let payment = PaymentRequestT {
+        recipients: Some(recipients),
+        src_pools,
+        sender_pay_fees: true,
+        use_change: true,
+        height: cp_height.0,
+        expiration: cp_height.0 + 50,
+    };
     let utx = make_payment(
         network,
         connection,
         account,
-        cp_height,
-        payment,
-        PoolMask(src_pools),
-        true,
+        &payment,
         s,
         o,
     )?;

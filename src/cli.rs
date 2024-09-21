@@ -1,4 +1,7 @@
-use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -23,7 +26,7 @@ use crate::{
         txs::get_txs,
     },
     coin::CoinDef,
-    data::fb::{ConfigT, PacketT, PacketsT, PaymentRequestT, PaymentRequestsT, TransactionSummaryT},
+    data::fb::{ConfigT, PacketT, PacketsT, PaymentRequestT, RecipientT, TransactionSummaryT},
     db::{
         account::{get_account_property, get_balance, list_accounts, set_account_property},
         account_manager::{
@@ -268,9 +271,15 @@ pub enum Command {
     Pay {
         account: u32,
         address: String,
+        to_pools: u8,
         amount: u64,
-        pools: u8,
+        from_pools: u8,
         fee_paid_by_sender: u8,
+        use_change: u8,
+    },
+    MultiPay {
+        account: u32,
+        payment: PaymentRequestT,
     },
     Sweep {
         account: u32,
@@ -291,7 +300,7 @@ pub enum Command {
         account: u32,
     },
     MakePaymentURI {
-        recipients: PaymentRequestsT,
+        payment: PaymentRequestT,
     },
     PayPaymentUri {
         account: u32,
@@ -302,11 +311,11 @@ pub enum Command {
     },
 }
 
-impl FromStr for PaymentRequestsT {
+impl FromStr for PaymentRequestT {
     type Err = serde_json::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        serde_json::from_str::<PaymentRequestsT>(s)
+        serde_json::from_str::<PaymentRequestT>(s)
     }
 }
 
@@ -627,32 +636,40 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         Command::Pay {
             account,
             address,
+            to_pools,
             amount,
-            pools,
+            from_pools,
             fee_paid_by_sender,
+            use_change,
         } => {
             let mut client = zec.connect_lwd().await?;
+            let bc_height = get_last_height(&mut client).await?;
             let connection = zec.connection()?;
-            let p = PaymentRequestT {
+            let recipient = RecipientT {
                 address: Some(address.clone()),
                 amount,
+                pools: to_pools,
                 memo: None,
                 memo_bytes: None,
             };
-            let recipients = PaymentRequestsT {
-                payments: Some(vec![p]),
+            let payment = PaymentRequestT {
+                recipients: Some(vec![recipient]),
+                src_pools: from_pools,
+                sender_pay_fees: fee_paid_by_sender != 0,
+                use_change: use_change != 0,
+                height: bc_height,
+                expiration: bc_height + 100,
             };
-            let summary = prepare_payment(
-                network,
-                &connection,
-                &mut client,
-                account,
-                &recipients,
-                pools,
-                fee_paid_by_sender != 0,
-                zec.config.confirmations,
-            )
-            .await?;
+            tracing::info!("{}", serde_json::to_string(&payment)?);
+            let summary =
+                prepare_payment(network, &connection, &mut client, account, &payment).await?;
+            *txbytes = display_tx(network, &connection, summary)?;
+        }
+        Command::MultiPay { account, payment } => {
+            let mut client = zec.connect_lwd().await?;
+            let connection = zec.connection()?;
+            let summary =
+                prepare_payment(network, &connection, &mut client, account, &payment).await?;
             *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::GetTx { account, id } => {
@@ -729,25 +746,20 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 println!("{}", serde_json::to_string_pretty(tx).unwrap());
             }
         }
-        Command::MakePaymentURI { recipients } => {
-            let payment_uri = make_payment_uri(&recipients)?;
+        Command::MakePaymentURI { payment } => {
+            tracing::info!("{}", serde_json::to_string(&payment)?);
+            let payment_uri = make_payment_uri(&payment)?;
             println!("{}", payment_uri);
         }
         Command::PayPaymentUri { account, uri } => {
-            let connection = zec.connection()?;
             let mut client = zec.connect_lwd().await?;
-            let recipients = parse_payment_uri(&uri)?;
-            let summary = prepare_payment(
-                network,
-                &connection,
-                &mut client,
-                account,
-                &recipients,
-                7,
-                true,
-                zec.config.confirmations,
-            )
-            .await?;
+            let connection = zec.connection()?;
+            let bc_height = get_last_height(&mut client).await?;
+            let cp_height =
+                snap_to_checkpoint(&connection, bc_height - zec.config.confirmations + 1)?;
+            let payment = parse_payment_uri(&uri, cp_height.0, cp_height.0 + 50)?;
+            let summary =
+                prepare_payment(network, &connection, &mut client, account, &payment).await?;
             *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::BroadcastLatest { clear } => {
