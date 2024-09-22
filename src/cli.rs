@@ -3,6 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use crate::{network::{regtest, Network}, utils::chain::reset_chain};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
@@ -17,8 +18,8 @@ use figment::{
 };
 use hex::FromHexError;
 use rand::rngs::OsRng;
-use rusqlite::{Connection, DropBehavior};
-use zcash_protocol::consensus::{Network, NetworkUpgrade, Parameters};
+use rusqlite::Connection;
+use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{
     account::{
@@ -34,8 +35,7 @@ use crate::{
             get_min_birth, new_transparent_address,
         },
         chain::{
-            get_sync_height, list_checkpoints, rewind, snap_to_checkpoint, store_block,
-            truncate_scan,
+            get_sync_height, list_checkpoints, rewind, snap_to_checkpoint,
         },
         contacts::{
             delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts,
@@ -46,7 +46,7 @@ use crate::{
         tx::{get_tx_details, get_txid, store_tx_details},
     },
     keys::generate_random_mnemonic_phrase,
-    lwd::{broadcast, get_compact_block, get_last_height, get_transaction, get_tree_state},
+    lwd::{broadcast, get_last_height, get_transaction, get_tree_state},
     txdetails::{analyze_raw_transaction, decode_tx_details, retrieve_tx_details},
     types::CheckpointHeight,
     utils::{
@@ -61,7 +61,7 @@ use crate::{
             decrypt_zip_database_files, encrypt_zip_database_files, generate_zip_database_keys,
         },
     },
-    warp::{sync::warp_sync, BlockHeader},
+    warp::sync::warp_sync,
     EXPIRATION_HEIGHT_DELTA,
 };
 
@@ -582,20 +582,15 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             println!("{height:?}");
         }
         Command::Reset { height } => {
-            let connection = zec.connection()?;
-            truncate_scan(&connection)?;
+            let mut connection = zec.connection()?;
+            let mut client = zec.connect_lwd().await?;
             let activation: u32 = network
                 .activation_height(NetworkUpgrade::Sapling)
                 .unwrap()
                 .into();
             let min_birth_height = get_min_birth(&connection)?.unwrap_or(activation);
             let height = height.unwrap_or(min_birth_height).max(activation + 1);
-            let mut client = zec.connect_lwd().await?;
-            let block = get_compact_block(&mut client, height).await?;
-            let mut connection = zec.connection()?;
-            let mut transaction = connection.transaction()?;
-            transaction.set_drop_behavior(DropBehavior::Commit);
-            store_block(&transaction, &BlockHeader::from(&block))?;
+            reset_chain(network, &mut connection, &mut client, height).await?;
         }
         Command::Sync {
             confirmations,
@@ -779,7 +774,14 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
 }
 
 pub fn cli_main(config: &ConfigT) -> Result<()> {
-    let mut zec = CoinDef::from_network(0, zcash_primitives::consensus::Network::MainNetwork);
+    let mut zec = CoinDef::from_network(
+        0,
+        if config.regtest {
+            Network::Regtest(regtest())
+        } else {
+            Network::Main
+        },
+    );
     zec.set_config(config)?;
     let prompt = DefaultPrompt {
         left_prompt: DefaultPromptSegment::Basic("zcash-warp".to_owned()),

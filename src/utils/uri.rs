@@ -1,7 +1,8 @@
 use anyhow::Result;
 use zcash_address::ZcashAddress;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
-use zcash_protocol::{consensus::Network, memo::MemoBytes, value::Zatoshis};
+use zcash_protocol::{memo::MemoBytes, value::Zatoshis};
+use crate::network::Network;
 
 use crate::{
     coin::COINS,

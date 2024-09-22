@@ -17,11 +17,12 @@ use zcash_client_backend::{
 };
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{
-    consensus::{Network, NetworkConstants as _},
+    consensus::NetworkConstants as _,
     legacy::TransparentAddress,
 };
 
 use crate::{
+    network::Network,
     data::fb::{BackupT, ContactCardT},
     db::account_manager::parse_seed_phrase,
     keys::export_sk_bip38,

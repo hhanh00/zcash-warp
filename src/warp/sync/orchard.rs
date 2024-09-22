@@ -20,7 +20,7 @@ use crate::{
 use anyhow::Result;
 use rayon::prelude::*;
 use tracing::info;
-use zcash_primitives::consensus::Network;
+use crate::network::Network;
 
 use crate::warp::{Edge, Hasher, MERKLE_DEPTH};
 

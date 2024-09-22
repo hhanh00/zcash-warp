@@ -3,9 +3,9 @@ use bech32::{Bech32m, Hrp};
 use orchard::keys::Scope;
 use rusqlite::Connection;
 use zcash_client_backend::encoding::AddressCodec;
-use zcash_primitives::{consensus::Network, legacy::TransparentAddress};
+use zcash_primitives::legacy::TransparentAddress;
 
-use crate::{db::account::get_account_info, types::PoolMask};
+use crate::{db::account::get_account_info, network::Network, types::PoolMask};
 
 pub fn get_diversified_address(
     network: &Network,

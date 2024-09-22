@@ -3663,6 +3663,7 @@ impl<'a> flatbuffers::Follow<'a> for TransactionRecipient<'a> {
 impl<'a> TransactionRecipient<'a> {
   pub const VT_ADDRESS: flatbuffers::VOffsetT = 4;
   pub const VT_AMOUNT: flatbuffers::VOffsetT = 6;
+  pub const VT_CHANGE: flatbuffers::VOffsetT = 8;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -3676,6 +3677,7 @@ impl<'a> TransactionRecipient<'a> {
     let mut builder = TransactionRecipientBuilder::new(_fbb);
     builder.add_amount(args.amount);
     if let Some(x) = args.address { builder.add_address(x); }
+    builder.add_change(args.change);
     builder.finish()
   }
 
@@ -3684,9 +3686,11 @@ impl<'a> TransactionRecipient<'a> {
       x.to_string()
     });
     let amount = self.amount();
+    let change = self.change();
     TransactionRecipientT {
       address,
       amount,
+      change,
     }
   }
 
@@ -3704,6 +3708,13 @@ impl<'a> TransactionRecipient<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<u64>(TransactionRecipient::VT_AMOUNT, Some(0)).unwrap()}
   }
+  #[inline]
+  pub fn change(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(TransactionRecipient::VT_CHANGE, Some(false)).unwrap()}
+  }
 }
 
 impl flatbuffers::Verifiable for TransactionRecipient<'_> {
@@ -3715,6 +3726,7 @@ impl flatbuffers::Verifiable for TransactionRecipient<'_> {
     v.visit_table(pos)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
      .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
+     .visit_field::<bool>("change", Self::VT_CHANGE, false)?
      .finish();
     Ok(())
   }
@@ -3722,6 +3734,7 @@ impl flatbuffers::Verifiable for TransactionRecipient<'_> {
 pub struct TransactionRecipientArgs<'a> {
     pub address: Option<flatbuffers::WIPOffset<&'a str>>,
     pub amount: u64,
+    pub change: bool,
 }
 impl<'a> Default for TransactionRecipientArgs<'a> {
   #[inline]
@@ -3729,6 +3742,7 @@ impl<'a> Default for TransactionRecipientArgs<'a> {
     TransactionRecipientArgs {
       address: None,
       amount: 0,
+      change: false,
     }
   }
 }
@@ -3745,6 +3759,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionRecipientBuilder<'a,
   #[inline]
   pub fn add_amount(&mut self, amount: u64) {
     self.fbb_.push_slot::<u64>(TransactionRecipient::VT_AMOUNT, amount, 0);
+  }
+  #[inline]
+  pub fn add_change(&mut self, change: bool) {
+    self.fbb_.push_slot::<bool>(TransactionRecipient::VT_CHANGE, change, false);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransactionRecipientBuilder<'a, 'b, A> {
@@ -3766,6 +3784,7 @@ impl core::fmt::Debug for TransactionRecipient<'_> {
     let mut ds = f.debug_struct("TransactionRecipient");
       ds.field("address", &self.address());
       ds.field("amount", &self.amount());
+      ds.field("change", &self.change());
       ds.finish()
   }
 }
@@ -3774,12 +3793,14 @@ impl core::fmt::Debug for TransactionRecipient<'_> {
 pub struct TransactionRecipientT {
   pub address: Option<String>,
   pub amount: u64,
+  pub change: bool,
 }
 impl Default for TransactionRecipientT {
   fn default() -> Self {
     Self {
       address: None,
       amount: 0,
+      change: false,
     }
   }
 }
@@ -3792,9 +3813,11 @@ impl TransactionRecipientT {
       _fbb.create_string(x)
     });
     let amount = self.amount;
+    let change = self.change;
     TransactionRecipient::create(_fbb, &TransactionRecipientArgs{
       address,
       amount,
+      change,
     })
   }
 }
@@ -5776,6 +5799,7 @@ impl<'a> Config<'a> {
   pub const VT_WARP_URL: flatbuffers::VOffsetT = 8;
   pub const VT_WARP_END_HEIGHT: flatbuffers::VOffsetT = 10;
   pub const VT_CONFIRMATIONS: flatbuffers::VOffsetT = 12;
+  pub const VT_REGTEST: flatbuffers::VOffsetT = 14;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -5792,6 +5816,7 @@ impl<'a> Config<'a> {
     if let Some(x) = args.warp_url { builder.add_warp_url(x); }
     if let Some(x) = args.lwd_url { builder.add_lwd_url(x); }
     if let Some(x) = args.db_path { builder.add_db_path(x); }
+    builder.add_regtest(args.regtest);
     builder.finish()
   }
 
@@ -5807,12 +5832,14 @@ impl<'a> Config<'a> {
     });
     let warp_end_height = self.warp_end_height();
     let confirmations = self.confirmations();
+    let regtest = self.regtest();
     ConfigT {
       db_path,
       lwd_url,
       warp_url,
       warp_end_height,
       confirmations,
+      regtest,
     }
   }
 
@@ -5851,6 +5878,13 @@ impl<'a> Config<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<u32>(Config::VT_CONFIRMATIONS, Some(0)).unwrap()}
   }
+  #[inline]
+  pub fn regtest(&self) -> bool {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<bool>(Config::VT_REGTEST, Some(false)).unwrap()}
+  }
 }
 
 impl flatbuffers::Verifiable for Config<'_> {
@@ -5865,6 +5899,7 @@ impl flatbuffers::Verifiable for Config<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("warp_url", Self::VT_WARP_URL, false)?
      .visit_field::<u32>("warp_end_height", Self::VT_WARP_END_HEIGHT, false)?
      .visit_field::<u32>("confirmations", Self::VT_CONFIRMATIONS, false)?
+     .visit_field::<bool>("regtest", Self::VT_REGTEST, false)?
      .finish();
     Ok(())
   }
@@ -5875,6 +5910,7 @@ pub struct ConfigArgs<'a> {
     pub warp_url: Option<flatbuffers::WIPOffset<&'a str>>,
     pub warp_end_height: u32,
     pub confirmations: u32,
+    pub regtest: bool,
 }
 impl<'a> Default for ConfigArgs<'a> {
   #[inline]
@@ -5885,6 +5921,7 @@ impl<'a> Default for ConfigArgs<'a> {
       warp_url: None,
       warp_end_height: 0,
       confirmations: 0,
+      regtest: false,
     }
   }
 }
@@ -5915,6 +5952,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ConfigBuilder<'a, 'b, A> {
     self.fbb_.push_slot::<u32>(Config::VT_CONFIRMATIONS, confirmations, 0);
   }
   #[inline]
+  pub fn add_regtest(&mut self, regtest: bool) {
+    self.fbb_.push_slot::<bool>(Config::VT_REGTEST, regtest, false);
+  }
+  #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> ConfigBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     ConfigBuilder {
@@ -5937,6 +5978,7 @@ impl core::fmt::Debug for Config<'_> {
       ds.field("warp_url", &self.warp_url());
       ds.field("warp_end_height", &self.warp_end_height());
       ds.field("confirmations", &self.confirmations());
+      ds.field("regtest", &self.regtest());
       ds.finish()
   }
 }
@@ -5948,6 +5990,7 @@ pub struct ConfigT {
   pub warp_url: Option<String>,
   pub warp_end_height: u32,
   pub confirmations: u32,
+  pub regtest: bool,
 }
 impl Default for ConfigT {
   fn default() -> Self {
@@ -5957,6 +6000,7 @@ impl Default for ConfigT {
       warp_url: None,
       warp_end_height: 0,
       confirmations: 0,
+      regtest: false,
     }
   }
 }
@@ -5976,12 +6020,14 @@ impl ConfigT {
     });
     let warp_end_height = self.warp_end_height;
     let confirmations = self.confirmations;
+    let regtest = self.regtest;
     Config::create(_fbb, &ConfigArgs{
       db_path,
       lwd_url,
       warp_url,
       warp_end_height,
       confirmations,
+      regtest,
     })
   }
 }

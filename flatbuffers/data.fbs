@@ -133,6 +133,7 @@ table ContactCard {
 table TransactionRecipient {
   address: string;
   amount: uint64;
+  change: bool;
 }
 
 table TransactionSummary {
@@ -208,6 +209,7 @@ table Config {
   warp_url: string;
   warp_end_height: uint32;
   confirmations: uint32;
+  regtest: bool;
 }
 
 table AccountSigningCapabilities {

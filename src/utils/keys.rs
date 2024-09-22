@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::Connection;
 use zcash_keys::encoding::{encode_extended_spending_key, encode_payment_address, AddressCodec as _};
-use zcash_protocol::consensus::{Network, NetworkConstants};
+use zcash_protocol::consensus::NetworkConstants;
 
 use crate::{
     data::fb::ZIP32KeysT,
@@ -9,7 +9,7 @@ use crate::{
         account::get_account_info,
         account_manager::{detect_key, KeyType},
     },
-    keys::{derive_bip32, derive_zip32, export_sk_bip38},
+    keys::{derive_bip32, derive_zip32, export_sk_bip38}, network::Network,
 };
 use warp_macros::c_export;
 use crate::{coin::COINS, ffi::{map_result_bytes, CResult}};

@@ -11,7 +11,7 @@ use zcash_primitives::{
     legacy::TransparentAddress,
     memo::{Memo, MemoBytes},
 };
-use zcash_protocol::consensus::Network;
+use crate::network::Network;
 
 use crate::{
     data::fb::{ContactCardT, PaymentRequestT, RecipientT},

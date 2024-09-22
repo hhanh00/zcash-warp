@@ -10,12 +10,12 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use zcash_primitives::{
-    consensus::Network,
     memo::Memo,
     transaction::{components::sapling::zip212_enforcement, Transaction as ZTransaction},
 };
 
 use crate::{
+    network::Network,
     account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
     coin::connect_lwd,
     data::fb::{

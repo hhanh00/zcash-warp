@@ -6,6 +6,7 @@ use tonic::transport::Channel;
 #[path = "./generated/data_generated.rs"]
 mod data;
 
+pub mod network;
 pub mod account;
 pub mod cli;
 pub mod coin;

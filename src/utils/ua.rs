@@ -5,7 +5,7 @@ use zcash_keys::{
     encoding::AddressCodec,
 };
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_protocol::consensus::Network;
+use crate::network::Network;
 
 use crate::{data::fb::UAReceiversT, types::PoolMask};
 

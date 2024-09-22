@@ -1,6 +1,7 @@
 use std::sync::mpsc::Sender;
 
 use crate::{
+    network::Network,
     lwd::rpc::{CompactOrchardAction, CompactSaplingOutput},
     warp::{
         sync::{ReceivedNote, ReceivedTx},
@@ -26,7 +27,7 @@ use sapling_crypto::{
     SaplingIvk,
 };
 use zcash_note_encryption::COMPACT_NOTE_SIZE;
-use zcash_primitives::{consensus::Network, transaction::components::sapling::zip212_enforcement};
+use zcash_primitives::transaction::components::sapling::zip212_enforcement;
 
 pub fn try_sapling_decrypt(
     network: &Network,

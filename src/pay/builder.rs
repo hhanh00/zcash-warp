@@ -26,7 +26,7 @@ use orchard::{
 use rand::{CryptoRng, RngCore};
 use rusqlite::Connection;
 use zcash_primitives::{
-    consensus::{BlockHeight, BranchId, Network},
+    consensus::{BlockHeight, BranchId},
     legacy::TransparentAddress,
     transaction::{
         components::{transparent::builder::TransparentBuilder, OutPoint, TxOut},
@@ -38,7 +38,7 @@ use zcash_primitives::{
 use zcash_proofs::prover::LocalTxProver;
 
 use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, CParam, CResult}};
+use crate::{network::Network, coin::COINS, ffi::{map_result, CParam, CResult}};
 
 const DUST: u64 = 54;
 

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use rusqlite::Connection;
-use zcash_protocol::consensus::Network;
+use crate::network::Network;
 
 use crate::{coin::connect_lwd, data::fb::TransactionInfoExtendedT, db::tx::{get_txid, store_tx_details}, lwd::get_transaction, txdetails::analyze_raw_transaction};
 

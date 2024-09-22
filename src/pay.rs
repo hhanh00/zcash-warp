@@ -6,11 +6,12 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use zcash_keys::address::Address as RecipientAddress;
-use zcash_primitives::{consensus::Network, memo::MemoBytes};
+use zcash_primitives::memo::MemoBytes;
 use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
+    network::Network,
     data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT},
     keys::TSKStore,
     types::{AccountInfo, CheckpointHeight, PoolMask},
@@ -184,14 +185,11 @@ impl UnsignedTransaction {
             .tx_outputs
             .iter()
             .filter_map(|o| {
-                if !o.is_change {
-                    Some(TransactionRecipientT {
-                        address: Some(o.address_string.clone()),
-                        amount: o.amount,
-                    })
-                } else {
-                    None
-                }
+                Some(TransactionRecipientT {
+                    address: Some(o.address_string.clone()),
+                    amount: o.amount,
+                    change: o.is_change,
+                })
             })
             .collect::<Vec<_>>();
         let ins = self

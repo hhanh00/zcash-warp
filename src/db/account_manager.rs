@@ -13,9 +13,10 @@ use zcash_client_backend::{
     },
     keys::UnifiedFullViewingKey,
 };
-use zcash_primitives::consensus::{Network, NetworkConstants as _};
+use zcash_primitives::consensus::NetworkConstants as _;
 
 use crate::{
+    network::Network,
     data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
     keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38},
     types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},

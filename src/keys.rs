@@ -10,15 +10,16 @@ use sapling_crypto::zip32::ExtendedSpendingKey;
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::Sha256;
+use zcash_protocol::consensus::NetworkConstants as _;
 use std::str::FromStr;
 use tiny_hderive::bip32::ExtendedPrivKey;
-use zcash_primitives::{consensus::Network, legacy::TransparentAddress};
-use zcash_protocol::consensus::NetworkConstants as _;
+use zcash_primitives::legacy::TransparentAddress;
 use zip32::ChildIndex;
 
 use crate::types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 
 use crate::{
+    network::Network,
     coin::COINS,
     ffi::{map_result_string, CResult},
 };

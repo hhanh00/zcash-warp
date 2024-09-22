@@ -4,21 +4,17 @@ use super::{
 };
 use rusqlite::Connection;
 use zcash_keys::address::Address as RecipientAddress;
-use zcash_primitives::{consensus::Network, memo::MemoBytes};
+use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    data::fb::RecipientT,
-    db::{
+    data::fb::RecipientT, db::{
         account::get_account_info,
         notes::{list_received_notes, list_utxos},
-    },
-    types::{CheckpointHeight, PoolMask},
-    utils::{pay::COST_PER_ACTION, ua::single_receiver_address},
-    warp::{
+    }, network::Network, types::{CheckpointHeight, PoolMask}, utils::{pay::COST_PER_ACTION, ua::single_receiver_address}, warp::{
         hasher::{OrchardHasher, SaplingHasher},
         legacy::CommitmentTreeFrontier,
         UTXO,
-    },
+    }
 };
 
 /*

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use zcash_keys::address::Address as RecipientAddress;
-use zcash_primitives::consensus::Network;
+use crate::network::Network;
 
 use warp_macros::c_export;
 use crate::coin::COINS;

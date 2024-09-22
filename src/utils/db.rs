@@ -1,6 +1,6 @@
 use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension as _};
-use zcash_protocol::consensus::Network;
+use crate::network::Network;
 
 use crate::account::address::get_diversified_address;
 use crate::{data::fb::BackupT, db::account::get_account_info, types::PoolMask};

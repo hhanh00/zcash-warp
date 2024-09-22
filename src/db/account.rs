@@ -6,9 +6,10 @@ use zcash_client_backend::encoding::{
     AddressCodec as _,
 };
 use zcash_keys::address::Address as RecipientAddress;
-use zcash_primitives::consensus::{Network, NetworkConstants as _};
+use zcash_primitives::consensus::NetworkConstants as _;
 use zcash_primitives::legacy::TransparentAddress;
 
+use crate::network::Network;
 use crate::account::contacts::recipient_contains;
 use crate::coin::COINS;
 use crate::data::fb::{AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendingT};

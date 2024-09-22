@@ -2,9 +2,10 @@ use anyhow::Result;
 use rusqlite::Connection;
 use zcash_client_backend::encoding::AddressCodec;
 use zcash_keys::address::Address as RecipientAddress;
-use zcash_primitives::{consensus::Network, legacy::TransparentAddress};
+use zcash_primitives::legacy::TransparentAddress;
 
 use crate::{
+    network::Network,
     db::{
         account::list_transparent_addresses,
         notes::list_utxos,

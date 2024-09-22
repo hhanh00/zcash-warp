@@ -16,7 +16,7 @@ use anyhow::Result;
 use rayon::prelude::*;
 use sapling_crypto::{value::NoteValue, Note, PaymentAddress, Rseed};
 use tracing::info;
-use zcash_primitives::consensus::Network;
+use crate::network::Network;
 
 use crate::warp::{hasher::SaplingHasher, Edge, Hasher, MERKLE_DEPTH};
 

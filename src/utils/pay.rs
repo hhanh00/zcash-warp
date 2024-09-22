@@ -2,28 +2,16 @@ use anyhow::Result;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
 use zcash_keys::encoding::AddressCodec as _;
-use zcash_protocol::{
-    consensus::Network,
-    memo::{Memo, MemoBytes},
-};
+use zcash_protocol::memo::{Memo, MemoBytes};
 
 use crate::{
-    account::contacts::commit_unsaved_contacts,
-    coin::connect_lwd,
-    data::fb::{
-        PaymentRequest, PaymentRequestT, RecipientT, TransactionSummary,
-        TransactionSummaryT,
-    },
-    db::{account::get_account_info, chain::snap_to_checkpoint},
-    keys::{import_sk_bip38, TSKStore},
-    lwd::{broadcast, get_last_height, get_tree_state},
-    pay::{
+    account::contacts::commit_unsaved_contacts, coin::connect_lwd, data::fb::{
+        PaymentRequest, PaymentRequestT, RecipientT, TransactionSummary, TransactionSummaryT,
+    }, db::{account::get_account_info, chain::snap_to_checkpoint}, keys::{import_sk_bip38, TSKStore}, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{
         make_payment,
         sweep::{prepare_sweep, scan_utxo_by_address, scan_utxo_by_seed},
         UnsignedTransaction,
-    },
-    types::TransparentAccountInfo,
-    Client,
+    }, types::TransparentAccountInfo, Client
 };
 
 use crate::{
@@ -62,14 +50,7 @@ pub async fn prepare_payment(
         height: cp_height.0,
         expiration: payment.expiration,
     };
-    let unsigned_tx = make_payment(
-        network,
-        &connection,
-        account,
-        &payment,
-        &s_tree,
-        &o_tree,
-    )?;
+    let unsigned_tx = make_payment(network, &connection, account, &payment, &s_tree, &o_tree)?;
     let summary = unsigned_tx.to_summary(vec![])?;
     Ok(summary)
 }

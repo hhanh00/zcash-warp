@@ -1,9 +1,10 @@
 use anyhow::Result;
 use rand::{CryptoRng, RngCore};
 use rusqlite::Connection;
-use zcash_primitives::{consensus::Network, memo::MemoBytes};
+use zcash_primitives::memo::MemoBytes;
 
 use crate::{
+    network::Network,
     data::fb::RecipientT,
     db::{account::get_account_info, chain::snap_to_checkpoint},
     keys::TSKStore,

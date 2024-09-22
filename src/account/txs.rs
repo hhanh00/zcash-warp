@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::Result;
 use rusqlite::Connection;
-use zcash_primitives::consensus::Network;
+use crate::network::Network;
 use zcash_keys::address::Address as RecipientAddress;
 
 use super::contacts::recipient_contains;

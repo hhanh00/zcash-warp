@@ -3,9 +3,9 @@ use sapling_crypto::PaymentAddress;
 use serde::{Deserialize, Serialize};
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_keys::address::{Address as RecipientAddress, UnifiedAddress};
-use zcash_primitives::{consensus::Network, legacy::TransparentAddress, memo::MemoBytes};
+use zcash_primitives::{legacy::TransparentAddress, memo::MemoBytes};
 
-use crate::{types::PoolMask, warp::sync::ReceivedNote};
+use crate::{network::Network, types::PoolMask, warp::sync::ReceivedNote};
 
 use super::{InputNote, OutputNote, TxInput, UTXO};
 
@@ -76,11 +76,7 @@ impl OutputNote {
         }
     }
 
-    pub fn from_address(
-        network: &Network,
-        address: &str,
-        memo: MemoBytes,
-    ) -> Result<Self> {
+    pub fn from_address(network: &Network, address: &str, memo: MemoBytes) -> Result<Self> {
         let address = RecipientAddress::decode(network, address).unwrap();
         let note = match address {
             RecipientAddress::Transparent(t) => match t {

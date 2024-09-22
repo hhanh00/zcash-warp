@@ -1,15 +1,12 @@
 use anyhow::Result;
 use rusqlite::{Connection, DropBehavior};
-use zcash_protocol::consensus::{Network, NetworkUpgrade, Parameters};
+use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{
     db::{
         account_manager::get_min_birth,
         chain::{store_block, truncate_scan},
-    },
-    lwd::{get_compact_block, get_last_height},
-    warp::BlockHeader,
-    Client,
+    }, lwd::{get_compact_block, get_last_height}, network::Network, warp::BlockHeader, Client
 };
 
 use warp_macros::c_export;

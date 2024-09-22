@@ -2,7 +2,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 use tonic::Request;
 use zcash_client_backend::encoding::AddressCodec as _;
-use zcash_primitives::consensus::Network;
+use crate::network::Network;
 
 use super::{PaymentBuilder, UnsignedTransaction};
 use crate::{

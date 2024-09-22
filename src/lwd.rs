@@ -9,12 +9,13 @@ use tokio::runtime::Handle;
 use tonic::{Request, Streaming};
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_primitives::{
-    consensus::{BlockHeight, BranchId, Network},
+    consensus::{BlockHeight, BranchId},
     legacy::TransparentAddress,
     transaction::Transaction,
 };
 
 use crate::{
+    network::Network,
     coin::connect_lwd, types::CheckpointHeight, warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2}, Client
 };
 
