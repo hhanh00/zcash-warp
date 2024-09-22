@@ -56,7 +56,7 @@ impl Synchronizer {
             let ai = get_account_info(network, connection, a.id)?;
             account_infos.push(ai);
         }
-        let notes = list_received_notes(connection, start, false)?;
+        let notes = list_received_notes(connection, None, start, false)?;
 
         Ok(Self {
             hasher: SaplingHasher::default(),

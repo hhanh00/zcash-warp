@@ -28,7 +28,8 @@ pub fn make_payment_uri(payment: &PaymentRequestT) -> Result<String> {
             let amount = Zatoshis::from_u64(r.amount)?;
             let memo = r.memo_bytes.as_ref().unwrap();
             let memo = MemoBytes::from_bytes(memo)?;
-            let p = Payment::new(recipient_address, amount, Some(memo), None, None, vec![])
+            let memo = if recipient_address.can_receive_memo() { Some(memo) } else { None };
+            let p = Payment::new(recipient_address, amount, memo, None, None, vec![])
                 .ok_or(anyhow::anyhow!("Invalid Payment URI"));
             p
         })

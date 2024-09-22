@@ -48,18 +48,23 @@ pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Optio
 
 pub fn list_received_notes(
     connection: &Connection,
+    account: Option<u32>,
     height: CheckpointHeight,
     orchard: bool,
 ) -> Result<Vec<ReceivedNote>> {
     let height: u32 = height.into();
+    let (where_account, query_params) = match account {
+        Some(_) => (format!(" AND n.account = ?3"), params![height, orchard, account]),
+        None => (String::new(), params![height, orchard])
+    };
     let mut s = connection.prepare(
-        "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
+        &("SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2 AND (spent IS NULL OR spent > ?1) AND NOT excluded
-        ORDER BY n.value DESC",
+        AND orchard = ?2 AND (spent IS NULL OR spent > ?1) AND NOT excluded".to_string() + &where_account
+        + " ORDER BY n.value DESC"),
     )?;
-    let rows = s.query_map(params![height, orchard], |r| {
+    let rows = s.query_map(query_params, |r| {
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, u32>(1)?,
@@ -210,16 +215,20 @@ pub fn store_witness(
     Ok(())
 }
 
-pub fn list_utxos(connection: &Connection, height: CheckpointHeight) -> Result<Vec<UTXO>> {
+pub fn list_utxos(connection: &Connection, account: Option<u32>, height: CheckpointHeight) -> Result<Vec<UTXO>> {
     let height: u32 = height.into();
+    let (where_account, query_params) = match account {
+        Some(_) => (format!(" AND u.account = ?2"), params![height, account]),
+        None => (String::new(), params![height])
+    };
     let mut s = connection.prepare(
-        "SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
+        &("SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
         u.value FROM utxos u
         JOIN t_accounts t ON u.account = t.account
         JOIN t_subaccounts s ON s.account = t.account AND s.addr_index = u.addr_index
-        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)",
+        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)".to_string() + &where_account),
     )?;
-    let rows = s.query_map([height], |r| {
+    let rows = s.query_map(query_params, |r| {
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, u32>(1)?,

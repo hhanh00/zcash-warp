@@ -42,7 +42,7 @@ impl TransparentSync {
                 (*account, *addr_index, ta)
             })
             .collect::<Vec<_>>();
-        let utxos = list_utxos(connection, height)?;
+        let utxos = list_utxos(connection, None, height)?;
 
         Ok(Self {
             network: network.clone(),
