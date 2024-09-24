@@ -351,10 +351,16 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                     println!("{}", serde_json::to_string_pretty(&accounts)?);
                 }
                 AccountCommand::Create { key, name, birth } => {
-                    let mut client = zec.connect_lwd().await?;
-                    let bc_height = get_last_height(&mut client).await?;
+                    let birth = match birth {
+                        Some(b) => b,
+                        None => {
+                            // Avoid using LWD if the user gave us the wallet birth height
+                            let mut client = zec.connect_lwd().await?;
+                            let bc_height = get_last_height(&mut client).await?;
+                            bc_height
+                        }
+                    };
                     let name = name.unwrap_or("<unnamed>".to_string());
-                    let birth = birth.unwrap_or(bc_height);
                     create_new_account(network, &connection, &name, &key, 0, birth)?;
                 }
                 AccountCommand::NewTransparentAddress { account } => {
@@ -743,7 +749,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         }
         Command::MakePaymentURI { payment } => {
             tracing::info!("{}", serde_json::to_string(&payment)?);
-            let payment_uri = make_payment_uri(&payment)?;
+            let payment_uri = make_payment_uri(network, &payment)?;
             println!("{}", payment_uri);
         }
         Command::PayPaymentUri { account, uri } => {

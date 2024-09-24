@@ -2,7 +2,7 @@ use std::io::{Read, Write};
 
 use anyhow::Result;
 use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
-use orchard::{keys::Scope, note_encryption::OrchardDomain};
+use orchard::{keys::Scope, note_encryption::OrchardDomain, Address};
 use parking_lot::Mutex;
 use rusqlite::Connection;
 use sapling_crypto::{note_encryption::SaplingDomain, PaymentAddress};
@@ -361,7 +361,7 @@ pub fn decode_tx_details(
         ) = output
         {
             let note_address = if orchard {
-                ua_of_orchard(&fnote.note.address).encode(network)
+                ua_of_orchard(&Address::from_raw_address_bytes(&fnote.note.address).unwrap()).encode(network)
             } else {
                 let a = PaymentAddress::from_bytes(&fnote.note.address).unwrap();
                 a.encode(network)
@@ -504,7 +504,7 @@ pub fn get_tx_primary_address_memo(
             if let Some(oaddr) = addrs.orchard.as_ref() {
                 for oout in txd.oouts.iter() {
                     if let Some(oout) = &oout.note {
-                        let oout_addr = ua_of_orchard(&oout.note.address).encode(network);
+                        let oout_addr = ua_of_orchard(&Address::from_raw_address_bytes(&oout.note.address).unwrap()).encode(network);
                         if &oout_addr != oaddr {
                             address = Some(oout_addr.clone());
                             let m = Memo::from_bytes(&oout.memo.0)?;
@@ -588,7 +588,7 @@ impl TransactionDetails {
                 let note = sin.note.as_ref();
                 InputShieldedT {
                     nf: Some(sin.nf.to_vec()),
-                    address: note.map(|n| ua_of_orchard(&n.address).encode(network)),
+                    address: note.map(|n| ua_of_orchard(&Address::from_raw_address_bytes(&n.address).unwrap()).encode(network)),
                     value: note.map(|n| n.value).unwrap_or_default(),
                     rcm: note.map(|n| n.rcm.to_vec()),
                     rho: note.and_then(|n| n.rho.map(|r| r.to_vec())),
@@ -603,7 +603,7 @@ impl TransactionDetails {
                 OutputShieldedT {
                     cmx: Some(sout.cmx.to_vec()),
                     incoming: note.map(|n| n.incoming).unwrap_or_default(),
-                    address: note.map(|n| ua_of_orchard(&n.note.address).encode(network)),
+                    address: note.map(|n| ua_of_orchard(&Address::from_raw_address_bytes(&n.note.address).unwrap()).encode(network)),
                     value: note.map(|n| n.note.value).unwrap_or_default(),
                     rcm: note.map(|n| n.note.rcm.to_vec()),
                     rho: note.map(|n| n.note.rho.map(|r| r.to_vec()).unwrap_or_default()),

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use orchard::Address;
+use sapling_crypto::PaymentAddress;
 use zcash_keys::{
     address::{Address as RecipientAddress, UnifiedAddress},
     encoding::AddressCodec,
@@ -11,49 +12,57 @@ use crate::{data::fb::UAReceiversT, types::PoolMask};
 
 use crate::{
     coin::COINS,
-    ffi::{map_result_bytes, CResult},
+    ffi::{map_result_bytes, map_result_string, CResult},
 };
 use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 use flatbuffers::FlatBufferBuilder;
 
+pub fn split_address(network: &Network, address: &str) -> Result<(Option<TransparentAddress>, Option<PaymentAddress>, Option<Address>, bool)> {
+    let address: RecipientAddress = RecipientAddress::decode(network, address).ok_or(anyhow::anyhow!("Invalid UA"))?;
+    let receivers = match address {
+        RecipientAddress::Unified(ua) => {
+            let t = ua.transparent().cloned();
+            let s = ua.sapling().cloned();
+            let o = ua
+                .orchard().cloned();
+            (t, s, o, false)
+        }
+        RecipientAddress::Sapling(s) => (None, Some(s), None, false),
+        RecipientAddress::Transparent(t) => (Some(t), None, None, false),
+        RecipientAddress::Tex(pkh) => (Some(TransparentAddress::PublicKeyHash(pkh)),
+        None, None, true),
+    };
+    Ok(receivers)
+}
+
 #[c_export]
 pub fn decode_address(network: &Network, address: &str) -> Result<UAReceiversT> {
-    let ua = RecipientAddress::decode(network, address).ok_or(anyhow::anyhow!("Invalid UA"))?;
-    let ua = match ua {
-        RecipientAddress::Unified(ua) => {
-            let t = ua.transparent().map(|t| t.encode(network));
-            let s = ua.sapling().map(|s| s.encode(network));
-            let o = ua
-                .orchard()
-                .map(|o| ua_of_orchard(&o.to_raw_address_bytes()).encode(network));
-            UAReceiversT {
-                tex: false,
-                transparent: t,
-                sapling: s,
-                orchard: o,
-            }
-        }
-        RecipientAddress::Sapling(s) => UAReceiversT {
-            tex: false,
-            transparent: None,
-            sapling: Some(s.encode(network)),
-            orchard: None,
-        },
-        RecipientAddress::Transparent(t) => UAReceiversT {
-            tex: false,
-            transparent: Some(t.encode(network)),
-            sapling: None,
-            orchard: None,
-        },
-        RecipientAddress::Tex(pkh) => UAReceiversT {
-            tex: true,
-            transparent: Some(TransparentAddress::PublicKeyHash(pkh).encode(network)),
-            sapling: None,
-            orchard: None,
-        },
+    let (t, s, o, tex) = split_address(network, address)?;
+    let ua = UAReceiversT { tex, 
+        transparent: t.map(|t| t.encode(network)), 
+        sapling: s.map(|s| s.encode(network)), 
+        orchard: o.map(|o| ua_of_orchard(&o).encode(network)),
     };
     Ok(ua)
+}
+
+#[c_export]
+pub fn filter_address(network: &Network, address: &str, pool_mask: u8) -> Result<String> {
+    let (t, s, o, _) = split_address(network, address)?;
+    let t = t.filter(|_| pool_mask & 1 != 0);
+    let s = s.filter(|_| pool_mask & 2 != 0);
+    let o = o.filter(|_| pool_mask & 4 != 0);
+
+    let addr = match (t, s, o) {
+        (Some(t), None, None) => t.encode(network),
+        (None, Some(s), None) => s.encode(network),
+        _ => {
+            let ua = UnifiedAddress::from_receivers(o, s, t);
+            ua.map(|ua| ua.encode(network)).unwrap()
+        }
+    };
+    Ok(addr)
 }
 
 pub fn single_receiver_address(
@@ -77,7 +86,7 @@ pub fn single_receiver_address(
             1 => ua.sapling().map(|s| s.encode(network)),
             2 => ua
                 .orchard()
-                .map(|o| ua_of_orchard(&o.to_raw_address_bytes()).encode(network)),
+                .map(|o| ua_of_orchard(o).encode(network)),
             _ => unreachable!(),
         },
         _ => None,
@@ -85,10 +94,9 @@ pub fn single_receiver_address(
     Ok(address)
 }
 
-pub fn ua_of_orchard(address: &[u8; 43]) -> UnifiedAddress {
-    let orchard = Address::from_raw_address_bytes(address).unwrap();
+pub fn ua_of_orchard(orchard: &Address) -> UnifiedAddress {
     let ua =
-        zcash_client_backend::address::UnifiedAddress::from_receivers(Some(orchard), None, None)
+        zcash_client_backend::address::UnifiedAddress::from_receivers(Some(orchard.clone()), None, None)
             .unwrap();
     ua
 }

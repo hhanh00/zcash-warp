@@ -13,10 +13,10 @@ use flatbuffers::FlatBufferBuilder;
 use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
-use super::ua::decode_address;
+use super::ua::{decode_address, filter_address};
 
 #[c_export]
-pub fn make_payment_uri(payment: &PaymentRequestT) -> Result<String> {
+pub fn make_payment_uri(network: &Network, payment: &PaymentRequestT) -> Result<String> {
     let payments = payment
         .recipients
         .as_ref()
@@ -24,7 +24,8 @@ pub fn make_payment_uri(payment: &PaymentRequestT) -> Result<String> {
         .iter()
         .map(|r| {
             let r = r.normalize_memo()?;
-            let recipient_address = ZcashAddress::try_from_encoded(r.address.as_ref().unwrap())?;
+            let address = filter_address(network, r.address.as_ref().unwrap(), r.pools)?;
+            let recipient_address = ZcashAddress::try_from_encoded(&address)?;
             let amount = Zatoshis::from_u64(r.amount)?;
             let memo = r.memo_bytes.as_ref().unwrap();
             let memo = MemoBytes::from_bytes(memo)?;
