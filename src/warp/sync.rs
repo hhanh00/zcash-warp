@@ -1,21 +1,14 @@
 use crate::{
-    coin::{connect_lwd, CoinDef, COINS},
-    db::{
+    coin::{connect_lwd, CoinDef, COINS}, db::{
         chain::{get_block_header, get_sync_height, rewind_checkpoint, store_block},
         notes::{
             mark_shielded_spent, mark_transparent_spent, store_received_note, store_utxo, update_account_balances, update_tx_timestamp
         },
         tx::add_tx_value,
-    },
-    ffi::{map_result, CResult},
-    lwd::{get_compact_block_range, get_transparent, get_tree_state},
-    txdetails::CompressedMemo,
-    types::CheckpointHeight,
-    warp::{
+    }, fb_unwrap, ffi::{map_result, CResult}, lwd::{get_compact_block_range, get_transparent, get_tree_state}, txdetails::CompressedMemo, types::CheckpointHeight, utils::chain::{get_activation_height, reset_chain}, warp::{
         hasher::{OrchardHasher, SaplingHasher},
         BlockHeader,
-    },
-    Hash,
+    }, Hash
 };
 use anyhow::Result;
 use header::BlockHeaderStore;
@@ -166,9 +159,9 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
     let mut prev_hash = bh.hash;
 
     let block_url = if end < coin.config.warp_end_height {
-        coin.config.warp_url.as_ref().unwrap()
+        fb_unwrap!(coin.config.warp_url)
     } else {
-        coin.config.lwd_url.as_ref().unwrap()
+        fb_unwrap!(coin.config.lwd_url)
     };
     tracing::info!("Using LWD block server {block_url}");
     let mut block_client = connect_lwd(block_url).await?;
@@ -266,9 +259,12 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
 pub async extern "C" fn warp_synchronize(coin: u8, end_height: u32) -> CResult<u8> {
     let res = async {
         let coin = COINS[coin as usize].lock().clone();
-        let connection = coin.connection()?;
+        let mut connection = coin.connection()?;
         let start_height = get_sync_height(&connection)?;
         if start_height == 0 {
+            let activation_height = get_activation_height(&coin.network)?;
+            let mut client = coin.connect_lwd().await?;
+            reset_chain(&coin.network, &mut *connection, &mut client, activation_height).await?;
             anyhow::bail!("no sync data. Have you run reset?");
         }
         if start_height < end_height {

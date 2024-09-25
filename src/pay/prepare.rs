@@ -10,7 +10,7 @@ use crate::{
     data::fb::RecipientT, db::{
         account::get_account_info,
         notes::{list_received_notes, list_utxos},
-    }, network::Network, types::{CheckpointHeight, PoolMask}, utils::{pay::COST_PER_ACTION, ua::single_receiver_address}, warp::{
+    }, fb_unwrap, network::Network, types::{CheckpointHeight, PoolMask}, utils::{pay::COST_PER_ACTION, ua::single_receiver_address}, warp::{
         hasher::{OrchardHasher, SaplingHasher},
         legacy::CommitmentTreeFrontier,
         UTXO,
@@ -113,7 +113,7 @@ impl PaymentBuilder {
         let has_tex = self.outputs.iter().any(|o| {
             let address = &o.recipient.address;
             let address =
-                RecipientAddress::decode(&self.network, address.as_ref().unwrap()).unwrap();
+                RecipientAddress::decode(&self.network, fb_unwrap!(address)).unwrap();
             if let RecipientAddress::Tex(_) = address {
                 true
             } else {
@@ -316,7 +316,7 @@ impl PaymentBuilder {
                 ..
             } = pi;
             let address =
-                single_receiver_address(&self.network, address.as_ref().unwrap(), n.pool_mask)?
+                single_receiver_address(&self.network, fb_unwrap!(address), n.pool_mask)?
                     .unwrap();
             let memo = memo_bytes.map(|memo| MemoBytes::from_bytes(&memo).unwrap());
             let memo = memo.unwrap_or(MemoBytes::empty());

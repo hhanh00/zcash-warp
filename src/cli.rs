@@ -3,7 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{network::{regtest, Network}, utils::chain::reset_chain};
+use crate::{data::fb::ZipDbConfigT, fb_unwrap, network::{regtest, Network}, utils::chain::reset_chain};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
@@ -196,10 +196,7 @@ pub enum DatabaseCommand {
     },
     GenerateKeys,
     Encrypt {
-        directory: String,
-        extension: String,
-        target_path: String,
-        public_key: String,
+        config: ZipDbConfigT,
     },
     Decrypt {
         file_path: String,
@@ -311,13 +308,20 @@ pub enum Command {
     },
 }
 
-impl FromStr for PaymentRequestT {
-    type Err = serde_json::Error;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        serde_json::from_str::<PaymentRequestT>(s)
+macro_rules! impl_fb_from_str {
+    ($v: ident) => {
+        impl FromStr for $v {
+            type Err = serde_json::Error;
+        
+            fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+                serde_json::from_str::<$v>(s)
+            }
+        }
     }
 }
+
+impl_fb_from_str!(PaymentRequestT);
+impl_fb_from_str!(ZipDbConfigT);
 
 fn display_tx(
     network: &Network,
@@ -341,7 +345,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
     match command {
         Command::CreateDatabase => {
             let connection = zec.connection().unwrap();
-            reset_tables(&connection)?;
+            reset_tables(network, &connection, false)?;
         }
         Command::Account(account_cmd) => {
             let connection = zec.connection()?;
@@ -517,12 +521,9 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 zec.db_password = Some(password);
             }
             DatabaseCommand::Encrypt {
-                directory,
-                extension,
-                target_path,
-                public_key,
+                config
             } => {
-                encrypt_zip_database_files(&directory, &extension, &target_path, &public_key)?;
+                encrypt_zip_database_files(&config)?;
             }
             DatabaseCommand::Decrypt {
                 file_path,
@@ -541,7 +542,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 let data = hex::decode(&data)?;
                 let packets = split(&data, threshold)?;
                 for p in packets {
-                    println!("{} {}", data.len(), hex::encode(p.data.as_ref().unwrap()));
+                    println!("{} {}", data.len(), hex::encode(fb_unwrap!(p.data)));
                 }
             }
             QRDataCommand::Merge { parts, data_len } => {

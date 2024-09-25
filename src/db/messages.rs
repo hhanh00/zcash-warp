@@ -2,8 +2,7 @@ use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension as _, Row};
 
 use crate::{
-    data::fb::{ShieldedMessageT, UserMemoT},
-    txdetails::TransactionDetails,
+    data::fb::{ShieldedMessageT, UserMemoT}, fb_unwrap, txdetails::TransactionDetails
 };
 
 use crate::{
@@ -227,7 +226,7 @@ pub fn store_message(
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, false)
         ON CONFLICT DO NOTHING",
     )?;
-    let memo = message.memo.as_ref().unwrap();
+    let memo = fb_unwrap!(message.memo);
     s.execute(params![
         account,
         tx.height,

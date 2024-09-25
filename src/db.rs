@@ -1,31 +1,55 @@
+use crate::{
+    coin::COINS,
+    ffi::{map_result, CResult},
+    network::Network,
+};
+use account_manager::create_new_account;
 use anyhow::Result;
 use rusqlite::Connection;
 use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, CResult}};
+use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 pub mod account;
 pub mod account_manager;
-pub mod contacts;
 pub mod chain;
+pub mod contacts;
+pub mod messages;
 pub mod notes;
 pub mod tx;
 pub mod witnesses;
-pub mod messages;
 
 #[c_export]
-pub fn reset_tables(connection: &Connection) -> Result<()> {
+pub fn reset_tables(network: &Network, connection: &Connection, upgrade: bool) -> Result<bool> {
     tracing::info!("Reset Tables");
-    // TODO Schema versioning
-    // connection.execute("DROP TABLE IF EXISTS props", [])?;
-    // connection.execute("DROP TABLE IF EXISTS txs", [])?;
-    // connection.execute("DROP TABLE IF EXISTS notes", [])?;
-    // connection.execute("DROP TABLE IF EXISTS witnesses", [])?;
-    // connection.execute("DROP TABLE IF EXISTS utxos", [])?;
-    // connection.execute("DROP TABLE IF EXISTS blcks", [])?;
-    // connection.execute("DROP TABLE IF EXISTS txdetails", [])?;
-    // connection.execute("DROP TABLE IF EXISTS msgs", [])?;
-    // connection.execute("DROP TABLE IF EXISTS contacts", [])?;
 
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS schema_version(
+        id INTEGER NOT NULL PRIMARY KEY,
+        version INTEGER NOT NULL)",
+        [],
+    )?;
+    connection.execute(
+        "INSERT INTO schema_version(id, version)
+    VALUES (0, 0) ON CONFLICT DO NOTHING",
+        [],
+    )?;
+
+    let minor =
+        connection.query_row("SELECT version FROM schema_version WHERE id = 0", [], |r| {
+            r.get::<_, u8>(0)
+        })? as usize;
+
+    let migrations = vec![migrate_v1];
+    let res = if minor < migrations.len() {
+        migrations[minor](network, connection, upgrade)?;
+        true
+    } else {
+        false
+    };
+    Ok(res)
+}
+
+fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS props(
         id_prop INTEGER PRIMARY KEY,
@@ -185,6 +209,30 @@ pub fn reset_tables(connection: &Connection) -> Result<()> {
         UNIQUE (account, name))",
         [],
     )?;
+
+    if upgrade {
+        let mut s = connection.prepare(
+            "SELECT a.name, a.seed, a.aindex, a.sk, a.ivk FROM src_db.accounts a",
+        )?;
+        let rows = s.query_map([], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, Option<String>>(1)?,
+                r.get::<_, u32>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, String>(4)?,
+            ))
+        })?;
+        let birth: u32 = network
+            .activation_height(NetworkUpgrade::Sapling)
+            .unwrap()
+            .into();
+        for r in rows {
+            let (name, seed, aindex, sk, ivk) = r?;
+            let key = seed.clone().or(sk.clone()).unwrap_or(ivk.clone());
+            create_new_account(network, connection, &name, &key, aindex, birth)?;
+        }
+    }
 
     Ok(())
 }

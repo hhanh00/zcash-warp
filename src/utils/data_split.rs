@@ -2,6 +2,7 @@ use anyhow::Result;
 use raptorq::{Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation};
 
 use crate::data::fb::{PacketT, PacketsT, Packets};
+use crate::fb_unwrap;
 use crate::ffi::CParam;
 use crate::{
     coin::COINS,
@@ -29,9 +30,9 @@ pub fn split(data: &[u8], threshold: u32) -> Result<Vec<PacketT>> {
 #[c_export]
 pub fn merge(parts: &PacketsT) -> Result<PacketT> {
     let config = ObjectTransmissionInformation::with_defaults(parts.len as u64, QR_DATA_SIZE);
-    let packets = parts.packets.as_ref().unwrap()
+    let packets = fb_unwrap!(parts.packets)
         .iter()
-        .map(|p| EncodingPacket::deserialize(p.data.as_ref().unwrap()))
+        .map(|p| EncodingPacket::deserialize(fb_unwrap!(p.data)))
         .collect::<Vec<_>>();
     let mut decoder = Decoder::new(config);
     for packet in packets {

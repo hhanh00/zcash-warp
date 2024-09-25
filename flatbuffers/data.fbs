@@ -204,7 +204,6 @@ table ZIP32Keys {
 }
 
 table Config {
-  db_path: string;
   lwd_url: string;
   warp_url: string;
   warp_end_height: uint32;
@@ -217,4 +216,16 @@ table AccountSigningCapabilities {
   transparent: uint8;
   sapling: uint8;
   orchard: uint8;
+}
+
+table SchemaVersion {
+  major: uint8;
+  minor: uint8;
+}
+
+table ZipDbConfig {
+  directory: string;
+  file_list: [string];
+  target_path: string;
+  public_key: string;
 }

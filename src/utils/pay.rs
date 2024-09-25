@@ -7,7 +7,7 @@ use zcash_protocol::memo::{Memo, MemoBytes};
 use crate::{
     account::contacts::commit_unsaved_contacts, coin::connect_lwd, data::fb::{
         PaymentRequest, PaymentRequestT, RecipientT, TransactionSummary, TransactionSummaryT,
-    }, db::{account::get_account_info, chain::snap_to_checkpoint}, keys::{import_sk_bip38, TSKStore}, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{
+    }, db::{account::get_account_info, chain::snap_to_checkpoint}, fb_unwrap, keys::{import_sk_bip38, TSKStore}, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{
         make_payment,
         sweep::{prepare_sweep, scan_utxo_by_address, scan_utxo_by_seed},
         UnsignedTransaction,
@@ -62,7 +62,7 @@ pub fn can_sign(
     account: u32,
     summary: &TransactionSummaryT,
 ) -> Result<bool> {
-    let utx = summary.data.as_ref().unwrap();
+    let utx = fb_unwrap!(summary.data);
     let utx = bincode::deserialize_from::<_, UnsignedTransaction>(&utx[..])?;
     let ai = get_account_info(network, connection, account)?;
     if utx.account_id != ai.fingerprint {
@@ -108,9 +108,9 @@ pub fn sign(
     summary: &TransactionSummaryT,
     expiration_height: u32,
 ) -> Result<Vec<u8>> {
-    let data = summary.data.as_ref().unwrap();
+    let data = fb_unwrap!(summary.data);
     let unsigned_tx = bincode::deserialize_from::<_, UnsignedTransaction>(&data[..])?;
-    let keys = summary.keys.as_ref().unwrap();
+    let keys = fb_unwrap!(summary.keys);
     let mut tsk_store = if keys.is_empty() {
         TSKStore::default()
     } else {

@@ -35,17 +35,16 @@ impl CoinDef {
 
     pub fn set_config(&mut self, config: &ConfigT) -> Result<()> {
         self.config.merge(config);
-        if let Some(path) = self.config.db_path.as_ref() {
-            tracing::info!("Setting pool");
-            let manager = r2d2_sqlite::SqliteConnectionManager::file(path);
-            let pool = r2d2::Pool::new(manager)?;
-            self.pool = Some(pool);
-        }
         Ok(())
     }
 
-    pub fn set_password(&mut self, password: &str) {
+    pub fn set_path_password(&mut self, path: &str, password: &str) -> Result<()> {
         self.db_password = Some(password.to_string());
+        tracing::info!("Setting pool");
+        let manager = r2d2_sqlite::SqliteConnectionManager::file(path);
+        let pool = r2d2::Pool::new(manager)?;
+        self.pool = Some(pool);
+        Ok(())
     }
 
     pub fn connection(&self) -> Result<Connection> {

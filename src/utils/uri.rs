@@ -1,12 +1,15 @@
+use crate::data::fb::UserMemoT;
+use crate::fb_unwrap;
+use crate::network::Network;
 use anyhow::Result;
 use zcash_address::ZcashAddress;
 use zcash_client_backend::zip321::{Payment, TransactionRequest};
+use zcash_protocol::memo::Memo;
 use zcash_protocol::{memo::MemoBytes, value::Zatoshis};
-use crate::network::Network;
 
 use crate::{
     coin::COINS,
-    data::fb::{RecipientT, PaymentRequest, PaymentRequestT},
+    data::fb::{PaymentRequest, PaymentRequestT, RecipientT},
     ffi::{map_result, map_result_bytes, map_result_string, CParam, CResult},
 };
 use flatbuffers::FlatBufferBuilder;
@@ -24,12 +27,16 @@ pub fn make_payment_uri(network: &Network, payment: &PaymentRequestT) -> Result<
         .iter()
         .map(|r| {
             let r = r.normalize_memo()?;
-            let address = filter_address(network, r.address.as_ref().unwrap(), r.pools)?;
+            let address = filter_address(network, fb_unwrap!(r.address), r.pools)?;
             let recipient_address = ZcashAddress::try_from_encoded(&address)?;
             let amount = Zatoshis::from_u64(r.amount)?;
-            let memo = r.memo_bytes.as_ref().unwrap();
+            let memo = fb_unwrap!(r.memo_bytes);
             let memo = MemoBytes::from_bytes(memo)?;
-            let memo = if recipient_address.can_receive_memo() { Some(memo) } else { None };
+            let memo = if recipient_address.can_receive_memo() {
+                Some(memo)
+            } else {
+                None
+            };
             let p = Payment::new(recipient_address, amount, memo, None, None, vec![])
                 .ok_or(anyhow::anyhow!("Invalid Payment URI"));
             p
@@ -46,12 +53,30 @@ pub fn parse_payment_uri(uri: &str, height: u32, expiration: u32) -> Result<Paym
     let recipients = treq
         .payments()
         .iter()
-        .map(|(_, p)| RecipientT {
-            address: Some(p.recipient_address().encode()),
-            amount: p.amount().into(),
-            pools: 7,
-            memo: None,
-            memo_bytes: p.memo().cloned().map(|m| m.as_slice().to_vec()),
+        .map(|(_, p)| {
+            let memo = p.memo().and_then(|m| Memo::try_from(m).ok());
+            let memo_text = memo.and_then(|memo| match memo {
+                Memo::Text(text_memo) => Some(text_memo),
+                _ => None,
+            });
+            let memo_text = memo_text.map(|t| t.to_string());
+            let user_memo = memo_text.map(|t| {
+                Box::new(UserMemoT {
+                    reply_to: false,
+                    sender: None,
+                    recipient: None,
+                    subject: None,
+                    body: Some(t),
+                })
+            });
+
+            RecipientT {
+                address: Some(p.recipient_address().encode()),
+                amount: p.amount().into(),
+                pools: 7,
+                memo: user_memo,
+                memo_bytes: p.memo().cloned().map(|m| m.as_slice().to_vec()),
+            }
         })
         .collect::<Vec<_>>();
     let p = PaymentRequestT {

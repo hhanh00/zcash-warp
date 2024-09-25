@@ -10,22 +10,28 @@ use age::{secrecy::ExposeSecret as _, Decryptor};
 use anyhow::Result;
 use zip::write::FileOptions;
 
-use crate::data::fb::AGEKeysT;
+use crate::data::fb::{AGEKeysT, ZipDbConfig, ZipDbConfigT};
+use crate::fb_unwrap;
 use rusqlite::{backup::Backup, Connection};
 
-use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result_bytes, map_result, CResult}};
-use std::ffi::{CStr, c_char};
+use crate::{
+    coin::COINS,
+    ffi::{map_result, map_result_bytes, CParam, CResult},
+};
 use flatbuffers::FlatBufferBuilder;
+use std::ffi::{c_char, CStr};
+use warp_macros::c_export;
 
 #[c_export]
-pub fn encrypt_zip_database_files(
-    directory: &str,
-    extension: &str,
-    target_path: &str,
-    public_key: &str,
-) -> Result<()> {
-    let directory = PathBuf::from(directory);
+pub fn encrypt_zip_database_files(zip_db_config: &ZipDbConfigT) -> Result<()> {
+    let ZipDbConfigT {
+        directory,
+        file_list,
+        target_path,
+        public_key,
+    } = zip_db_config.clone();
+
+    let directory = PathBuf::from(fb_unwrap!(directory));
     let mut zip_directory = directory.clone();
     zip_directory.push(".tmp");
     let _ = fs::create_dir(zip_directory.clone());
@@ -34,33 +40,30 @@ pub fn encrypt_zip_database_files(
     let buff = Cursor::new(zip_data);
     let mut zip_writer = zip::ZipWriter::new(buff);
 
-    for file in directory.read_dir()? {
-        let p = file?;
-        if let Some(ext) = p.path().extension() {
-            if ext != extension {
-                continue;
-            }
-            let db_name = p.file_name().into_string().unwrap();
-            tracing::info!("Backup {db_name}...");
-            {
-                let src = Connection::open(p.path())?;
-                let mut dst = Connection::open(zip_directory.join(&db_name))?;
-                let backup = Backup::new(&src, &mut dst)?;
-                backup.run_to_completion(100, time::Duration::from_millis(10), None)?;
-            }
-            tracing::info!("Zipping {db_name}...");
-            {
-                zip_writer.start_file(&db_name, FileOptions::<()>::default())?;
-                let mut f = File::open(zip_directory.join(db_name))?;
-                let mut buffer = Vec::new();
-                f.read_to_end(&mut buffer)?;
-                zip_writer.write_all(&*buffer)?;
-            }
+    let files = fb_unwrap!(file_list);
+    for db_name in files.iter() {
+        {
+            let p = directory.join(db_name);
+            tracing::info!("Backup {:?}...", p);
+            let src = Connection::open(p)?;
+            let mut dst = Connection::open(zip_directory.join(&db_name))?;
+            let backup = Backup::new(&src, &mut dst)?;
+            backup.run_to_completion(100, time::Duration::from_millis(10), None)?;
+        }
+        tracing::info!("Zipping {db_name}...");
+        {
+            zip_writer.start_file(&db_name, FileOptions::<()>::default())?;
+            let mut f = File::open(zip_directory.join(db_name))?;
+            let mut buffer = Vec::new();
+            f.read_to_end(&mut buffer)?;
+            zip_writer.write_all(&*buffer)?;
         }
     }
     let buffer = zip_writer.finish()?;
     let zip_data = buffer.into_inner();
 
+    let target_path = fb_unwrap!(target_path);
+    let public_key = fb_unwrap!(public_key);
     tracing::info!("Encrypting {target_path}...");
     let public_key = age::x25519::Recipient::from_str(public_key).map_err(anyhow::Error::msg)?;
 
@@ -88,7 +91,6 @@ pub fn decrypt_zip_database_files(
     }
     let mut zip_data = vec![];
     {
-
         let Decryptor::Recipients(decryptor) =
             Decryptor::new(&*encrypted_data).map_err(anyhow::Error::msg)?
         else {

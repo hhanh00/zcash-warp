@@ -5794,12 +5794,11 @@ impl<'a> flatbuffers::Follow<'a> for Config<'a> {
 }
 
 impl<'a> Config<'a> {
-  pub const VT_DB_PATH: flatbuffers::VOffsetT = 4;
-  pub const VT_LWD_URL: flatbuffers::VOffsetT = 6;
-  pub const VT_WARP_URL: flatbuffers::VOffsetT = 8;
-  pub const VT_WARP_END_HEIGHT: flatbuffers::VOffsetT = 10;
-  pub const VT_CONFIRMATIONS: flatbuffers::VOffsetT = 12;
-  pub const VT_REGTEST: flatbuffers::VOffsetT = 14;
+  pub const VT_LWD_URL: flatbuffers::VOffsetT = 4;
+  pub const VT_WARP_URL: flatbuffers::VOffsetT = 6;
+  pub const VT_WARP_END_HEIGHT: flatbuffers::VOffsetT = 8;
+  pub const VT_CONFIRMATIONS: flatbuffers::VOffsetT = 10;
+  pub const VT_REGTEST: flatbuffers::VOffsetT = 12;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -5815,15 +5814,11 @@ impl<'a> Config<'a> {
     builder.add_warp_end_height(args.warp_end_height);
     if let Some(x) = args.warp_url { builder.add_warp_url(x); }
     if let Some(x) = args.lwd_url { builder.add_lwd_url(x); }
-    if let Some(x) = args.db_path { builder.add_db_path(x); }
     builder.add_regtest(args.regtest);
     builder.finish()
   }
 
   pub fn unpack(&self) -> ConfigT {
-    let db_path = self.db_path().map(|x| {
-      x.to_string()
-    });
     let lwd_url = self.lwd_url().map(|x| {
       x.to_string()
     });
@@ -5834,7 +5829,6 @@ impl<'a> Config<'a> {
     let confirmations = self.confirmations();
     let regtest = self.regtest();
     ConfigT {
-      db_path,
       lwd_url,
       warp_url,
       warp_end_height,
@@ -5843,13 +5837,6 @@ impl<'a> Config<'a> {
     }
   }
 
-  #[inline]
-  pub fn db_path(&self) -> Option<&'a str> {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Config::VT_DB_PATH, None)}
-  }
   #[inline]
   pub fn lwd_url(&self) -> Option<&'a str> {
     // Safety:
@@ -5894,7 +5881,6 @@ impl flatbuffers::Verifiable for Config<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
-     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("db_path", Self::VT_DB_PATH, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("lwd_url", Self::VT_LWD_URL, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("warp_url", Self::VT_WARP_URL, false)?
      .visit_field::<u32>("warp_end_height", Self::VT_WARP_END_HEIGHT, false)?
@@ -5905,7 +5891,6 @@ impl flatbuffers::Verifiable for Config<'_> {
   }
 }
 pub struct ConfigArgs<'a> {
-    pub db_path: Option<flatbuffers::WIPOffset<&'a str>>,
     pub lwd_url: Option<flatbuffers::WIPOffset<&'a str>>,
     pub warp_url: Option<flatbuffers::WIPOffset<&'a str>>,
     pub warp_end_height: u32,
@@ -5916,7 +5901,6 @@ impl<'a> Default for ConfigArgs<'a> {
   #[inline]
   fn default() -> Self {
     ConfigArgs {
-      db_path: None,
       lwd_url: None,
       warp_url: None,
       warp_end_height: 0,
@@ -5931,10 +5915,6 @@ pub struct ConfigBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ConfigBuilder<'a, 'b, A> {
-  #[inline]
-  pub fn add_db_path(&mut self, db_path: flatbuffers::WIPOffset<&'b  str>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Config::VT_DB_PATH, db_path);
-  }
   #[inline]
   pub fn add_lwd_url(&mut self, lwd_url: flatbuffers::WIPOffset<&'b  str>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Config::VT_LWD_URL, lwd_url);
@@ -5973,7 +5953,6 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ConfigBuilder<'a, 'b, A> {
 impl core::fmt::Debug for Config<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("Config");
-      ds.field("db_path", &self.db_path());
       ds.field("lwd_url", &self.lwd_url());
       ds.field("warp_url", &self.warp_url());
       ds.field("warp_end_height", &self.warp_end_height());
@@ -5985,7 +5964,6 @@ impl core::fmt::Debug for Config<'_> {
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ConfigT {
-  pub db_path: Option<String>,
   pub lwd_url: Option<String>,
   pub warp_url: Option<String>,
   pub warp_end_height: u32,
@@ -5995,7 +5973,6 @@ pub struct ConfigT {
 impl Default for ConfigT {
   fn default() -> Self {
     Self {
-      db_path: None,
       lwd_url: None,
       warp_url: None,
       warp_end_height: 0,
@@ -6009,9 +5986,6 @@ impl ConfigT {
     &self,
     _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
   ) -> flatbuffers::WIPOffset<Config<'b>> {
-    let db_path = self.db_path.as_ref().map(|x|{
-      _fbb.create_string(x)
-    });
     let lwd_url = self.lwd_url.as_ref().map(|x|{
       _fbb.create_string(x)
     });
@@ -6022,7 +5996,6 @@ impl ConfigT {
     let confirmations = self.confirmations;
     let regtest = self.regtest;
     Config::create(_fbb, &ConfigArgs{
-      db_path,
       lwd_url,
       warp_url,
       warp_end_height,
@@ -6223,6 +6196,366 @@ impl AccountSigningCapabilitiesT {
       transparent,
       sapling,
       orchard,
+    })
+  }
+}
+pub enum SchemaVersionOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct SchemaVersion<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for SchemaVersion<'a> {
+  type Inner = SchemaVersion<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> SchemaVersion<'a> {
+  pub const VT_MAJOR: flatbuffers::VOffsetT = 4;
+  pub const VT_MINOR: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    SchemaVersion { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args SchemaVersionArgs
+  ) -> flatbuffers::WIPOffset<SchemaVersion<'bldr>> {
+    let mut builder = SchemaVersionBuilder::new(_fbb);
+    builder.add_minor(args.minor);
+    builder.add_major(args.major);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> SchemaVersionT {
+    let major = self.major();
+    let minor = self.minor();
+    SchemaVersionT {
+      major,
+      minor,
+    }
+  }
+
+  #[inline]
+  pub fn major(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(SchemaVersion::VT_MAJOR, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn minor(&self) -> u8 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u8>(SchemaVersion::VT_MINOR, Some(0)).unwrap()}
+  }
+}
+
+impl flatbuffers::Verifiable for SchemaVersion<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u8>("major", Self::VT_MAJOR, false)?
+     .visit_field::<u8>("minor", Self::VT_MINOR, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct SchemaVersionArgs {
+    pub major: u8,
+    pub minor: u8,
+}
+impl<'a> Default for SchemaVersionArgs {
+  #[inline]
+  fn default() -> Self {
+    SchemaVersionArgs {
+      major: 0,
+      minor: 0,
+    }
+  }
+}
+
+pub struct SchemaVersionBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> SchemaVersionBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_major(&mut self, major: u8) {
+    self.fbb_.push_slot::<u8>(SchemaVersion::VT_MAJOR, major, 0);
+  }
+  #[inline]
+  pub fn add_minor(&mut self, minor: u8) {
+    self.fbb_.push_slot::<u8>(SchemaVersion::VT_MINOR, minor, 0);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> SchemaVersionBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    SchemaVersionBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<SchemaVersion<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for SchemaVersion<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("SchemaVersion");
+      ds.field("major", &self.major());
+      ds.field("minor", &self.minor());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SchemaVersionT {
+  pub major: u8,
+  pub minor: u8,
+}
+impl Default for SchemaVersionT {
+  fn default() -> Self {
+    Self {
+      major: 0,
+      minor: 0,
+    }
+  }
+}
+impl SchemaVersionT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<SchemaVersion<'b>> {
+    let major = self.major;
+    let minor = self.minor;
+    SchemaVersion::create(_fbb, &SchemaVersionArgs{
+      major,
+      minor,
+    })
+  }
+}
+pub enum ZipDbConfigOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct ZipDbConfig<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for ZipDbConfig<'a> {
+  type Inner = ZipDbConfig<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> ZipDbConfig<'a> {
+  pub const VT_DIRECTORY: flatbuffers::VOffsetT = 4;
+  pub const VT_FILE_LIST: flatbuffers::VOffsetT = 6;
+  pub const VT_TARGET_PATH: flatbuffers::VOffsetT = 8;
+  pub const VT_PUBLIC_KEY: flatbuffers::VOffsetT = 10;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    ZipDbConfig { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args ZipDbConfigArgs<'args>
+  ) -> flatbuffers::WIPOffset<ZipDbConfig<'bldr>> {
+    let mut builder = ZipDbConfigBuilder::new(_fbb);
+    if let Some(x) = args.public_key { builder.add_public_key(x); }
+    if let Some(x) = args.target_path { builder.add_target_path(x); }
+    if let Some(x) = args.file_list { builder.add_file_list(x); }
+    if let Some(x) = args.directory { builder.add_directory(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> ZipDbConfigT {
+    let directory = self.directory().map(|x| {
+      x.to_string()
+    });
+    let file_list = self.file_list().map(|x| {
+      x.iter().map(|s| s.to_string()).collect()
+    });
+    let target_path = self.target_path().map(|x| {
+      x.to_string()
+    });
+    let public_key = self.public_key().map(|x| {
+      x.to_string()
+    });
+    ZipDbConfigT {
+      directory,
+      file_list,
+      target_path,
+      public_key,
+    }
+  }
+
+  #[inline]
+  pub fn directory(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(ZipDbConfig::VT_DIRECTORY, None)}
+  }
+  #[inline]
+  pub fn file_list(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>>>(ZipDbConfig::VT_FILE_LIST, None)}
+  }
+  #[inline]
+  pub fn target_path(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(ZipDbConfig::VT_TARGET_PATH, None)}
+  }
+  #[inline]
+  pub fn public_key(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(ZipDbConfig::VT_PUBLIC_KEY, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for ZipDbConfig<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("directory", Self::VT_DIRECTORY, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<&'_ str>>>>("file_list", Self::VT_FILE_LIST, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("target_path", Self::VT_TARGET_PATH, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("public_key", Self::VT_PUBLIC_KEY, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct ZipDbConfigArgs<'a> {
+    pub directory: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub file_list: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>>>,
+    pub target_path: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub public_key: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for ZipDbConfigArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    ZipDbConfigArgs {
+      directory: None,
+      file_list: None,
+      target_path: None,
+      public_key: None,
+    }
+  }
+}
+
+pub struct ZipDbConfigBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ZipDbConfigBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_directory(&mut self, directory: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ZipDbConfig::VT_DIRECTORY, directory);
+  }
+  #[inline]
+  pub fn add_file_list(&mut self, file_list: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<&'b  str>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ZipDbConfig::VT_FILE_LIST, file_list);
+  }
+  #[inline]
+  pub fn add_target_path(&mut self, target_path: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ZipDbConfig::VT_TARGET_PATH, target_path);
+  }
+  #[inline]
+  pub fn add_public_key(&mut self, public_key: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(ZipDbConfig::VT_PUBLIC_KEY, public_key);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> ZipDbConfigBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    ZipDbConfigBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<ZipDbConfig<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for ZipDbConfig<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("ZipDbConfig");
+      ds.field("directory", &self.directory());
+      ds.field("file_list", &self.file_list());
+      ds.field("target_path", &self.target_path());
+      ds.field("public_key", &self.public_key());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ZipDbConfigT {
+  pub directory: Option<String>,
+  pub file_list: Option<Vec<String>>,
+  pub target_path: Option<String>,
+  pub public_key: Option<String>,
+}
+impl Default for ZipDbConfigT {
+  fn default() -> Self {
+    Self {
+      directory: None,
+      file_list: None,
+      target_path: None,
+      public_key: None,
+    }
+  }
+}
+impl ZipDbConfigT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<ZipDbConfig<'b>> {
+    let directory = self.directory.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let file_list = self.file_list.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|s| _fbb.create_string(s)).collect();_fbb.create_vector(&w)
+    });
+    let target_path = self.target_path.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    let public_key = self.public_key.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    ZipDbConfig::create(_fbb, &ZipDbConfigArgs{
+      directory,
+      file_list,
+      target_path,
+      public_key,
     })
   }
 }

@@ -11,12 +11,7 @@ use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    network::Network,
-    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT},
-    keys::TSKStore,
-    types::{AccountInfo, CheckpointHeight, PoolMask},
-    warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO},
-    Hash,
+    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT}, fb_unwrap, keys::TSKStore, network::Network, types::{AccountInfo, CheckpointHeight, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -55,7 +50,7 @@ impl ExtendedRecipient {
         self.recipient
     }
     fn to_extended(network: &Network, recipient: RecipientT) -> Result<Self> {
-        let ua = RecipientAddress::decode(network, &recipient.address.as_ref().unwrap())
+        let ua = RecipientAddress::decode(network, &fb_unwrap!(recipient.address))
             .ok_or(anyhow::anyhow!("Invalid Address"))?;
         let pools = match ua {
             RecipientAddress::Sapling(_) => 2,
@@ -287,7 +282,7 @@ pub fn make_payment(
 ) -> Result<UnsignedTransaction> {
     let mut pb = PaymentBuilder::new(
         network, connection, account, CheckpointHeight(payment.height),
-        payment.recipients.as_ref().unwrap(), PoolMask(payment.src_pools), s_tree, o_tree,
+        fb_unwrap!(payment.recipients), PoolMask(payment.src_pools), s_tree, o_tree,
     )?;
     pb.add_account_funds(&connection)?;
     pb.set_use_change(payment.use_change)?;

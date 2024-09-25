@@ -1,6 +1,7 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use zcash_keys::address::Address as RecipientAddress;
+use crate::fb_unwrap;
 use crate::network::Network;
 
 use warp_macros::c_export;
@@ -59,7 +60,7 @@ pub fn list_contact_cards(connection: &Connection) -> Result<Vec<ContactCardT>> 
 pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<Contact>> {
     let cards = list_contact_cards(connection)?;
     let contacts = cards.iter().map(|card| {
-        let recipient = RecipientAddress::decode(network, card.address.as_ref().unwrap()).unwrap();
+        let recipient = RecipientAddress::decode(network, fb_unwrap!(card.address)).unwrap();
         let contact = Contact {
             card: card.clone(),
             address: recipient,
@@ -71,7 +72,7 @@ pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<C
 
 pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Result<Contact> {
     let card = get_contact_card(connection, id)?;
-    let recipient = RecipientAddress::decode(network, card.address.as_ref().unwrap()).unwrap();
+    let recipient = RecipientAddress::decode(network, fb_unwrap!(card.address)).unwrap();
     let contact = Contact {
         card,
         address: recipient,

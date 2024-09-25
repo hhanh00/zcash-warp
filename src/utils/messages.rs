@@ -4,7 +4,7 @@ use zcash_protocol::memo::Memo;
 
 use crate::{
     data::fb::{ShieldedMessageT, UserMemoT},
-    db::messages::{navigate_message_by_height, navigate_message_by_subject},
+    db::messages::{navigate_message_by_height, navigate_message_by_subject}, fb_unwrap,
 };
 
 use crate::{
@@ -111,7 +111,7 @@ impl UserMemoT {
         let memo_text = match &self.subject {
             Some(subject) => {
                 format!("\u{1F6E1}MSG\n{}\n{}\n{}", sender,
-                subject, self.body.as_ref().unwrap())
+                subject, fb_unwrap!(self.body))
             }
             None => {
                 self.body.clone().unwrap_or_default()

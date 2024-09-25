@@ -30,13 +30,9 @@ pub extern "C" fn c_setup() {
 }
 
 #[macro_export]
-macro_rules! fb_to_bytes {
-    ($v: ident) => {{
-        let mut builder = FlatBufferBuilder::new();
-        let backup_bytes = $v.pack(&mut builder);
-        builder.finish(backup_bytes, None);
-        Ok::<_, anyhow::Error>(builder.finished_data().to_vec())
-    }};
+macro_rules! fb_unwrap {
+    ($v: expr) => {$v.as_ref().unwrap()
+    }
 }
 
 #[macro_export]
@@ -76,9 +72,6 @@ pub fn configure(coin: u8, config: &ConfigT) -> Result<()> {
 
 impl ConfigT {
     pub fn merge(&mut self, other: &ConfigT) {
-        if other.db_path.is_some() {
-            self.db_path = other.db_path.clone();
-        }
         if other.lwd_url.is_some() {
             self.lwd_url = other.lwd_url.clone();
         }

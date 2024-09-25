@@ -82,11 +82,11 @@ impl From<&KeyType> for u8 {
 }
 
 impl KeyType {
-    fn to_fingerprint(&self, network: &Network) -> Result<KeyFingerprint> {
+    pub fn to_fingerprint(&self, network: &Network) -> Result<KeyFingerprint> {
         let mut fingerprint_buffer = vec![];
         match self {
-            KeyType::Seed(_, seed, _) => {
-                let si = derive_zip32(network, &seed, 0);
+            KeyType::Seed(_, seed, aindex) => {
+                let si = derive_zip32(network, &seed, *aindex);
                 fingerprint_buffer.put_u8(1);
                 fingerprint_buffer.write_all(&si.addr.to_bytes()[..])?;
             }

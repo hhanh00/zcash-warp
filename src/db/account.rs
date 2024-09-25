@@ -1,6 +1,6 @@
 use anyhow::Result;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension as _};
 use zcash_client_backend::encoding::{
     decode_extended_full_viewing_key, decode_extended_spending_key, decode_payment_address,
     AddressCodec as _,
@@ -253,8 +253,8 @@ pub fn get_account_property(connection: &Connection, account: u32, name: &str) -
         "SELECT value FROM props WHERE account = ?1 AND name = ?2",
         params![account, name],
         |r| r.get::<_, Vec<u8>>(0),
-    )?;
-    Ok(value)
+    ).optional()?;
+    Ok(value.unwrap_or_default())
 }
 
 #[c_export]
