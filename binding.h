@@ -96,6 +96,12 @@ struct CResult_u8 c_set_backup_reminder(uint8_t coin, uint32_t account, bool sav
 
 struct CResult_u8 c_downgrade_account(uint8_t coin, uint32_t account, struct CParam capabilities);
 
+struct CResult_u32 c_get_sync_height(uint8_t coin);
+
+struct CResult_u8 c_rewind(uint8_t coin, uint32_t height);
+
+struct CResult______u8 c_list_checkpoints(uint8_t coin);
+
 struct CResult_u32 c_store_contact(uint8_t coin, struct CParam contact);
 
 struct CResult______u8 c_list_contact_cards(uint8_t coin);
@@ -108,11 +114,11 @@ struct CResult_u8 c_edit_contact_address(uint8_t coin, uint32_t id, char *addres
 
 struct CResult_u8 c_delete_contact(uint8_t coin, uint32_t id);
 
-struct CResult_u32 c_get_sync_height(uint8_t coin);
+struct CResult______u8 c_list_messages(uint8_t coin, uint32_t account);
 
-struct CResult_u8 c_rewind(uint8_t coin, uint32_t height);
+struct CResult_u8 c_mark_all_read(uint8_t coin, uint32_t account, bool reverse);
 
-struct CResult______u8 c_list_checkpoints(uint8_t coin);
+struct CResult_u8 c_mark_read(uint8_t coin, uint32_t id, bool reverse);
 
 struct CResult______u8 c_get_unspent_notes(uint8_t coin, uint32_t account, uint32_t bc_height);
 
@@ -120,11 +126,7 @@ struct CResult_u8 c_exclude_note(uint8_t coin, uint32_t id, bool reverse);
 
 struct CResult_u8 c_reverse_note_exclusion(uint8_t coin, uint32_t account);
 
-struct CResult______u8 c_list_messages(uint8_t coin, uint32_t account);
-
-struct CResult_u8 c_mark_all_read(uint8_t coin, uint32_t account, bool reverse);
-
-struct CResult_u8 c_mark_read(uint8_t coin, uint32_t id, bool reverse);
+struct CResult______u8 c_get_tx_details(uint8_t coin, uint32_t id_tx);
 
 struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(uint8_t coin);
 

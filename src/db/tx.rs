@@ -1,10 +1,12 @@
 use crate::{
-    txdetails::TransactionDetails,
-    warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate},
-    Hash,
+    data::fb::TransactionInfoExtendedT, network::Network, txdetails::TransactionDetails, warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate}, Hash
 };
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
+
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result_bytes, CResult}};
+use flatbuffers::FlatBufferBuilder;
 
 pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Hash)>> {
     let mut s = connection.prepare(
@@ -89,7 +91,7 @@ pub fn get_tx(connection: &Connection, id_tx: u32) -> Result<ReceivedTx> {
     Ok(tx)
 }
 
-pub fn get_tx_details(connection: &Connection, id_tx: u32) -> Result<(u32, TransactionDetails)> {
+pub fn get_tx_details_account(connection: &Connection, id_tx: u32) -> Result<(u32, TransactionDetails)> {
     let (account, tx_bin) = connection.query_row(
         "SELECT t.account, d.data FROM txs t
         JOIN txdetails d ON t.id_tx = d.id_tx 
@@ -99,6 +101,15 @@ pub fn get_tx_details(connection: &Connection, id_tx: u32) -> Result<(u32, Trans
     )?;
     let tx: TransactionDetails = bincode::deserialize_from(&*tx_bin)?;
     Ok((account, tx))
+}
+
+#[c_export]
+pub fn get_tx_details(network: &Network, connection: &Connection, id_tx: u32) -> Result<TransactionInfoExtendedT> {
+    let tx_bin = connection.query_row(
+        "SELECT data FROM txdetails WHERE id_tx = ?1", [id_tx], |r| r.get::<_, Vec<u8>>(0))?;
+    let tx: TransactionDetails = bincode::deserialize_from(&*tx_bin)?;
+    let etx = tx.to_transaction_info_ext(network);
+    Ok(etx)
 }
 
 pub fn store_tx(connection: &Transaction, tx: &ReceivedTx) -> Result<()> {

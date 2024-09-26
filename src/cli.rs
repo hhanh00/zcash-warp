@@ -43,7 +43,7 @@ use crate::{
         messages::{get_message, list_messages, mark_all_read, mark_read},
         notes::{exclude_note, get_unspent_notes, reverse_note_exclusion},
         reset_tables,
-        tx::{get_tx_details, get_txid, store_tx_details},
+        tx::{get_tx_details_account, get_txid, store_tx_details},
     },
     keys::generate_random_mnemonic_phrase,
     lwd::{broadcast, get_last_height, get_transaction, get_tree_state},
@@ -729,7 +729,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         }
         Command::GetTxDetails { id } => {
             let connection = zec.connection()?;
-            let (account, tx) = get_tx_details(&connection, id)?;
+            let (account, tx) = get_tx_details_account(&connection, id)?;
             decode_tx_details(network, &connection, account, id, &tx)?;
             let etx = tx.to_transaction_info_ext(network);
             println!("{}", serde_json::to_string_pretty(&etx).unwrap());
