@@ -2,7 +2,7 @@ use anyhow::Result;
 use bip39::{Mnemonic, Seed};
 use orchard::keys::Scope;
 use prost::bytes::BufMut;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use sapling_crypto::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
 use secp256k1::{All, Secp256k1, SecretKey};
 use zcash_client_backend::{
@@ -393,6 +393,13 @@ pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     Ok(())
 }
 
+pub fn get_account_by_fingerprint(connection: &Connection, fingerprint: &[u8]) -> Result<Option<u32>> {
+    let account = connection.query_row(
+        "SELECT id_account FROM accounts WHERE fingerprint = ?1", [fingerprint],
+    |r| r.get::<_, u32>(0)).optional()?;
+    Ok(account)
+}
+
 #[c_export]
 pub fn set_backup_reminder(connection: &Connection, account: u32, saved: bool) -> Result<()> {
     connection.execute(
@@ -409,7 +416,7 @@ pub fn downgrade_account(
     account: u32,
     capabilities: &AccountSigningCapabilitiesT,
 ) -> Result<()> {
-    if capabilities.transparent == 0 && 
+    if capabilities.transparent == 0 &&
     capabilities.sapling == 0 && capabilities.orchard == 0 {
         anyhow::bail!("Account needs at least one key");
     }

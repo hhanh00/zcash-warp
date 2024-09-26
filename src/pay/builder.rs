@@ -1,5 +1,5 @@
 use crate::{
-    db::account::{get_account_info, list_account_tsk},
+    db::{account::{get_account_info, list_account_tsk}, account_manager::get_account_by_fingerprint},
     keys::TSKStore,
     warp::{
         hasher::{empty_roots, OrchardHasher, SaplingHasher},
@@ -51,15 +51,16 @@ impl UnsignedTransaction {
         tsk_store: &mut TSKStore,
         mut rng: R,
     ) -> Result<Vec<u8>> {
-        let ai = get_account_info(network, connection, self.account)?;
+        let account = get_account_by_fingerprint(connection, &self.account_id)?;
+        let account = account.ok_or(anyhow::anyhow!("Account not in wallet"))?;
+
+        let ai = get_account_info(network, connection, account)?;
         if ai.fingerprint != self.account_id {
             anyhow::bail!("Invalid Account");
         }
-        let sks = ai.to_secret_keys();
-        sks.sapling.ok_or(anyhow::anyhow!("No Secret Keys"))?;
 
         if let Some(_ti) = ai.transparent.as_ref() {
-            let tsks = list_account_tsk(connection, self.account)?;
+            let tsks = list_account_tsk(connection, account)?;
             for tsk in tsks.iter() {
                 tsk_store.0.insert(tsk.address.clone(), tsk.sk.clone());
             }
