@@ -228,14 +228,15 @@ struct CResult______u8 c_save_contacts(uint8_t coin,
 
 struct CResult______u8 c_prepare_sweep_tx(uint8_t coin,
                                           uint32_t account,
-                                          uint32_t confirmations,
+                                          uint32_t height,
                                           char *destination_address,
+                                          uint32_t addr_index,
                                           uintptr_t gap_limit);
 
 struct CResult______u8 c_prepare_sweep_tx_by_sk(uint8_t coin,
                                                 uint32_t account,
+                                                uint32_t height,
                                                 char *sk,
-                                                uint32_t confirmations,
                                                 char *destination_address);
 
 struct CResult______u8 c_fetch_tx_details(uint8_t coin, uint32_t account, uint32_t id);

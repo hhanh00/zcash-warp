@@ -697,13 +697,18 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             destination_address,
         } => {
             let connection = zec.connection()?;
+            let mut client = zec.connect_lwd().await?;
+            let bc_height = get_last_height(&mut client).await?;
+            // no need to snap because we have no shielded inputs
+            let cp_height = CheckpointHeight(bc_height - zec.config.confirmations + 1);
             let summary = prepare_sweep_tx(
                 network,
                 &connection,
                 zec.config.lwd_url.clone().unwrap(),
                 account,
-                zec.config.confirmations,
+                cp_height.0,
                 &destination_address,
+                0,
                 50,
             )
             .await?;
@@ -715,13 +720,17 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             destination_address,
         } => {
             let connection = zec.connection()?;
+            let mut client = zec.connect_lwd().await?;
+            let bc_height = get_last_height(&mut client).await?;
+            // no need to snap because we have no shielded inputs
+            let cp_height = CheckpointHeight(bc_height - zec.config.confirmations + 1);
             let summary = prepare_sweep_tx_by_sk(
                 network,
                 &connection,
                 zec.config.lwd_url.clone().unwrap(),
                 account,
+                cp_height.0,
                 &secret_key,
-                zec.config.confirmations,
                 &destination_address,
             )
             .await?;
@@ -790,6 +799,8 @@ pub fn cli_main(config: &ConfigT) -> Result<()> {
         },
     );
     zec.set_config(config)?;
+    zec.set_path_password(config.db_path.as_deref().unwrap(), "")?;
+
     let prompt = DefaultPrompt {
         left_prompt: DefaultPromptSegment::Basic("zcash-warp".to_owned()),
         ..DefaultPrompt::default()

@@ -5794,11 +5794,12 @@ impl<'a> flatbuffers::Follow<'a> for Config<'a> {
 }
 
 impl<'a> Config<'a> {
-  pub const VT_LWD_URL: flatbuffers::VOffsetT = 4;
-  pub const VT_WARP_URL: flatbuffers::VOffsetT = 6;
-  pub const VT_WARP_END_HEIGHT: flatbuffers::VOffsetT = 8;
-  pub const VT_CONFIRMATIONS: flatbuffers::VOffsetT = 10;
-  pub const VT_REGTEST: flatbuffers::VOffsetT = 12;
+  pub const VT_DB_PATH: flatbuffers::VOffsetT = 4;
+  pub const VT_LWD_URL: flatbuffers::VOffsetT = 6;
+  pub const VT_WARP_URL: flatbuffers::VOffsetT = 8;
+  pub const VT_WARP_END_HEIGHT: flatbuffers::VOffsetT = 10;
+  pub const VT_CONFIRMATIONS: flatbuffers::VOffsetT = 12;
+  pub const VT_REGTEST: flatbuffers::VOffsetT = 14;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -5814,11 +5815,15 @@ impl<'a> Config<'a> {
     builder.add_warp_end_height(args.warp_end_height);
     if let Some(x) = args.warp_url { builder.add_warp_url(x); }
     if let Some(x) = args.lwd_url { builder.add_lwd_url(x); }
+    if let Some(x) = args.db_path { builder.add_db_path(x); }
     builder.add_regtest(args.regtest);
     builder.finish()
   }
 
   pub fn unpack(&self) -> ConfigT {
+    let db_path = self.db_path().map(|x| {
+      x.to_string()
+    });
     let lwd_url = self.lwd_url().map(|x| {
       x.to_string()
     });
@@ -5829,6 +5834,7 @@ impl<'a> Config<'a> {
     let confirmations = self.confirmations();
     let regtest = self.regtest();
     ConfigT {
+      db_path,
       lwd_url,
       warp_url,
       warp_end_height,
@@ -5837,6 +5843,13 @@ impl<'a> Config<'a> {
     }
   }
 
+  #[inline]
+  pub fn db_path(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(Config::VT_DB_PATH, None)}
+  }
   #[inline]
   pub fn lwd_url(&self) -> Option<&'a str> {
     // Safety:
@@ -5881,6 +5894,7 @@ impl flatbuffers::Verifiable for Config<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("db_path", Self::VT_DB_PATH, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("lwd_url", Self::VT_LWD_URL, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("warp_url", Self::VT_WARP_URL, false)?
      .visit_field::<u32>("warp_end_height", Self::VT_WARP_END_HEIGHT, false)?
@@ -5891,6 +5905,7 @@ impl flatbuffers::Verifiable for Config<'_> {
   }
 }
 pub struct ConfigArgs<'a> {
+    pub db_path: Option<flatbuffers::WIPOffset<&'a str>>,
     pub lwd_url: Option<flatbuffers::WIPOffset<&'a str>>,
     pub warp_url: Option<flatbuffers::WIPOffset<&'a str>>,
     pub warp_end_height: u32,
@@ -5901,6 +5916,7 @@ impl<'a> Default for ConfigArgs<'a> {
   #[inline]
   fn default() -> Self {
     ConfigArgs {
+      db_path: None,
       lwd_url: None,
       warp_url: None,
       warp_end_height: 0,
@@ -5915,6 +5931,10 @@ pub struct ConfigBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ConfigBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_db_path(&mut self, db_path: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Config::VT_DB_PATH, db_path);
+  }
   #[inline]
   pub fn add_lwd_url(&mut self, lwd_url: flatbuffers::WIPOffset<&'b  str>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Config::VT_LWD_URL, lwd_url);
@@ -5953,6 +5973,7 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ConfigBuilder<'a, 'b, A> {
 impl core::fmt::Debug for Config<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("Config");
+      ds.field("db_path", &self.db_path());
       ds.field("lwd_url", &self.lwd_url());
       ds.field("warp_url", &self.warp_url());
       ds.field("warp_end_height", &self.warp_end_height());
@@ -5964,6 +5985,7 @@ impl core::fmt::Debug for Config<'_> {
 #[non_exhaustive]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ConfigT {
+  pub db_path: Option<String>,
   pub lwd_url: Option<String>,
   pub warp_url: Option<String>,
   pub warp_end_height: u32,
@@ -5973,6 +5995,7 @@ pub struct ConfigT {
 impl Default for ConfigT {
   fn default() -> Self {
     Self {
+      db_path: None,
       lwd_url: None,
       warp_url: None,
       warp_end_height: 0,
@@ -5986,6 +6009,9 @@ impl ConfigT {
     &self,
     _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
   ) -> flatbuffers::WIPOffset<Config<'b>> {
+    let db_path = self.db_path.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
     let lwd_url = self.lwd_url.as_ref().map(|x|{
       _fbb.create_string(x)
     });
@@ -5996,6 +6022,7 @@ impl ConfigT {
     let confirmations = self.confirmations;
     let regtest = self.regtest;
     Config::create(_fbb, &ConfigArgs{
+      db_path,
       lwd_url,
       warp_url,
       warp_end_height,

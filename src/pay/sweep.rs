@@ -2,7 +2,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 use tonic::Request;
 use zcash_client_backend::encoding::AddressCodec as _;
-use crate::network::Network;
+use crate::{network::Network, types::CheckpointHeight};
 
 use super::{PaymentBuilder, UnsignedTransaction};
 use crate::{
@@ -113,12 +113,13 @@ pub fn prepare_sweep(
     network: &Network,
     connection: &Connection,
     account: u32,
-    height: u32,
+    height: CheckpointHeight,
     utxos: &[UTXO],
     destination_address: &str,
     s: &CommitmentTreeFrontier,
     o: &CommitmentTreeFrontier,
 ) -> Result<UnsignedTransaction> {
+    let height = height.0;
     let amount = utxos.iter().map(|u| u.value).sum::<u64>();
 
     let recipient = RecipientT {

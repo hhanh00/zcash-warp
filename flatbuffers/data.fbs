@@ -204,6 +204,7 @@ table ZIP32Keys {
 }
 
 table Config {
+  db_path: string;
   lwd_url: string;
   warp_url: string;
   warp_end_height: uint32;
