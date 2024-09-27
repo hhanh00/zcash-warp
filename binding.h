@@ -67,6 +67,8 @@ struct CResult_bool c_reset_tables(uint8_t coin, bool upgrade);
 
 struct CResult______u8 c_list_accounts(uint8_t coin);
 
+struct CResult______u8 c_list_account_transparent_addresses(uint8_t coin, uint32_t account);
+
 struct CResult______u8 c_get_balance(uint8_t coin, uint32_t account, uint32_t height);
 
 struct CResult______u8 c_get_account_signing_capabilities(uint8_t coin, uint32_t account);
@@ -121,6 +123,8 @@ struct CResult_u8 c_mark_all_read(uint8_t coin, uint32_t account, bool reverse);
 struct CResult_u8 c_mark_read(uint8_t coin, uint32_t id, bool reverse);
 
 struct CResult______u8 c_get_unspent_notes(uint8_t coin, uint32_t account, uint32_t bc_height);
+
+struct CResult______u8 c_get_unspent_utxos(uint8_t coin, uint32_t account, uint32_t bc_height);
 
 struct CResult_u8 c_exclude_note(uint8_t coin, uint32_t id, bool reverse);
 

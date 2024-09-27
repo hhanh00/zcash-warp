@@ -6586,5 +6586,158 @@ impl ZipDbConfigT {
     })
   }
 }
+pub enum TransparentAddressOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct TransparentAddress<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for TransparentAddress<'a> {
+  type Inner = TransparentAddress<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> TransparentAddress<'a> {
+  pub const VT_ADDR_INDEX: flatbuffers::VOffsetT = 4;
+  pub const VT_ADDRESS: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    TransparentAddress { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args TransparentAddressArgs<'args>
+  ) -> flatbuffers::WIPOffset<TransparentAddress<'bldr>> {
+    let mut builder = TransparentAddressBuilder::new(_fbb);
+    if let Some(x) = args.address { builder.add_address(x); }
+    builder.add_addr_index(args.addr_index);
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> TransparentAddressT {
+    let addr_index = self.addr_index();
+    let address = self.address().map(|x| {
+      x.to_string()
+    });
+    TransparentAddressT {
+      addr_index,
+      address,
+    }
+  }
+
+  #[inline]
+  pub fn addr_index(&self) -> u32 {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<u32>(TransparentAddress::VT_ADDR_INDEX, Some(0)).unwrap()}
+  }
+  #[inline]
+  pub fn address(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(TransparentAddress::VT_ADDRESS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for TransparentAddress<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<u32>("addr_index", Self::VT_ADDR_INDEX, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("address", Self::VT_ADDRESS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct TransparentAddressArgs<'a> {
+    pub addr_index: u32,
+    pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+}
+impl<'a> Default for TransparentAddressArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    TransparentAddressArgs {
+      addr_index: 0,
+      address: None,
+    }
+  }
+}
+
+pub struct TransparentAddressBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransparentAddressBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_addr_index(&mut self, addr_index: u32) {
+    self.fbb_.push_slot::<u32>(TransparentAddress::VT_ADDR_INDEX, addr_index, 0);
+  }
+  #[inline]
+  pub fn add_address(&mut self, address: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransparentAddress::VT_ADDRESS, address);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransparentAddressBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    TransparentAddressBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<TransparentAddress<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for TransparentAddress<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("TransparentAddress");
+      ds.field("addr_index", &self.addr_index());
+      ds.field("address", &self.address());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct TransparentAddressT {
+  pub addr_index: u32,
+  pub address: Option<String>,
+}
+impl Default for TransparentAddressT {
+  fn default() -> Self {
+    Self {
+      addr_index: 0,
+      address: None,
+    }
+  }
+}
+impl TransparentAddressT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<TransparentAddress<'b>> {
+    let addr_index = self.addr_index;
+    let address = self.address.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
+    TransparentAddress::create(_fbb, &TransparentAddressArgs{
+      addr_index,
+      address,
+    })
+  }
+}
 }  // pub mod fb
 

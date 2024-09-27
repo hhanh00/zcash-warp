@@ -230,3 +230,8 @@ table ZipDbConfig {
   target_path: string;
   public_key: string;
 }
+
+table TransparentAddress {
+  addr_index: uint32;
+  address: string;
+}

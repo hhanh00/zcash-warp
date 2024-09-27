@@ -3,7 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{data::fb::ZipDbConfigT, fb_unwrap, network::{regtest, Network}, utils::chain::reset_chain};
+use crate::{data::fb::ZipDbConfigT, db::{account::list_account_transparent_addresses, notes::list_utxos}, fb_unwrap, network::{regtest, Network}, utils::chain::reset_chain};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
@@ -93,6 +93,9 @@ pub enum AccountCommand {
     NewTransparentAddress {
         account: u32,
     },
+    ListTransparentAddresses {
+        account: u32,
+    },
     SetProperty {
         account: u32,
         name: String,
@@ -177,6 +180,7 @@ pub enum NoteCommand {
     List { account: u32 },
     Exclude { id: u32, reverse: u8 },
     Reverse { account: u32 },
+    Utxo { account: u32 },
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -370,6 +374,10 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 AccountCommand::NewTransparentAddress { account } => {
                     new_transparent_address(network, &connection, account)?;
                 }
+                AccountCommand::ListTransparentAddresses { account } => {
+                    let t_addresses = list_account_transparent_addresses(&connection, account)?;
+                    println!("{:?}", t_addresses);
+                }
                 AccountCommand::EditName { account, name } => {
                     edit_account_name(&connection, account, &name)?;
                 }
@@ -496,9 +504,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let connection = zec.connection()?;
             match note_command.command {
                 NoteCommand::List { account } => {
-                    let mut client = zec.connect_lwd().await?;
-                    let bc_height = get_last_height(&mut client).await?;
-                    let notes = get_unspent_notes(&connection, account, bc_height)?;
+                    let notes = get_unspent_notes(&connection, account, u32::MAX)?;
                     println!("{}", serde_json::to_string_pretty(&notes).unwrap());
                 }
                 NoteCommand::Exclude { id, reverse } => {
@@ -506,6 +512,10 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 }
                 NoteCommand::Reverse { account } => {
                     reverse_note_exclusion(&connection, account)?;
+                }
+                NoteCommand::Utxo { account } => {
+                    let utxos = list_utxos(&connection, Some(account), CheckpointHeight(u32::MAX))?;
+                    println!("{:?}", utxos);
                 }
             }
         }

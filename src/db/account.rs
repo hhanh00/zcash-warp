@@ -9,13 +9,15 @@ use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::consensus::NetworkConstants as _;
 use zcash_primitives::legacy::TransparentAddress;
 
-use crate::network::Network;
 use crate::account::contacts::recipient_contains;
 use crate::coin::COINS;
-use crate::data::fb::{AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendingT};
+use crate::data::fb::{
+    AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendingT, TransparentAddressT,
+};
 use crate::db::contacts::list_contacts;
 use crate::ffi::{map_result, map_result_bytes, CParam, CResult};
 use crate::keys::import_sk_bip38;
+use crate::network::Network;
 use crate::types::{AccountInfo, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 use crate::warp::TransparentSK;
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
@@ -50,6 +52,28 @@ pub fn list_accounts(coin: u8, connection: &Connection) -> Result<Vec<AccountNam
     }
 
     Ok(accounts)
+}
+
+#[c_export]
+pub fn list_account_transparent_addresses(
+    connection: &Connection,
+    account: u32,
+) -> Result<Vec<TransparentAddressT>> {
+    let mut s = connection.prepare(
+        "SELECT addr_index, address FROM t_subaccounts WHERE account = ?1 ORDER BY addr_index",
+    )?;
+    let rows = s.query_map([account], |r| {
+        Ok((r.get::<_, u32>(0)?, r.get::<_, String>(1)?))
+    })?;
+    let mut addresses = vec![];
+    for r in rows {
+        let (addr_index, address) = r?;
+        addresses.push(TransparentAddressT {
+            addr_index,
+            address: Some(address),
+        });
+    }
+    Ok(addresses)
 }
 
 pub fn list_transparent_addresses(connection: &Connection) -> Result<Vec<(u32, u32, String)>> {
@@ -249,11 +273,13 @@ pub fn get_account_signing_capabilities(
 
 #[c_export]
 pub fn get_account_property(connection: &Connection, account: u32, name: &str) -> Result<Vec<u8>> {
-    let value = connection.query_row(
-        "SELECT value FROM props WHERE account = ?1 AND name = ?2",
-        params![account, name],
-        |r| r.get::<_, Vec<u8>>(0),
-    ).optional()?;
+    let value = connection
+        .query_row(
+            "SELECT value FROM props WHERE account = ?1 AND name = ?2",
+            params![account, name],
+            |r| r.get::<_, Vec<u8>>(0),
+        )
+        .optional()?;
     Ok(value.unwrap_or_default())
 }
 

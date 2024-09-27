@@ -1,5 +1,5 @@
 use crate::{
-    data::fb::ShieldedNoteT,
+    data::fb::{InputTransparentT, ShieldedNoteT},
     types::CheckpointHeight,
     warp::{
         sync::{PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
@@ -54,8 +54,11 @@ pub fn list_received_notes(
 ) -> Result<Vec<ReceivedNote>> {
     let height: u32 = height.into();
     let (where_account, query_params) = match account {
-        Some(_) => (format!(" AND n.account = ?3"), params![height, orchard, account]),
-        None => (String::new(), params![height, orchard])
+        Some(_) => (
+            format!(" AND n.account = ?3"),
+            params![height, orchard, account],
+        ),
+        None => (String::new(), params![height, orchard]),
     };
     let mut s = connection.prepare(
         &("SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
@@ -215,11 +218,15 @@ pub fn store_witness(
     Ok(())
 }
 
-pub fn list_utxos(connection: &Connection, account: Option<u32>, height: CheckpointHeight) -> Result<Vec<UTXO>> {
+pub fn list_utxos(
+    connection: &Connection,
+    account: Option<u32>,
+    height: CheckpointHeight,
+) -> Result<Vec<UTXO>> {
     let height: u32 = height.into();
     let (where_account, query_params) = match account {
         Some(_) => (format!(" AND u.account = ?2"), params![height, account]),
-        None => (String::new(), params![height])
+        None => (String::new(), params![height]),
     };
     let mut s = connection.prepare(
         &("SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
@@ -262,10 +269,7 @@ pub fn list_utxos(connection: &Connection, account: Option<u32>, height: Checkpo
     Ok(utxos)
 }
 
-pub fn store_utxo(
-    connection: &Transaction,
-    utxo: &UTXO,
-) -> Result<()> {
+pub fn store_utxo(connection: &Transaction, utxo: &UTXO) -> Result<()> {
     if utxo.is_new {
         let mut s = connection.prepare_cached(
             "INSERT INTO utxos
@@ -361,6 +365,22 @@ pub fn get_unspent_notes(
         notes.push(note);
     }
     Ok(notes)
+}
+
+#[c_export]
+pub fn get_unspent_utxos(
+    connection: &Connection,
+    account: u32,
+    bc_height: u32,
+) -> Result<Vec<InputTransparentT>> {
+    let utxos = list_utxos(connection, Some(account), CheckpointHeight(bc_height))?;
+    let utxos = utxos.into_iter().map(|u| InputTransparentT {
+        txid: Some(u.txid.to_vec()),
+        vout: u.vout,
+        address: Some(u.address),
+        value: u.value,
+    }).collect::<Vec<_>>();
+    Ok(utxos)
 }
 
 #[c_export]
