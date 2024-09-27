@@ -88,6 +88,8 @@ struct CResult_u32 c_create_new_account(uint8_t coin,
                                         uint32_t acc_index,
                                         uint32_t birth);
 
+struct CResult_u8 c_new_transparent_address(uint8_t coin, uint32_t account);
+
 struct CResult_u8 c_edit_account_name(uint8_t coin, uint32_t account, char *name);
 
 struct CResult_u8 c_edit_account_birth(uint8_t coin, uint32_t account, uint32_t birth);
@@ -139,6 +141,8 @@ struct CResult_u32 c_get_last_height(uint8_t coin);
 struct CResult_u64 c_ping(uint8_t coin, char *lwd_url);
 
 struct CResult_u8 c_init_sapling_prover(uint8_t coin, struct CParam spend, struct CParam output);
+
+struct CResult_u8 c_scan_transparent_addresses(uint8_t coin, uint32_t account, uint32_t gap_limit);
 
 struct CResult_u8 c_retrieve_tx_details(uint8_t coin);
 
@@ -229,19 +233,6 @@ struct CResult______u8 c_save_contacts(uint8_t coin,
                                        uint32_t account,
                                        uint32_t height,
                                        uint32_t confirmations);
-
-struct CResult______u8 c_prepare_sweep_tx(uint8_t coin,
-                                          uint32_t account,
-                                          uint32_t height,
-                                          char *destination_address,
-                                          uint32_t addr_index,
-                                          uintptr_t gap_limit);
-
-struct CResult______u8 c_prepare_sweep_tx_by_sk(uint8_t coin,
-                                                uint32_t account,
-                                                uint32_t height,
-                                                char *sk,
-                                                char *destination_address);
 
 struct CResult______u8 c_fetch_tx_details(uint8_t coin, uint32_t account, uint32_t id);
 

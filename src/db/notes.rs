@@ -233,7 +233,8 @@ pub fn list_utxos(
         u.value FROM utxos u
         JOIN t_accounts t ON u.account = t.account
         JOIN t_subaccounts s ON s.account = t.account AND s.addr_index = u.addr_index
-        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)".to_string() + &where_account),
+        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)".to_string() + &where_account
+        + " ORDER BY u.height DESC"),
     )?;
     let rows = s.query_map(query_params, |r| {
         Ok((

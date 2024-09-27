@@ -77,7 +77,7 @@ pub fn list_account_transparent_addresses(
 }
 
 pub fn list_transparent_addresses(connection: &Connection) -> Result<Vec<(u32, u32, String)>> {
-    let mut s = connection.prepare("SELECT account, addr_index, address FROM t_subaccounts")?;
+    let mut s = connection.prepare("SELECT account, addr_index, address FROM t_subaccounts ORDER BY addr_index")?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,

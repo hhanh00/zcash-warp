@@ -16,9 +16,9 @@ use zcash_client_backend::{
 use zcash_primitives::consensus::NetworkConstants as _;
 
 use crate::{
-    network::Network,
     data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
     keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38},
+    network::Network,
     types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
 };
 
@@ -326,6 +326,7 @@ pub fn get_account_seed(connection: &Connection, account: u32) -> Result<(Seed, 
     Ok((seed, aindex))
 }
 
+#[c_export]
 pub fn new_transparent_address(
     network: &Network,
     connection: &Connection,
@@ -339,6 +340,28 @@ pub fn new_transparent_address(
     )? + 1;
     let ti = derive_bip32(network, &seed, acc_index, addr_index, true);
     create_transparent_subaccount(network, connection, account, addr_index, &ti)?;
+    Ok(())
+}
+
+pub fn trim_excess_transparent_addresses(connection: &Connection, account: u32) -> Result<()> {
+    let max_addr_index = connection
+        .query_row(
+            "SELECT MAX(addr_index) FROM utxos WHERE account = ?1",
+            [account],
+            |r| r.get::<_, Option<u32>>(0),
+        )?
+        .unwrap_or_default();
+    connection.execute(
+        "DELETE FROM t_subaccounts WHERE account = ?1 AND addr_index > ?2",
+        params![account, max_addr_index],
+    )?;
+    connection.execute(
+        "INSERT INTO t_accounts 
+        SELECT account, addr_index, sk, address FROM t_subaccounts
+        WHERE account = ?1 AND addr_index = ?2
+        ON CONFLICT (account) DO UPDATE SET addr_index = excluded.addr_index,
+        sk = excluded.sk, address = excluded.address",
+        params![account, max_addr_index])?; // update the account transparent address
     Ok(())
 }
 
@@ -393,10 +416,17 @@ pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     Ok(())
 }
 
-pub fn get_account_by_fingerprint(connection: &Connection, fingerprint: &[u8]) -> Result<Option<u32>> {
-    let account = connection.query_row(
-        "SELECT id_account FROM accounts WHERE fingerprint = ?1", [fingerprint],
-    |r| r.get::<_, u32>(0)).optional()?;
+pub fn get_account_by_fingerprint(
+    connection: &Connection,
+    fingerprint: &[u8],
+) -> Result<Option<u32>> {
+    let account = connection
+        .query_row(
+            "SELECT id_account FROM accounts WHERE fingerprint = ?1",
+            [fingerprint],
+            |r| r.get::<_, u32>(0),
+        )
+        .optional()?;
     Ok(account)
 }
 
@@ -416,8 +446,7 @@ pub fn downgrade_account(
     account: u32,
     capabilities: &AccountSigningCapabilitiesT,
 ) -> Result<()> {
-    if capabilities.transparent == 0 &&
-    capabilities.sapling == 0 && capabilities.orchard == 0 {
+    if capabilities.transparent == 0 && capabilities.sapling == 0 && capabilities.orchard == 0 {
         anyhow::bail!("Account needs at least one key");
     }
 

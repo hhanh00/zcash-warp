@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
 use base58check::{FromBase58Check, ToBase58Check};
 use bip39::{Mnemonic, Seed};
@@ -8,10 +6,8 @@ use rand::{rngs::OsRng, CryptoRng, RngCore};
 use ripemd::{Digest as _, Ripemd160};
 use sapling_crypto::zip32::ExtendedSpendingKey;
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::Sha256;
 use zcash_protocol::consensus::NetworkConstants as _;
-use std::str::FromStr;
 use tiny_hderive::bip32::ExtendedPrivKey;
 use zcash_primitives::legacy::TransparentAddress;
 use zip32::ChildIndex;
@@ -112,77 +108,5 @@ pub fn derive_orchard_zip32(network: &Network, seed: &Seed, acc_index: u32) -> O
         sk: Some(sk),
         vk,
         addr,
-    }
-}
-
-pub struct Bip32KeyIterator {
-    network: Network,
-    seed: Seed,
-    acc_index: u32,
-    addr_index: u32,
-    compressed: bool,
-}
-
-impl Bip32KeyIterator {
-    pub fn new(
-        network: &Network,
-        seed: &Seed,
-        acc_index: u32,
-        addr_index: u32,
-        compressed: bool,
-    ) -> Self {
-        Self {
-            network: network.clone(),
-            seed: seed.clone(),
-            acc_index,
-            addr_index,
-            compressed,
-        }
-    }
-}
-
-impl Iterator for Bip32KeyIterator {
-    type Item = TransparentAccountInfo;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let ti = derive_bip32(
-            &self.network,
-            &self.seed,
-            self.acc_index,
-            self.addr_index,
-            self.compressed,
-        );
-        self.addr_index += 1;
-        Some(ti)
-    }
-}
-
-#[derive(Default, Serialize, Deserialize, Debug)]
-pub struct TSKStore(#[serde(with = "TSKStoreSer")] pub HashMap<String, SecretKey>);
-
-struct TSKStoreSer;
-
-impl TSKStoreSer {
-    pub fn serialize<S>(data: &HashMap<String, SecretKey>, s: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let data = data
-            .iter()
-            .map(|(k, v)| (k.clone(), v.display_secret().to_string()))
-            .collect::<HashMap<String, String>>();
-        data.serialize(s)
-    }
-
-    pub fn deserialize<'de, D>(d: D) -> Result<HashMap<String, SecretKey>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let data = HashMap::<String, String>::deserialize(d)?;
-        let data: HashMap<String, SecretKey> = data
-            .into_iter()
-            .map(|(k, v)| (k, SecretKey::from_str(&v).unwrap()))
-            .collect();
-        Ok(data)
     }
 }

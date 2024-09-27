@@ -1,154 +1,54 @@
+use crate::{
+    db::{
+        account::get_account_info, account_manager::{create_transparent_subaccount, trim_excess_transparent_addresses},
+        notes::store_utxo,
+    },
+    keys::derive_bip32,
+    lwd::get_utxos,
+    network::Network,
+    Client,
+};
 use anyhow::Result;
 use rusqlite::Connection;
-use tonic::Request;
 use zcash_client_backend::encoding::AddressCodec as _;
-use crate::{network::Network, types::CheckpointHeight};
 
-use super::{PaymentBuilder, UnsignedTransaction};
-use crate::{
-    coin::connect_lwd,
-    data::fb::RecipientT,
-    db::chain::snap_to_checkpoint,
-    keys::{Bip32KeyIterator, TSKStore},
-    lwd::rpc::{BlockId, BlockRange, GetAddressUtxosArg, TransparentAddressBlockFilter},
-    types::{AccountInfo, AccountType, PoolMask},
-    warp::{legacy::CommitmentTreeFrontier, UTXO},
-};
+use crate::types::AccountType;
 
-pub async fn scan_utxo_by_address(
-    url: String,
-    account: u32,
-    height: u32,
-    address: String,
-) -> Result<Vec<UTXO>> {
-    let range = BlockRange {
-        start: Some(BlockId {
-            height: 1,
-            hash: vec![],
-        }),
-        end: Some(BlockId {
-            height: height as u64,
-            hash: vec![],
-        }),
-        spam_filter_threshold: 0,
-    };
-    let mut client = connect_lwd(&url).await?;
-    let mut txids = client
-        .get_taddress_txids(Request::new(TransparentAddressBlockFilter {
-            address: address.clone(),
-            range: Some(range),
-        }))
-        .await?
-        .into_inner();
-    let rtx = txids.message().await?;
-    if rtx.is_none() {
-        return Ok(vec![]);
-    }
-    let mut utxos = vec![];
-    let mut utxo_reps = client
-        .get_address_utxos_stream(Request::new(GetAddressUtxosArg {
-            addresses: vec![address.clone()],
-            start_height: 1,
-            max_entries: u32::MAX,
-        }))
-        .await?
-        .into_inner();
-    while let Some(utxo) = utxo_reps.message().await? {
-        let utxo = UTXO {
-            is_new: false,
-            id: 0,
-            account, // TODO Should we set account to 0 to indicate this not coming from us?
-            addr_index: 0,
-            height,
-            timestamp: 0, // no need to retrieve block timestamp for a sweep
-            txid: utxo.txid.try_into().unwrap(),
-            vout: utxo.index as u32,
-            address: utxo.address,
-            value: utxo.value_zat as u64,
-        };
-        utxos.push(utxo);
-    }
-    Ok::<_, anyhow::Error>(utxos)
-}
+use warp_macros::c_export;
+use crate::{coin::COINS, ffi::{map_result, CResult}};
 
-pub async fn scan_utxo_by_seed(
+#[c_export]
+pub async fn scan_transparent_addresses(
     network: &Network,
-    url: &str,
-    ai: AccountInfo,
-    height: u32,
-    addr_index: u32,
-    compressed: bool,
-    gap_limit: usize,
-) -> Result<(Vec<UTXO>, TSKStore)> {
+    connection: &mut Connection,
+    client: &mut Client,
+    account: u32,
+    gap_limit: u32,
+) -> Result<()> {
+    let ai = get_account_info(network, connection, account)?;
     let at = ai.account_type()?;
-    let mut tsk_store = TSKStore::default();
-    let mut utxos = vec![];
-    if let AccountType::Seed(ref seed) = at {
-        let mut tis = Bip32KeyIterator::new(network, seed, ai.aindex, addr_index, compressed);
-        let mut gap = 0;
-        loop {
-            if gap >= gap_limit {
-                break;
-            }
-            let ti = tis.next().unwrap();
-            let address = ti.addr.encode(network);
-            let mut funds =
-                scan_utxo_by_address(url.to_string(), ai.account, height, address).await?;
-            if !funds.is_empty() {
-                tsk_store
-                    .0
-                    .insert(ti.addr.encode(network), ti.sk.clone().unwrap());
-                utxos.append(&mut funds);
-            } else {
-                gap += 1;
-            }
-        }
-    } else {
-        anyhow::bail!("Account has no seed");
-    }
-    Ok((utxos, tsk_store))
-}
-
-pub fn prepare_sweep(
-    network: &Network,
-    connection: &Connection,
-    account: u32,
-    height: CheckpointHeight,
-    utxos: &[UTXO],
-    destination_address: &str,
-    s: &CommitmentTreeFrontier,
-    o: &CommitmentTreeFrontier,
-) -> Result<UnsignedTransaction> {
-    let height = height.0;
-    let amount = utxos.iter().map(|u| u.value).sum::<u64>();
-
-    let recipient = RecipientT {
-        address: Some(destination_address.to_string()),
-        amount,
-        pools: 7,
-        memo: None,
-        memo_bytes: None,
+    let AccountType::Seed(seed) = at else {
+        anyhow::bail!("No Seed")
     };
-
-    let height = snap_to_checkpoint(connection, height)?;
-    let mut builder = PaymentBuilder::new(
-        network,
-        connection,
-        account,
-        height,
-        std::slice::from_ref(&recipient),
-        PoolMask(1),
-        &s,
-        &o,
-    )?;
-    builder.add_utxos(&utxos)?;
-    builder.set_use_change(false)?;
-    let mut utx = builder.prepare()?;
-    let change = utx.change;
-    assert!(change <= 0);
-    utx.add_to_change(-change)?;
-    let utx = builder.finalize(utx)?;
-
-    println!("{:?}", utx);
-    Ok(utx)
+    let ti = ai.transparent.as_ref().unwrap();
+    let mut addr_index = ti.index.unwrap() + 1;
+    let mut gap = 0;
+    while gap < gap_limit {
+        let ti = derive_bip32(network, &seed, ai.aindex, addr_index, true);
+        create_transparent_subaccount(network, connection, account, addr_index, &ti)?;
+        let address = ti.addr.encode(network);
+        let utxos = get_utxos(client, account, addr_index, &address).await?;
+        if utxos.is_empty() {
+            gap += 1;
+        } else {
+            let db_tx = connection.transaction()?;
+            for utxo in utxos.iter() {
+                store_utxo(&db_tx, utxo)?;
+            }
+            db_tx.commit()?;
+        }
+        addr_index += 1;
+    }
+    trim_excess_transparent_addresses(connection, account)?;
+    Ok(())
 }

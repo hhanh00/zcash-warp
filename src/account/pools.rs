@@ -7,7 +7,6 @@ use crate::{
     network::Network,
     data::fb::RecipientT,
     db::{account::get_account_info, chain::snap_to_checkpoint},
-    keys::TSKStore,
     pay::PaymentBuilder,
     warp::legacy::CommitmentTreeFrontier,
     EXPIRATION_HEIGHT_DELTA,
@@ -68,7 +67,6 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
         network,
         connection,
         height + EXPIRATION_HEIGHT_DELTA,
-        &mut TSKStore::default(),
         rng,
     )?;
     Ok(tx)

@@ -3847,7 +3847,6 @@ impl<'a> TransactionSummary<'a> {
   pub const VT_NUM_INPUTS: flatbuffers::VOffsetT = 18;
   pub const VT_NUM_OUTPUTS: flatbuffers::VOffsetT = 20;
   pub const VT_DATA: flatbuffers::VOffsetT = 22;
-  pub const VT_KEYS: flatbuffers::VOffsetT = 24;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -3863,7 +3862,6 @@ impl<'a> TransactionSummary<'a> {
     builder.add_orchard_net(args.orchard_net);
     builder.add_sapling_net(args.sapling_net);
     builder.add_transparent_ins(args.transparent_ins);
-    if let Some(x) = args.keys { builder.add_keys(x); }
     if let Some(x) = args.data { builder.add_data(x); }
     if let Some(x) = args.num_outputs { builder.add_num_outputs(x); }
     if let Some(x) = args.num_inputs { builder.add_num_inputs(x); }
@@ -3892,9 +3890,6 @@ impl<'a> TransactionSummary<'a> {
     let data = self.data().map(|x| {
       x.into_iter().collect()
     });
-    let keys = self.keys().map(|x| {
-      x.into_iter().collect()
-    });
     TransactionSummaryT {
       height,
       recipients,
@@ -3906,7 +3901,6 @@ impl<'a> TransactionSummary<'a> {
       num_inputs,
       num_outputs,
       data,
-      keys,
     }
   }
 
@@ -3980,13 +3974,6 @@ impl<'a> TransactionSummary<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionSummary::VT_DATA, None)}
   }
-  #[inline]
-  pub fn keys(&self) -> Option<flatbuffers::Vector<'a, u8>> {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionSummary::VT_KEYS, None)}
-  }
 }
 
 impl flatbuffers::Verifiable for TransactionSummary<'_> {
@@ -4006,7 +3993,6 @@ impl flatbuffers::Verifiable for TransactionSummary<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("num_inputs", Self::VT_NUM_INPUTS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("num_outputs", Self::VT_NUM_OUTPUTS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("data", Self::VT_DATA, false)?
-     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("keys", Self::VT_KEYS, false)?
      .finish();
     Ok(())
   }
@@ -4022,7 +4008,6 @@ pub struct TransactionSummaryArgs<'a> {
     pub num_inputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub num_outputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
-    pub keys: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
 }
 impl<'a> Default for TransactionSummaryArgs<'a> {
   #[inline]
@@ -4038,7 +4023,6 @@ impl<'a> Default for TransactionSummaryArgs<'a> {
       num_inputs: None,
       num_outputs: None,
       data: None,
-      keys: None,
     }
   }
 }
@@ -4089,10 +4073,6 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionSummaryBuilder<'a, '
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_DATA, data);
   }
   #[inline]
-  pub fn add_keys(&mut self, keys: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
-    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_KEYS, keys);
-  }
-  #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransactionSummaryBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     TransactionSummaryBuilder {
@@ -4120,7 +4100,6 @@ impl core::fmt::Debug for TransactionSummary<'_> {
       ds.field("num_inputs", &self.num_inputs());
       ds.field("num_outputs", &self.num_outputs());
       ds.field("data", &self.data());
-      ds.field("keys", &self.keys());
       ds.finish()
   }
 }
@@ -4137,7 +4116,6 @@ pub struct TransactionSummaryT {
   pub num_inputs: Option<Vec<u8>>,
   pub num_outputs: Option<Vec<u8>>,
   pub data: Option<Vec<u8>>,
-  pub keys: Option<Vec<u8>>,
 }
 impl Default for TransactionSummaryT {
   fn default() -> Self {
@@ -4152,7 +4130,6 @@ impl Default for TransactionSummaryT {
       num_inputs: None,
       num_outputs: None,
       data: None,
-      keys: None,
     }
   }
 }
@@ -4179,9 +4156,6 @@ impl TransactionSummaryT {
     let data = self.data.as_ref().map(|x|{
       _fbb.create_vector(x)
     });
-    let keys = self.keys.as_ref().map(|x|{
-      _fbb.create_vector(x)
-    });
     TransactionSummary::create(_fbb, &TransactionSummaryArgs{
       height,
       recipients,
@@ -4193,7 +4167,6 @@ impl TransactionSummaryT {
       num_inputs,
       num_outputs,
       data,
-      keys,
     })
   }
 }

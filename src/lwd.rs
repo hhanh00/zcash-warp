@@ -2,8 +2,7 @@ use std::time::Instant;
 
 use anyhow::Result;
 use rpc::{
-    BlockId, BlockRange, CompactBlock, Empty, RawTransaction, TransparentAddressBlockFilter,
-    TreeState, TxFilter,
+    BlockId, BlockRange, CompactBlock, Empty, GetAddressUtxosArg, RawTransaction, TransparentAddressBlockFilter, TreeState, TxFilter
 };
 use tokio::runtime::Handle;
 use tonic::{Request, Streaming};
@@ -15,8 +14,7 @@ use zcash_primitives::{
 };
 
 use crate::{
-    network::Network,
-    coin::connect_lwd, types::CheckpointHeight, warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2}, Client
+    coin::connect_lwd, network::Network, types::CheckpointHeight, warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2, UTXO}, Client
 };
 
 use warp_macros::c_export;
@@ -264,6 +262,35 @@ pub async fn get_transaction(
     )?;
     Ok((height, tx))
 }
+
+pub async fn get_utxos(client: &mut Client, account: u32, addr_index: u32, address: &str) -> Result<Vec<UTXO>> {
+    let mut utxos = vec![];
+    let mut utxo_reps = client
+        .get_address_utxos_stream(Request::new(GetAddressUtxosArg {
+            addresses: vec![address.to_string()],
+            start_height: 1,
+            max_entries: u32::MAX,
+        }))
+        .await?
+        .into_inner();
+    while let Some(utxo) = utxo_reps.message().await? {
+        let utxo = UTXO {
+            is_new: true,
+            id: 0,
+            account,
+            addr_index,
+            height: utxo.height as u32,
+            timestamp: 0, // no need to retrieve block timestamp for a sweep
+            txid: utxo.txid.try_into().unwrap(),
+            vout: utxo.index as u32,
+            address: utxo.address,
+            value: utxo.value_zat as u64,
+        };
+        utxos.push(utxo);
+    }
+    Ok(utxos)
+}
+
 
 #[c_export]
 pub async fn ping(lwd_url: &str) -> Result<u64> {

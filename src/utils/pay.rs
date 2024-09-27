@@ -1,17 +1,15 @@
 use anyhow::Result;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
-use zcash_keys::encoding::AddressCodec as _;
 use zcash_protocol::memo::{Memo, MemoBytes};
 
 use crate::{
-    account::contacts::commit_unsaved_contacts, coin::connect_lwd, data::fb::{
+    account::contacts::commit_unsaved_contacts, data::fb::{
         PaymentRequest, PaymentRequestT, RecipientT, TransactionSummary, TransactionSummaryT,
-    }, db::{account::get_account_info, chain::snap_to_checkpoint}, fb_unwrap, keys::{import_sk_bip38, TSKStore}, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{
+    }, db::{account::get_account_info, chain::snap_to_checkpoint}, fb_unwrap, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{
         make_payment,
-        sweep::{prepare_sweep, scan_utxo_by_address, scan_utxo_by_seed},
         UnsignedTransaction,
-    }, types::TransparentAccountInfo, Client
+    }, Client
 };
 
 use crate::{
@@ -19,7 +17,7 @@ use crate::{
     ffi::{map_result, map_result_bytes, map_result_string, CParam, CResult},
 };
 use flatbuffers::FlatBufferBuilder;
-use std::ffi::{c_char, CStr};
+use std::ffi::c_char;
 use warp_macros::c_export;
 
 pub(crate) const COST_PER_ACTION: u64 = 5_000;
@@ -51,7 +49,7 @@ pub async fn prepare_payment(
         expiration: payment.expiration,
     };
     let unsigned_tx = make_payment(network, &connection, account, &payment, &s_tree, &o_tree)?;
-    let summary = unsigned_tx.to_summary(vec![])?;
+    let summary = unsigned_tx.to_summary()?;
     Ok(summary)
 }
 
@@ -110,17 +108,10 @@ pub fn sign(
 ) -> Result<Vec<u8>> {
     let data = fb_unwrap!(summary.data);
     let unsigned_tx = bincode::deserialize_from::<_, UnsignedTransaction>(&data[..])?;
-    let keys = fb_unwrap!(summary.keys);
-    let mut tsk_store = if keys.is_empty() {
-        TSKStore::default()
-    } else {
-        bincode::deserialize_from::<_, TSKStore>(&keys[..])?
-    };
     let txb = unsigned_tx.build(
         network,
         connection,
         expiration_height,
-        &mut tsk_store,
         OsRng,
     )?;
     tracing::info!("TXBLen {}", txb.len());
@@ -154,73 +145,7 @@ pub async fn save_contacts(
         &s_tree,
         &o_tree,
     )?;
-    unsigned_tx.to_summary(vec![]).map_err(anyhow::Error::msg)
-}
-
-#[c_export]
-pub async fn prepare_sweep_tx(
-    network: &Network,
-    connection: &Connection,
-    url: String,
-    account: u32,
-    height: u32,
-    destination_address: &str,
-    addr_index: u32,
-    gap_limit: usize,
-) -> Result<TransactionSummaryT> {
-    let ai = get_account_info(network, connection, account)?;
-    let mut client = connect_lwd(&url).await?;
-    let cp_height = snap_to_checkpoint(connection, height)?;
-    let (s, o) = get_tree_state(&mut client, cp_height).await?;
-    let (utxos, tsk_store) =
-        scan_utxo_by_seed(network, &url, ai, cp_height.0, addr_index, true, gap_limit).await?;
-    let unsigned_tx = prepare_sweep(
-        network,
-        &connection,
-        account,
-        cp_height,
-        &utxos,
-        destination_address,
-        &s,
-        &o,
-    )?;
-    let keys = bincode::serialize(&tsk_store)?;
-    let sweep_tx = unsigned_tx.to_summary(keys)?;
-    Ok(sweep_tx)
-}
-
-#[c_export]
-pub async fn prepare_sweep_tx_by_sk(
-    network: &Network,
-    connection: &Connection,
-    url: String,
-    account: u32,
-    height: u32,
-    sk: &str,
-    destination_address: &str,
-) -> Result<TransactionSummaryT> {
-    let sk = import_sk_bip38(sk)?;
-    let ti = TransparentAccountInfo::from_secret_key(&sk, true);
-    let address = ti.addr.encode(network);
-    let mut client = connect_lwd(&url).await?;
-    let cp_height = snap_to_checkpoint(connection, height)?;
-    let (s, o) = get_tree_state(&mut client, cp_height).await?;
-    let utxos = scan_utxo_by_address(url, account, cp_height.0, address.clone()).await?;
-    let unsigned_tx = prepare_sweep(
-        network,
-        &connection,
-        account,
-        cp_height,
-        &utxos,
-        destination_address,
-        &s,
-        &o,
-    )?;
-    let mut tsk_store = TSKStore::default();
-    tsk_store.0.insert(address, sk);
-    let keys = bincode::serialize(&tsk_store)?;
-    let sweep_tx = unsigned_tx.to_summary(keys)?;
-    Ok(sweep_tx)
+    unsigned_tx.to_summary().map_err(anyhow::Error::msg)
 }
 
 impl RecipientT {

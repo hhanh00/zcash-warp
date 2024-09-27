@@ -3,7 +3,14 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::{data::fb::ZipDbConfigT, db::{account::list_account_transparent_addresses, notes::list_utxos}, fb_unwrap, network::{regtest, Network}, utils::chain::reset_chain};
+use crate::{
+    data::fb::ZipDbConfigT,
+    db::{account::list_account_transparent_addresses, notes::list_utxos},
+    fb_unwrap,
+    network::{regtest, Network},
+    pay::sweep::scan_transparent_addresses,
+    utils::chain::reset_chain,
+};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
@@ -34,9 +41,7 @@ use crate::{
             create_new_account, delete_account, edit_account_birth, edit_account_name,
             get_min_birth, new_transparent_address,
         },
-        chain::{
-            get_sync_height, list_checkpoints, rewind, snap_to_checkpoint,
-        },
+        chain::{get_sync_height, list_checkpoints, rewind, snap_to_checkpoint},
         contacts::{
             delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts,
         },
@@ -54,7 +59,7 @@ use crate::{
         data_split::{merge, split},
         db::{create_backup, encrypt_db, get_address},
         messages::navigate_message,
-        pay::{prepare_payment, prepare_sweep_tx, prepare_sweep_tx_by_sk, sign},
+        pay::{prepare_payment, sign},
         ua::decode_address,
         uri::{make_payment_uri, parse_payment_uri},
         zip_db::{
@@ -95,6 +100,10 @@ pub enum AccountCommand {
     },
     ListTransparentAddresses {
         account: u32,
+    },
+    Scan {
+        account: u32,
+        gap_limit: u32,
     },
     SetProperty {
         account: u32,
@@ -282,15 +291,6 @@ pub enum Command {
         account: u32,
         payment: PaymentRequestT,
     },
-    Sweep {
-        account: u32,
-        destination_address: String,
-    },
-    SweepSecretKey {
-        account: u32,
-        secret_key: String,
-        destination_address: String,
-    },
     GetTxDetails {
         id: u32,
     },
@@ -316,12 +316,12 @@ macro_rules! impl_fb_from_str {
     ($v: ident) => {
         impl FromStr for $v {
             type Err = serde_json::Error;
-        
+
             fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
                 serde_json::from_str::<$v>(s)
             }
         }
-    }
+    };
 }
 
 impl_fb_from_str!(PaymentRequestT);
@@ -352,7 +352,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             reset_tables(network, &connection, false)?;
         }
         Command::Account(account_cmd) => {
-            let connection = zec.connection()?;
+            let mut connection = zec.connection()?;
             match account_cmd.command {
                 AccountCommand::List => {
                     let accounts = list_accounts(zec.coin, &connection)?;
@@ -377,6 +377,17 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 AccountCommand::ListTransparentAddresses { account } => {
                     let t_addresses = list_account_transparent_addresses(&connection, account)?;
                     println!("{:?}", t_addresses);
+                }
+                AccountCommand::Scan { account, gap_limit } => {
+                    let mut client = zec.connect_lwd().await?;
+                    scan_transparent_addresses(
+                        &network,
+                        &mut connection,
+                        &mut client,
+                        account,
+                        gap_limit,
+                    )
+                    .await?;
                 }
                 AccountCommand::EditName { account, name } => {
                     edit_account_name(&connection, account, &name)?;
@@ -443,7 +454,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                         &s_tree,
                         &o_tree,
                     )?
-                    .to_summary(vec![])?;
+                    .to_summary()?;
                     *txbytes = display_tx(network, &connection, summary)?;
                 }
             }
@@ -530,9 +541,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             DatabaseCommand::SetDbPassword { password } => {
                 zec.db_password = Some(password);
             }
-            DatabaseCommand::Encrypt {
-                config
-            } => {
+            DatabaseCommand::Encrypt { config } => {
                 encrypt_zip_database_files(&config)?;
             }
             DatabaseCommand::Decrypt {
@@ -701,50 +710,6 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
             let txb = serde_cbor::to_vec(&tx)?;
             println!("{}", hex::encode(&txb));
             store_tx_details(&connection, id, account, height, &tx.txid, &txb)?;
-        }
-        Command::Sweep {
-            account,
-            destination_address,
-        } => {
-            let connection = zec.connection()?;
-            let mut client = zec.connect_lwd().await?;
-            let bc_height = get_last_height(&mut client).await?;
-            // no need to snap because we have no shielded inputs
-            let cp_height = CheckpointHeight(bc_height - zec.config.confirmations + 1);
-            let summary = prepare_sweep_tx(
-                network,
-                &connection,
-                zec.config.lwd_url.clone().unwrap(),
-                account,
-                cp_height.0,
-                &destination_address,
-                0,
-                50,
-            )
-            .await?;
-            *txbytes = display_tx(network, &connection, summary)?;
-        }
-        Command::SweepSecretKey {
-            account,
-            secret_key,
-            destination_address,
-        } => {
-            let connection = zec.connection()?;
-            let mut client = zec.connect_lwd().await?;
-            let bc_height = get_last_height(&mut client).await?;
-            // no need to snap because we have no shielded inputs
-            let cp_height = CheckpointHeight(bc_height - zec.config.confirmations + 1);
-            let summary = prepare_sweep_tx_by_sk(
-                network,
-                &connection,
-                zec.config.lwd_url.clone().unwrap(),
-                account,
-                cp_height.0,
-                &secret_key,
-                &destination_address,
-            )
-            .await?;
-            *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::GetTxDetails { id } => {
             let connection = zec.connection()?;

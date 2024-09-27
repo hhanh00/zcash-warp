@@ -1,6 +1,7 @@
+use std::collections::HashMap;
+
 use crate::{
     db::{account::{get_account_info, list_account_tsk}, account_manager::get_account_by_fingerprint},
-    keys::TSKStore,
     warp::{
         hasher::{empty_roots, OrchardHasher, SaplingHasher},
         MERKLE_DEPTH,
@@ -8,6 +9,7 @@ use crate::{
 };
 use anyhow::Result;
 use sapling_crypto::{note_encryption::Zip212Enforcement, PaymentAddress};
+use secp256k1::SecretKey;
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_protocol::value::Zatoshis;
 
@@ -48,7 +50,6 @@ impl UnsignedTransaction {
         network: &Network,
         connection: &Connection,
         expiration_height: u32,
-        tsk_store: &mut TSKStore,
         mut rng: R,
     ) -> Result<Vec<u8>> {
         let account = get_account_by_fingerprint(connection, &self.account_id)?;
@@ -59,10 +60,11 @@ impl UnsignedTransaction {
             anyhow::bail!("Invalid Account");
         }
 
+        let mut tsk_store: HashMap<String, SecretKey> = HashMap::new();
         if let Some(_ti) = ai.transparent.as_ref() {
             let tsks = list_account_tsk(connection, account)?;
             for tsk in tsks.iter() {
-                tsk_store.0.insert(tsk.address.clone(), tsk.sk.clone());
+                tsk_store.insert(tsk.address.clone(), tsk.sk.clone());
             }
         }
 
@@ -96,7 +98,7 @@ impl UnsignedTransaction {
                     vout,
                     address,
                 } => {
-                    let Some(sk) = tsk_store.0.get(address) else {
+                    let Some(sk) = tsk_store.get(address) else {
                         anyhow::bail!("No Secret Key for address {}", address);
                     };
                     let ta = TransparentAddress::decode(network, address)?;

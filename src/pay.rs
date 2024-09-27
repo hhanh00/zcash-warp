@@ -11,7 +11,7 @@ use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT}, fb_unwrap, keys::TSKStore, network::Network, types::{AccountInfo, CheckpointHeight, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
+    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT}, fb_unwrap, network::Network, types::{AccountInfo, CheckpointHeight, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -175,7 +175,7 @@ pub struct UnsignedTransaction {
 }
 
 impl UnsignedTransaction {
-    pub fn to_summary(&self, keys: Vec<u8>) -> Result<TransactionSummaryT> {
+    pub fn to_summary(&self) -> Result<TransactionSummaryT> {
         let recipients = self
             .tx_outputs
             .iter()
@@ -229,7 +229,6 @@ impl UnsignedTransaction {
             num_outputs: Some(self.fees.num_outputs.to_vec()),
             privacy_level,
             data: Some(data),
-            keys: Some(keys),
         })
     }
 }
@@ -237,7 +236,6 @@ impl UnsignedTransaction {
 impl TransactionSummaryT {
     pub fn detach(&mut self) -> Vec<u8> {
         let data = self.data.take();
-        self.keys.take();
         data.unwrap()
     }
 }
@@ -300,9 +298,8 @@ pub fn sign_tx<R: RngCore + CryptoRng>(
     connection: &Connection,
     expiration_height: u32,
     utx: UnsignedTransaction,
-    tsk_store: &mut TSKStore,
     mut rng: R,
 ) -> Result<Vec<u8>> {
-    let txb = utx.build(network, connection, expiration_height, tsk_store, &mut rng)?;
+    let txb = utx.build(network, connection, expiration_height, &mut rng)?;
     Ok(txb)
 }

@@ -147,7 +147,6 @@ table TransactionSummary {
   num_inputs: [uint8];
   num_outputs: [uint8];
   data: [uint8];
-  keys: [uint8];
 }
 
 table AGEKeys {

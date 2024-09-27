@@ -32,7 +32,7 @@ pub fn store_contact(connection: &Connection, contact: &ContactCardT) -> Result<
 #[c_export]
 pub fn list_contact_cards(connection: &Connection) -> Result<Vec<ContactCardT>> {
     let mut s =
-        connection.prepare("SELECT id_contact, account, name, address, saved FROM contacts")?;
+        connection.prepare("SELECT id_contact, account, name, address, saved FROM contacts ORDER BY name")?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
