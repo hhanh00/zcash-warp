@@ -34,7 +34,7 @@ pub async fn scan_transparent_addresses(
     let mut addr_index = ti.index.unwrap() + 1;
     let mut gap = 0;
     while gap < gap_limit {
-        let ti = derive_bip32(network, &seed, ai.aindex, addr_index, true);
+        let ti = derive_bip32(network, &seed, ai.aindex, 0, addr_index, true);
         create_transparent_subaccount(network, connection, account, addr_index, &ti)?;
         let address = ti.addr.encode(network);
         let utxos = get_utxos(client, account, addr_index, &address).await?;

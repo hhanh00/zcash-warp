@@ -65,13 +65,15 @@ pub fn derive_bip32(
     network: &Network,
     seed: &Seed,
     acc_index: u32,
+    change: u32,
     addr_index: u32,
     compressed: bool,
 ) -> TransparentAccountInfo {
     let bip44_path = format!(
-        "m/44'/{}'/{}'/0/{}",
+        "m/44'/{}'/{}'/{}/{}",
         network.coin_type(),
         acc_index,
+        change,
         addr_index
     );
     let ext = ExtendedPrivKey::derive(seed.as_bytes(), &*bip44_path).unwrap();

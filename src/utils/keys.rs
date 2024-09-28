@@ -16,16 +16,17 @@ use crate::{coin::COINS, ffi::{map_result_bytes, CResult}};
 use flatbuffers::FlatBufferBuilder;
 
 #[c_export]
-pub fn derive_zip32_keys(network: &Network, connection: &Connection, account: u32, acc_index: u32) -> Result<ZIP32KeysT> {
+pub fn derive_zip32_keys(network: &Network, connection: &Connection, account: u32, 
+    acc_index: u32, change: u32, addr_index: u32) -> Result<ZIP32KeysT> {
     let ai = get_account_info(network, connection, account)?;
     let keys = ai.seed.as_ref().map(|seed| {
         let KeyType::Seed(_seed_str, seed, _acc_index) =
             detect_key(network, seed, 0)?
         else {
-            unreachable!()
+            anyhow::bail!("No Seed")
         };
         let si = derive_zip32(network, &seed, acc_index);
-        let ti = derive_bip32(network, &seed, 0, acc_index, true);
+        let ti = derive_bip32(network, &seed, acc_index, change, addr_index, true);
         Ok::<_, anyhow::Error>(ZIP32KeysT {
             tsk: ti.sk.as_ref().map(|sk| export_sk_bip38(sk)),
             taddress: Some(ti.addr.encode(network)),

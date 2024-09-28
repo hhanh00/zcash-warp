@@ -282,11 +282,12 @@ impl UnsignedTransaction {
         });
 
         let orchard_bundle = unauthed_tx.orchard_bundle().map(|ob| {
-            let sk = ai.orchard.as_ref().and_then(|oi| oi.sk).unwrap();
-            let sak = SpendAuthorizingKey::from(&sk);
+            let sk = ai.orchard.as_ref().and_then(|oi| oi.sk);
+            let sak = sk.map(|sk| SpendAuthorizingKey::from(&sk));
+            let sak = [sak].into_iter().flatten().collect::<Vec<_>>();
             let proven = ob.clone().create_proof(&ORCHARD_PROVER, &mut rng).unwrap();
             proven
-                .apply_signatures(&mut rng, sig_hash, std::slice::from_ref(&sak))
+                .apply_signatures(&mut rng, sig_hash, &sak)
                 .unwrap()
         });
 

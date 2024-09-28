@@ -82,6 +82,8 @@ struct CResult_u8 c_set_account_property(uint8_t coin,
 
 struct CResult______u8 c_get_spendings(uint8_t coin, uint32_t account, uint32_t timestamp);
 
+struct CResult_bool c_is_valid_key(uint8_t coin, char *key);
+
 struct CResult_u32 c_create_new_account(uint8_t coin,
                                         char *name,
                                         char *key,
@@ -150,7 +152,11 @@ void c_setup(void);
 
 struct CResult_u8 c_configure(uint8_t coin, struct CParam config);
 
-struct CResult______u8 c_derive_zip32_keys(uint8_t coin, uint32_t account, uint32_t acc_index);
+struct CResult______u8 c_derive_zip32_keys(uint8_t coin,
+                                           uint32_t account,
+                                           uint32_t acc_index,
+                                           uint32_t change,
+                                           uint32_t addr_index);
 
 struct CResult_u8 c_check_db_password(char *path, char *password);
 

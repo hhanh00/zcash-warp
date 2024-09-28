@@ -84,5 +84,8 @@ impl ConfigT {
         if other.warp_end_height > 0 {
             self.warp_end_height = other.warp_end_height;
         }
+        if other.regtest {
+            self.regtest = other.regtest;
+        }
     }
 }

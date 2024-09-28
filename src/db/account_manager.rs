@@ -142,6 +142,12 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<KeyTyp
 }
 
 #[c_export]
+pub fn is_valid_key(network: &Network, key: &str) -> Result<bool> {
+    let valid = detect_key(network, key, 0).is_ok();
+    Ok(valid)
+}
+
+#[c_export]
 pub fn create_new_account(
     network: &Network,
     connection: &Connection,
@@ -167,7 +173,7 @@ pub fn create_new_account(
             create_sapling_account(network, connection, account, &si)?;
             // This should have been acc_index / addr_index but ZecWallet Lite derives
             // with an incorrect path that we follow for compatibility reasons
-            let ti = derive_bip32(network, &seed, *acc_index, 0, true);
+            let ti = derive_bip32(network, &seed, *acc_index, 0, 0, true);
             create_transparent_account(network, connection, account, 0, &ti)?;
             create_transparent_subaccount(network, connection, account, 0, &ti)?;
             let oi = derive_orchard_zip32(network, &seed, *acc_index);
@@ -338,7 +344,7 @@ pub fn new_transparent_address(
         [account],
         |r| r.get::<_, u32>(0),
     )? + 1;
-    let ti = derive_bip32(network, &seed, acc_index, addr_index, true);
+    let ti = derive_bip32(network, &seed, acc_index, 0, addr_index, true);
     create_transparent_subaccount(network, connection, account, addr_index, &ti)?;
     Ok(())
 }

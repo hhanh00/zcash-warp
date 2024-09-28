@@ -7,7 +7,7 @@ use rusqlite::OptionalExtension;
 use std::time::Duration;
 use tonic::transport::{Certificate, ClientTlsConfig};
 
-use crate::network::Network;
+use crate::network::{regtest, Network};
 
 use crate::{data::fb::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client};
 
@@ -92,7 +92,7 @@ pub fn cli_init_coin(config: &ConfigT) -> Result<()> {
 
 lazy_static! {
     pub static ref COINS: [Mutex<CoinDef>; 1] = [
-        Mutex::new(CoinDef::from_network(0, Network::Main)),
+        Mutex::new(CoinDef::from_network(0, Network::Regtest(regtest()))),
         // Mutex::new(CoinDef::from_network(Network::YCashMainNetwork)),
     ];
 }

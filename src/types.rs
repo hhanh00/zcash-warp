@@ -83,6 +83,7 @@ pub enum AccountType {
     SaplingSK(ExtendedSpendingKey),
     SaplingVK(ExtendedFullViewingKey),
     UnifiedVK(UnifiedFullViewingKey),
+    TransparentSK(SecretKey),
 }
 
 #[derive(Debug)]
@@ -191,6 +192,9 @@ impl AccountInfo {
         }
         if let Some(svk) = self.sapling.as_ref().map(|si| &si.vk) {
             return Ok(AccountType::SaplingVK(svk.clone()));
+        }
+        if let Some(tsk) = self.transparent.as_ref().and_then(|ti| ti.sk.as_ref()) {
+            return Ok(AccountType::TransparentSK(tsk.clone()))
         }
         anyhow::bail!("Unknown account type");
     }

@@ -104,8 +104,9 @@ impl PaymentBuilder {
         let account_pools = match self.ai.account_type()? {
             crate::types::AccountType::Seed { .. } => 7, // T + S + O
             crate::types::AccountType::SaplingSK { .. } => 2,
-            crate::types::AccountType::SaplingVK { .. } => 7,
+            crate::types::AccountType::SaplingVK { .. } => 2,
             crate::types::AccountType::UnifiedVK { .. } => 7,
+            crate::types::AccountType::TransparentSK { .. } => 1,
         } as u8;
         let account_pools = account_pools & self.src_pools.0; // exclude pools
         self.account_pools = PoolMask(account_pools);
