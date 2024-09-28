@@ -12,6 +12,7 @@ use super::{InputNote, OutputNote, TxInput, UTXO};
 impl TxInput {
     pub fn from_utxo(utxo: &UTXO) -> Self {
         Self {
+            id: utxo.id,
             amount: utxo.value,
             remaining: utxo.value,
             pool: 0,
@@ -25,6 +26,7 @@ impl TxInput {
 
     pub fn from_sapling(note: &ReceivedNote) -> Self {
         Self {
+            id: note.id,
             amount: note.value,
             remaining: note.value,
             pool: 1,
@@ -38,6 +40,7 @@ impl TxInput {
 
     pub fn from_orchard(note: &ReceivedNote) -> Self {
         Self {
+            id: note.id,
             amount: note.value,
             remaining: note.value,
             pool: 2,

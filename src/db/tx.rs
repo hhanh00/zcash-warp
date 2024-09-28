@@ -132,8 +132,8 @@ pub fn add_tx_value<IDSpent: std::fmt::Debug>(
         VALUES (?1, ?2, ?3, ?4, 0) ON CONFLICT DO NOTHING")?;
     s_tx.execute(params![tx_value.account, tx_value.txid, tx_value.height, tx_value.timestamp])?;
     let mut s_tx =
-        connection.prepare_cached("UPDATE txs SET value = value + ?2 WHERE txid = ?1")?;
-    s_tx.execute(params![tx_value.txid, tx_value.value])?;
+        connection.prepare_cached("UPDATE txs SET value = value + ?3 WHERE txid = ?1 AND account = ?2")?;
+    s_tx.execute(params![tx_value.txid, tx_value.account, tx_value.value])?;
     Ok(())
 }
 

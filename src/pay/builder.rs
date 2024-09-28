@@ -1,7 +1,11 @@
 use std::collections::HashMap;
 
 use crate::{
-    db::{account::{get_account_info, list_account_tsk}, account_manager::get_account_by_fingerprint},
+    data::fb::{IdNoteT, TransactionBytesT},
+    db::{
+        account::{get_account_info, list_account_tsk},
+        account_manager::get_account_by_fingerprint,
+    },
     warp::{
         hasher::{empty_roots, OrchardHasher, SaplingHasher},
         MERKLE_DEPTH,
@@ -13,9 +17,7 @@ use secp256k1::SecretKey;
 use zcash_client_backend::encoding::AddressCodec as _;
 use zcash_protocol::value::Zatoshis;
 
-use super::{
-    InputNote, OutputNote, UnsignedTransaction, ORCHARD_PROVER, PROVER,
-};
+use super::{InputNote, OutputNote, UnsignedTransaction, ORCHARD_PROVER, PROVER};
 use jubjub::Fr;
 use orchard::{
     builder::{Builder as OrchardBuilder, BundleType},
@@ -39,8 +41,12 @@ use zcash_primitives::{
 };
 use zcash_proofs::prover::LocalTxProver;
 
+use crate::{
+    coin::COINS,
+    ffi::{map_result, CParam, CResult},
+    network::Network,
+};
 use warp_macros::c_export;
-use crate::{network::Network, coin::COINS, ffi::{map_result, CParam, CResult}};
 
 const DUST: u64 = 54;
 
@@ -51,7 +57,7 @@ impl UnsignedTransaction {
         connection: &Connection,
         expiration_height: u32,
         mut rng: R,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<TransactionBytesT> {
         let account = get_account_by_fingerprint(connection, &self.account_id)?;
         let account = account.ok_or(anyhow::anyhow!("Account not in wallet"))?;
 
@@ -90,6 +96,15 @@ impl UnsignedTransaction {
             },
             orchard::Anchor::from_bytes(self.roots[1].clone()).unwrap(),
         );
+
+        let id_notes = self
+            .tx_notes
+            .iter()
+            .map(|txin| IdNoteT {
+                pool: txin.pool,
+                id: txin.id,
+            })
+            .collect::<Vec<_>>();
 
         for txin in self.tx_notes.iter() {
             match &txin.note {
@@ -183,7 +198,9 @@ impl UnsignedTransaction {
         }
 
         for txout in self.tx_outputs.iter() {
-            if txout.is_change && txout.amount < DUST { continue; }
+            if txout.is_change && txout.amount < DUST {
+                continue;
+            }
             match &txout.note {
                 OutputNote::Transparent { pkh, address } => {
                     let taddr = if *pkh {
@@ -197,7 +214,7 @@ impl UnsignedTransaction {
                 }
                 OutputNote::Sapling { address, memo } => {
                     let vk = ai.sapling.as_ref().map(|si| &si.vk);
-                    let ovk = vk.map(|vk| vk.fvk.ovk);
+                    let ovk = vk.map(|vk| vk.fvk().ovk);
                     let recipient = PaymentAddress::from_bytes(address).unwrap();
                     sapling_builder
                         .add_output(
@@ -226,7 +243,9 @@ impl UnsignedTransaction {
 
         let transparent_bundle = transparent_builder.build();
         let prover = PROVER.lock();
-        let prover = prover.as_ref().ok_or(anyhow::anyhow!("Sapling prover not initialized"))?;
+        let prover = prover
+            .as_ref()
+            .ok_or(anyhow::anyhow!("Sapling prover not initialized"))?;
         let sapling_bundle = sapling_builder
             .build::<LocalTxProver, LocalTxProver, _, _>(&mut rng)
             .unwrap()
@@ -270,7 +289,10 @@ impl UnsignedTransaction {
             .transparent_bundle()
             .map(|tb| tb.clone().apply_signatures(&unauthed_tx, &txid_parts));
 
-        let ask = ai.sapling.as_ref().and_then(|si| si.sk.as_ref().map(|sk| &sk.expsk.ask));
+        let ask = ai
+            .sapling
+            .as_ref()
+            .and_then(|si| si.sk.as_ref().map(|sk| &sk.expsk.ask));
         let mut signing_keys = vec![];
         if let Some(ask) = ask {
             signing_keys.push(ask.clone());
@@ -286,9 +308,7 @@ impl UnsignedTransaction {
             let sak = sk.map(|sk| SpendAuthorizingKey::from(&sk));
             let sak = [sak].into_iter().flatten().collect::<Vec<_>>();
             let proven = ob.clone().create_proof(&ORCHARD_PROVER, &mut rng).unwrap();
-            proven
-                .apply_signatures(&mut rng, sig_hash, &sak)
-                .unwrap()
+            proven.apply_signatures(&mut rng, sig_hash, &sak).unwrap()
         });
 
         let tx_data: TransactionData<zcash_primitives::transaction::Authorized> =
@@ -307,6 +327,10 @@ impl UnsignedTransaction {
         let mut tx_bytes = vec![];
         tx.write(&mut tx_bytes).unwrap();
 
+        let tx_bytes = TransactionBytesT {
+            notes: Some(id_notes),
+            data: Some(tx_bytes),
+        };
         Ok(tx_bytes)
     }
 }

@@ -4,9 +4,8 @@ use orchard::{
     keys::{FullViewingKey, SpendingKey},
     Address,
 };
-use prost::bytes::BufMut as _;
 use sapling_crypto::{
-    zip32::{DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey},
+    zip32::{DiversifiableFullViewingKey, ExtendedSpendingKey},
     PaymentAddress,
 };
 use secp256k1::SecretKey;
@@ -16,16 +15,13 @@ use zcash_client_backend::{
     encoding::{encode_extended_full_viewing_key, encode_extended_spending_key, AddressCodec as _},
 };
 use zcash_keys::address::Address as RecipientAddress;
-use zcash_primitives::{
-    consensus::NetworkConstants as _,
-    legacy::TransparentAddress,
-};
+use zcash_primitives::{consensus::NetworkConstants as _, legacy::TransparentAddress};
 
 use crate::{
-    network::Network,
     data::fb::{BackupT, ContactCardT},
     db::account_manager::parse_seed_phrase,
-    keys::export_sk_bip38,
+    keys::{export_sk_bip38, to_extended_full_viewing_key, AccountKeys},
+    network::Network,
 };
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -80,10 +76,7 @@ impl From<Option<u8>> for PoolMask {
 #[derive(Debug)]
 pub enum AccountType {
     Seed(Seed),
-    SaplingSK(ExtendedSpendingKey),
-    SaplingVK(ExtendedFullViewingKey),
-    UnifiedVK(UnifiedFullViewingKey),
-    TransparentSK(SecretKey),
+    AccountKeys(AccountKeys),
 }
 
 #[derive(Debug)]
@@ -96,7 +89,7 @@ pub struct TransparentAccountInfo {
 #[derive(Debug)]
 pub struct SaplingAccountInfo {
     pub sk: Option<ExtendedSpendingKey>,
-    pub vk: ExtendedFullViewingKey,
+    pub vk: DiversifiableFullViewingKey,
     pub addr: PaymentAddress,
 }
 
@@ -123,8 +116,7 @@ pub struct AccountInfo {
 
 impl SaplingAccountInfo {
     pub fn from_sk(sk: &ExtendedSpendingKey) -> Self {
-        #[allow(deprecated)]
-        let vk = sk.to_extended_full_viewing_key();
+        let vk = sk.to_diversifiable_full_viewing_key();
         let (_, addr) = vk.default_address();
         Self {
             sk: Some(sk.clone()),
@@ -133,30 +125,11 @@ impl SaplingAccountInfo {
         }
     }
 
-    pub fn from_vk(vk: &ExtendedFullViewingKey) -> Self {
+    pub fn from_vk(vk: &DiversifiableFullViewingKey) -> Self {
         let (_, addr) = vk.default_address();
         Self {
             sk: None,
             vk: vk.clone(),
-            addr,
-        }
-    }
-
-    pub fn from_dvk(dvk: &DiversifiableFullViewingKey) -> Self {
-        let (_, addr) = dvk.default_address();
-        // There is no public api to build a ExtendedFullViewingKey from DiversifiableFullViewingKey
-        // we use the binary serialization format as a workaround
-        let mut evk = vec![];
-        evk.put_u8(0); // depth
-        evk.put_u32(0); // tag
-        evk.put_u32(0); // index
-        evk.put_bytes(0, 32); // chain code
-        evk.put(&dvk.to_bytes()[..]);
-        let evk = ExtendedFullViewingKey::read(&*evk).unwrap();
-
-        Self {
-            sk: None,
-            vk: evk,
             addr,
         }
     }
@@ -179,24 +152,28 @@ impl AccountInfo {
             let seed = parse_seed_phrase(&phrase)?;
             return Ok(AccountType::Seed(seed));
         }
-        if let Some(ssk) = self.sapling.as_ref().and_then(|si| si.sk.as_ref()) {
-            return Ok(AccountType::SaplingSK(ssk.clone()));
+        let mut ak = AccountKeys {
+            tsk: None,
+            tvk: None,
+            ssk: None,
+            svk: None,
+            osk: None,
+            ovk: None,
+        };
+
+        if let Some(ti) = self.transparent.as_ref() {
+            ak.tsk = ti.sk.clone();
+            ak.tvk = Some(ti.addr.clone());
         }
-        if let Some(ovk) = self.orchard.as_ref().map(|oi| &oi.vk) {
-            let svk = self
-                .sapling
-                .as_ref()
-                .map(|si| si.vk.to_diversifiable_full_viewing_key());
-            let uvk = UnifiedFullViewingKey::new(None, svk, Some(ovk.clone()))?;
-            return Ok(AccountType::UnifiedVK(uvk));
+        if let Some(si) = self.sapling.as_ref() {
+            ak.ssk = si.sk.clone();
+            ak.svk = Some(si.vk.clone());
         }
-        if let Some(svk) = self.sapling.as_ref().map(|si| &si.vk) {
-            return Ok(AccountType::SaplingVK(svk.clone()));
+        if let Some(oi) = self.orchard.as_ref() {
+            ak.osk = oi.sk.clone();
+            ak.ovk = Some(oi.vk.clone());
         }
-        if let Some(tsk) = self.transparent.as_ref().and_then(|ti| ti.sk.as_ref()) {
-            return Ok(AccountType::TransparentSK(tsk.clone()))
-        }
-        anyhow::bail!("Unknown account type");
+        Ok(AccountType::AccountKeys(ak))
     }
 
     pub fn to_backup(&self, network: &Network) -> BackupT {
@@ -205,16 +182,17 @@ impl AccountInfo {
                 encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)
             })
         });
-        let fvk = self.sapling.as_ref().map(|si| {
-            encode_extended_full_viewing_key(
-                network.hrp_sapling_extended_full_viewing_key(),
-                &si.vk,
-            )
-        });
         let dfvk = self
             .sapling
             .as_ref()
-            .map(|si| DiversifiableFullViewingKey::from(&si.vk));
+            .map(|si| si.vk.clone());
+        let fvk = dfvk.as_ref().map(|dfvk| {
+            let efvk = to_extended_full_viewing_key(&dfvk).unwrap();
+            encode_extended_full_viewing_key(
+                network.hrp_sapling_extended_full_viewing_key(),
+                &efvk,
+            )
+        });
         let ofvk = self.orchard.as_ref().map(|o| o.vk.clone());
 
         let uvk = if dfvk.is_some() || ofvk.is_some() {
@@ -329,7 +307,7 @@ pub struct SecretKeys {
 
 #[derive(Debug)]
 pub struct ViewKeys {
-    pub sapling: Option<ExtendedFullViewingKey>,
+    pub sapling: Option<DiversifiableFullViewingKey>,
     pub orchard: Option<FullViewingKey>,
 }
 

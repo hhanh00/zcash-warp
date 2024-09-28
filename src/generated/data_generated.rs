@@ -15,6 +15,150 @@ pub mod fb {
 use serde::{Serialize, Deserialize};
   use self::flatbuffers::{EndianScalar, Follow};
 
+// struct IdNote, aligned to 4
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq)]
+pub struct IdNote(pub [u8; 8]);
+impl Default for IdNote { 
+  fn default() -> Self { 
+    Self([0; 8])
+  }
+}
+impl core::fmt::Debug for IdNote {
+  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+    f.debug_struct("IdNote")
+      .field("pool", &self.pool())
+      .field("id", &self.id())
+      .finish()
+  }
+}
+
+impl flatbuffers::SimpleToVerifyInSlice for IdNote {}
+impl<'a> flatbuffers::Follow<'a> for IdNote {
+  type Inner = &'a IdNote;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    <&'a IdNote>::follow(buf, loc)
+  }
+}
+impl<'a> flatbuffers::Follow<'a> for &'a IdNote {
+  type Inner = &'a IdNote;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    flatbuffers::follow_cast_ref::<IdNote>(buf, loc)
+  }
+}
+impl<'b> flatbuffers::Push for IdNote {
+    type Output = IdNote;
+    #[inline]
+    unsafe fn push(&self, dst: &mut [u8], _written_len: usize) {
+        let src = ::core::slice::from_raw_parts(self as *const IdNote as *const u8, Self::size());
+        dst.copy_from_slice(src);
+    }
+}
+
+impl<'a> flatbuffers::Verifiable for IdNote {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.in_buffer::<Self>(pos)
+  }
+}
+
+impl<'a> IdNote {
+  #[allow(clippy::too_many_arguments)]
+  pub fn new(
+    pool: u8,
+    id: u32,
+  ) -> Self {
+    let mut s = Self([0; 8]);
+    s.set_pool(pool);
+    s.set_id(id);
+    s
+  }
+
+  pub fn pool(&self) -> u8 {
+    let mut mem = core::mem::MaybeUninit::<<u8 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[0..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<u8 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_pool(&mut self, x: u8) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[0..].as_mut_ptr(),
+        core::mem::size_of::<<u8 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn id(&self) -> u32 {
+    let mut mem = core::mem::MaybeUninit::<<u32 as EndianScalar>::Scalar>::uninit();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    EndianScalar::from_little_endian(unsafe {
+      core::ptr::copy_nonoverlapping(
+        self.0[4..].as_ptr(),
+        mem.as_mut_ptr() as *mut u8,
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+      mem.assume_init()
+    })
+  }
+
+  pub fn set_id(&mut self, x: u32) {
+    let x_le = x.to_little_endian();
+    // Safety:
+    // Created from a valid Table for this object
+    // Which contains a valid value in this slot
+    unsafe {
+      core::ptr::copy_nonoverlapping(
+        &x_le as *const _ as *const u8,
+        self.0[4..].as_mut_ptr(),
+        core::mem::size_of::<<u32 as EndianScalar>::Scalar>(),
+      );
+    }
+  }
+
+  pub fn unpack(&self) -> IdNoteT {
+    IdNoteT {
+      pool: self.pool(),
+      id: self.id(),
+    }
+  }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct IdNoteT {
+  pub pool: u8,
+  pub id: u32,
+}
+impl IdNoteT {
+  pub fn pack(&self) -> IdNote {
+    IdNote::new(
+      self.pool,
+      self.id,
+    )
+  }
+}
+
 pub enum BackupOffset {}
 #[derive(Copy, Clone, PartialEq)]
 
@@ -6709,6 +6853,163 @@ impl TransparentAddressT {
     TransparentAddress::create(_fbb, &TransparentAddressArgs{
       addr_index,
       address,
+    })
+  }
+}
+pub enum TransactionBytesOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct TransactionBytes<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for TransactionBytes<'a> {
+  type Inner = TransactionBytes<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> TransactionBytes<'a> {
+  pub const VT_NOTES: flatbuffers::VOffsetT = 4;
+  pub const VT_DATA: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    TransactionBytes { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr, A: flatbuffers::Allocator + 'bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+    args: &'args TransactionBytesArgs<'args>
+  ) -> flatbuffers::WIPOffset<TransactionBytes<'bldr>> {
+    let mut builder = TransactionBytesBuilder::new(_fbb);
+    if let Some(x) = args.data { builder.add_data(x); }
+    if let Some(x) = args.notes { builder.add_notes(x); }
+    builder.finish()
+  }
+
+  pub fn unpack(&self) -> TransactionBytesT {
+    let notes = self.notes().map(|x| {
+      x.iter().map(|t| t.unpack()).collect()
+    });
+    let data = self.data().map(|x| {
+      x.into_iter().collect()
+    });
+    TransactionBytesT {
+      notes,
+      data,
+    }
+  }
+
+  #[inline]
+  pub fn notes(&self) -> Option<flatbuffers::Vector<'a, IdNote>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, IdNote>>>(TransactionBytes::VT_NOTES, None)}
+  }
+  #[inline]
+  pub fn data(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionBytes::VT_DATA, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for TransactionBytes<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, IdNote>>>("notes", Self::VT_NOTES, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("data", Self::VT_DATA, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct TransactionBytesArgs<'a> {
+    pub notes: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, IdNote>>>,
+    pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+}
+impl<'a> Default for TransactionBytesArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    TransactionBytesArgs {
+      notes: None,
+      data: None,
+    }
+  }
+}
+
+pub struct TransactionBytesBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionBytesBuilder<'a, 'b, A> {
+  #[inline]
+  pub fn add_notes(&mut self, notes: flatbuffers::WIPOffset<flatbuffers::Vector<'b , IdNote>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionBytes::VT_NOTES, notes);
+  }
+  #[inline]
+  pub fn add_data(&mut self, data: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionBytes::VT_DATA, data);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransactionBytesBuilder<'a, 'b, A> {
+    let start = _fbb.start_table();
+    TransactionBytesBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<TransactionBytes<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for TransactionBytes<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("TransactionBytes");
+      ds.field("notes", &self.notes());
+      ds.field("data", &self.data());
+      ds.finish()
+  }
+}
+#[non_exhaustive]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct TransactionBytesT {
+  pub notes: Option<Vec<IdNoteT>>,
+  pub data: Option<Vec<u8>>,
+}
+impl Default for TransactionBytesT {
+  fn default() -> Self {
+    Self {
+      notes: None,
+      data: None,
+    }
+  }
+}
+impl TransactionBytesT {
+  pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+    &self,
+    _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>
+  ) -> flatbuffers::WIPOffset<TransactionBytes<'b>> {
+    let notes = self.notes.as_ref().map(|x|{
+      let w: Vec<_> = x.iter().map(|t| t.pack()).collect();_fbb.create_vector(&w)
+    });
+    let data = self.data.as_ref().map(|x|{
+      _fbb.create_vector(x)
+    });
+    TransactionBytes::create(_fbb, &TransactionBytesArgs{
+      notes,
+      data,
     })
   }
 }

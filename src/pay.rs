@@ -1,7 +1,6 @@
 use fee::FeeManager;
 use orchard::circuit::ProvingKey;
 use parking_lot::Mutex;
-use rand::{CryptoRng, RngCore};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -64,6 +63,7 @@ impl ExtendedRecipient {
             }
         };
         let pools = pools & recipient.pools;
+        let pools = if pools != 1 { pools & 6 } else { pools }; // remove T
         Ok(ExtendedRecipient {
             amount: recipient.amount,
             remaining: recipient.amount,
@@ -76,6 +76,7 @@ impl ExtendedRecipient {
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TxInput {
+    pub id: u32,
     pub amount: u64,
     pub remaining: u64,
     pub pool: u8,
@@ -291,15 +292,4 @@ pub fn make_payment(
     }
     let utx = pb.finalize(utx)?;
     Ok(utx)
-}
-
-pub fn sign_tx<R: RngCore + CryptoRng>(
-    network: &Network,
-    connection: &Connection,
-    expiration_height: u32,
-    utx: UnsignedTransaction,
-    mut rng: R,
-) -> Result<Vec<u8>> {
-    let txb = utx.build(network, connection, expiration_height, &mut rng)?;
-    Ok(txb)
 }

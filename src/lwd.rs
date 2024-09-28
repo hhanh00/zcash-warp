@@ -14,7 +14,7 @@ use zcash_primitives::{
 };
 
 use crate::{
-    coin::connect_lwd, network::Network, types::CheckpointHeight, warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2, UTXO}, Client
+    coin::connect_lwd, data::fb::TransactionBytesT, network::Network, types::CheckpointHeight, warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2, UTXO}, Client
 };
 
 use warp_macros::c_export;
@@ -198,10 +198,11 @@ pub async fn get_transparent(
     Ok(ttxs)
 }
 
-pub async fn broadcast(client: &mut Client, height: u32, tx: &[u8]) -> Result<String> {
+pub async fn broadcast(client: &mut Client, height: u32, tx: &TransactionBytesT) -> Result<String> {
+    let bb = tx.data.as_ref();
     let res = client
         .send_transaction(Request::new(RawTransaction {
-            data: tx.to_vec(),
+            data: bb.cloned().unwrap_or_default(),
             height: height as u64,
         }))
         .await?

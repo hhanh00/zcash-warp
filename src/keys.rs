@@ -1,26 +1,67 @@
 use anyhow::Result;
 use base58check::{FromBase58Check, ToBase58Check};
 use bip39::{Mnemonic, Seed};
+use blake2b_simd::Params;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
+use prost::bytes::BufMut as _;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use ripemd::{Digest as _, Ripemd160};
-use sapling_crypto::zip32::ExtendedSpendingKey;
+use sapling_crypto::zip32::{
+    DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey,
+};
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
-use zcash_protocol::consensus::NetworkConstants as _;
 use tiny_hderive::bip32::ExtendedPrivKey;
 use zcash_primitives::legacy::TransparentAddress;
+use zcash_protocol::consensus::NetworkConstants as _;
 use zip32::ChildIndex;
 
 use crate::types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 
 use crate::{
-    network::Network,
     coin::COINS,
     ffi::{map_result_string, CResult},
+    network::Network,
 };
 use std::ffi::c_char;
 use warp_macros::c_export;
+
+#[derive(Debug)]
+pub struct AccountKeys {
+    pub tsk: Option<SecretKey>,
+    pub tvk: Option<TransparentAddress>,
+    pub ssk: Option<ExtendedSpendingKey>,
+    pub svk: Option<DiversifiableFullViewingKey>,
+    pub osk: Option<SpendingKey>,
+    pub ovk: Option<FullViewingKey>,
+}
+
+pub const KEY_FINGERPRINT_PERSO: &[u8] = b"Acnt_Fingerprint";
+
+impl AccountKeys {
+    pub fn to_hash(&self) -> Result<Vec<u8>> {
+        let tvk = self.tvk.map(|tvk: TransparentAddress| tvk.script().0).unwrap_or_default();
+        let svk = self
+            .svk
+            .as_ref()
+            .map(|svk| svk.to_bytes().to_vec())
+            .unwrap_or_default();
+        let ovk = self
+            .ovk
+            .as_ref()
+            .map(|ovk| ovk.to_bytes().to_vec())
+            .unwrap_or_default();
+        let key = Params::new()
+            .hash_length(32)
+            .personal(KEY_FINGERPRINT_PERSO)
+            .to_state()
+            .update(&tvk)
+            .update(&svk)
+            .update(&ovk)
+            .finalize();
+        Ok(key.as_bytes().to_vec())
+    }
+}
 
 pub fn generate_random_mnemonic_phrase<R: RngCore + CryptoRng>(mut rng: R) -> String {
     let mut entropy = [0u8; 32];
@@ -92,7 +133,11 @@ impl TransparentAccountInfo {
         };
         let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
         let addr = TransparentAddress::PublicKeyHash(pub_key.into());
-        TransparentAccountInfo { index: None, sk: Some(sk.clone()), addr }
+        TransparentAccountInfo {
+            index: None,
+            sk: Some(sk.clone()),
+            addr,
+        }
     }
 }
 
@@ -111,4 +156,17 @@ pub fn derive_orchard_zip32(network: &Network, seed: &Seed, acc_index: u32) -> O
         vk,
         addr,
     }
+}
+
+pub fn to_extended_full_viewing_key(
+    dk: &DiversifiableFullViewingKey,
+) -> Result<ExtendedFullViewingKey> {
+    let mut b = vec![];
+    b.put_u8(0);
+    b.put_u32(0);
+    b.put_u32(0);
+    b.put_bytes(0, 32);
+    b.put(&dk.to_bytes()[..]);
+    let efvk = ExtendedFullViewingKey::read(&*b)?;
+    Ok(efvk)
 }

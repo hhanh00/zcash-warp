@@ -174,8 +174,8 @@ pub fn analyze_raw_transaction(
     let mut souts = vec![];
     if let Some(b) = data.sapling_bundle() {
         if let Some(si) = ai.sapling.as_ref() {
-            let ivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(&si.vk.fvk.vk.ivk());
-            let ovk = &si.vk.fvk.ovk;
+            let ivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(&si.vk.fvk().vk.ivk());
+            let ovk = &si.vk.fvk().ovk;
             for sin in b.shielded_spends() {
                 let spend = get_note_by_nf(connection, &sin.nullifier().0)?;
                 sins.push(ShieldedInput {

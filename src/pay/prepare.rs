@@ -7,14 +7,21 @@ use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    data::fb::RecipientT, db::{
+    data::fb::RecipientT,
+    db::{
         account::get_account_info,
         notes::{list_received_notes, list_utxos},
-    }, fb_unwrap, network::Network, types::{CheckpointHeight, PoolMask}, utils::{pay::COST_PER_ACTION, ua::single_receiver_address}, warp::{
+    },
+    fb_unwrap,
+    keys::AccountKeys,
+    network::Network,
+    types::{CheckpointHeight, PoolMask},
+    utils::{pay::COST_PER_ACTION, ua::single_receiver_address},
+    warp::{
         hasher::{OrchardHasher, SaplingHasher},
         legacy::CommitmentTreeFrontier,
         UTXO,
-    }
+    },
 };
 
 /*
@@ -103,18 +110,31 @@ impl PaymentBuilder {
     pub fn add_account_funds(&mut self, connection: &Connection) -> Result<()> {
         let account_pools = match self.ai.account_type()? {
             crate::types::AccountType::Seed { .. } => 7, // T + S + O
-            crate::types::AccountType::SaplingSK { .. } => 2,
-            crate::types::AccountType::SaplingVK { .. } => 2,
-            crate::types::AccountType::UnifiedVK { .. } => 7,
-            crate::types::AccountType::TransparentSK { .. } => 1,
+            crate::types::AccountType::AccountKeys(AccountKeys {
+                tvk,
+                svk,
+                ovk,
+                ..
+            }) => {
+                let mut pools = 0;
+                if tvk.is_some() {
+                    pools |= 1;
+                }
+                if svk.is_some() {
+                    pools |= 2;
+                }
+                if ovk.is_some() {
+                    pools |= 4;
+                }
+                pools
+            }
         } as u8;
         let account_pools = account_pools & self.src_pools.0; // exclude pools
         self.account_pools = PoolMask(account_pools);
 
         let has_tex = self.outputs.iter().any(|o| {
             let address = &o.recipient.address;
-            let address =
-                RecipientAddress::decode(&self.network, fb_unwrap!(address)).unwrap();
+            let address = RecipientAddress::decode(&self.network, fb_unwrap!(address)).unwrap();
             if let RecipientAddress::Tex(_) = address {
                 true
             } else {
@@ -123,17 +143,33 @@ impl PaymentBuilder {
         });
 
         let transparent_inputs = if account_pools & 1 != 0 {
-            list_utxos(connection, Some(self.account), CheckpointHeight(self.height))?
+            list_utxos(
+                connection,
+                Some(self.account),
+                CheckpointHeight(self.height),
+            )?
         } else {
             vec![]
         };
         let sapling_inputs = if account_pools & 2 != 0 && !has_tex {
-            list_received_notes(connection, Some(self.account), CheckpointHeight(self.height), false)?
+            list_received_notes(
+                connection,
+                Some(self.account),
+                CheckpointHeight(self.height),
+                false,
+                false,
+            )?
         } else {
             vec![]
         };
         let orchard_inputs = if account_pools & 4 != 0 && !has_tex {
-            list_received_notes(connection, Some(self.account), CheckpointHeight(self.height), true)?
+            list_received_notes(
+                connection,
+                Some(self.account),
+                CheckpointHeight(self.height),
+                true,
+                false,
+            )?
         } else {
             vec![]
         };
@@ -272,7 +308,10 @@ impl PaymentBuilder {
 
         if self.use_change {
             tracing::info!("Used pools {:?}", self.used);
-            let change_pool = (0..3usize).rev().find(|&i| self.used[i]).ok_or(anyhow::anyhow!("No inputs"))? as u8;
+            let change_pool = (0..3usize)
+                .rev()
+                .find(|&i| self.used[i])
+                .ok_or(anyhow::anyhow!("No Funds"))? as u8;
             tracing::info!("Change pool {change_pool}");
             let change_pool = 1 << change_pool;
             let change_address = self
@@ -317,8 +356,7 @@ impl PaymentBuilder {
                 ..
             } = pi;
             let address =
-                single_receiver_address(&self.network, fb_unwrap!(address), n.pool_mask)?
-                    .unwrap();
+                single_receiver_address(&self.network, fb_unwrap!(address), n.pool_mask)?.unwrap();
             let memo = memo_bytes.map(|memo| MemoBytes::from_bytes(&memo).unwrap());
             let memo = memo.unwrap_or(MemoBytes::empty());
             let note = OutputNote::from_address(&self.network, &address, memo)?;

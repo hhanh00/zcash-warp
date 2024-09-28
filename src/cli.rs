@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    data::fb::ZipDbConfigT,
+    data::fb::{TransactionBytesT, ZipDbConfigT},
     db::{account::list_account_transparent_addresses, notes::list_utxos},
     fb_unwrap,
     network::{regtest, Network},
@@ -331,7 +331,7 @@ fn display_tx(
     network: &Network,
     connection: &Connection,
     mut summary: TransactionSummaryT,
-) -> Result<Vec<u8>> {
+) -> Result<TransactionBytesT> {
     let txb = sign(
         network,
         connection,
@@ -344,7 +344,7 @@ fn display_tx(
 }
 
 #[tokio::main]
-async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<u8>) -> Result<()> {
+async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut TransactionBytesT) -> Result<()> {
     let network = &zec.network;
     match command {
         Command::CreateDatabase => {
@@ -584,8 +584,8 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
                 println!("{checkpoints:?}");
             }
             CheckpointCommand::Rewind { height } => {
-                let connection = zec.connection()?;
-                rewind(&connection, height)?;
+                let mut connection = zec.connection()?;
+                rewind(&mut connection, height)?;
             }
         },
         Command::GenerateSeed => {
@@ -751,11 +751,11 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Vec<
         Command::BroadcastLatest { clear } => {
             let clear = clear.unwrap_or(1);
             if clear != 0 {
-                if !txbytes.is_empty() {
-                    tracing::info!("{}", hex::encode(&txbytes));
+                if let Some(tx_bytes) = txbytes.data.as_ref() {
+                    tracing::info!("{}", hex::encode(tx_bytes));
                     let mut client = zec.connect_lwd().await?;
                     let bc_height = get_last_height(&mut client).await?;
-                    let r = broadcast(&mut client, bc_height, &txbytes).await?;
+                    let r = broadcast(&mut client, bc_height, txbytes).await?;
                     println!("{}", r);
                 }
             }
@@ -789,7 +789,7 @@ pub fn cli_main(config: &ConfigT) -> Result<()> {
         })
         .build();
 
-    let mut txbytes = vec![];
+    let mut txbytes = TransactionBytesT::default();
     rl.repl(|command| {
         if let Err(e) = process_command(command, &mut zec, &mut txbytes) {
             println!("{} {}", style("Error:").red().bold(), e);

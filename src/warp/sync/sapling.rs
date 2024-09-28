@@ -56,7 +56,7 @@ impl Synchronizer {
             let ai = get_account_info(network, connection, a.id)?;
             account_infos.push(ai);
         }
-        let notes = list_received_notes(connection, None, start, false)?;
+        let notes = list_received_notes(connection, None, start, false, true)?;
 
         Ok(Self {
             hasher: SaplingHasher::default(),
@@ -77,7 +77,7 @@ impl Synchronizer {
             .filter_map(|ai| {
                 ai.sapling
                     .as_ref()
-                    .map(|si| (ai.account, si.vk.fvk.vk.ivk()))
+                    .map(|si| (ai.account, si.vk.fvk().vk.ivk()))
             })
             .collect::<Vec<_>>();
 
@@ -144,7 +144,7 @@ impl Synchronizer {
                 .find(|&ai| ai.account == note.account)
                 .unwrap();
             let recipient = PaymentAddress::from_bytes(&note.address).unwrap();
-            if let Some(vk) = ai.sapling.as_ref().map(|si| &si.vk.fvk.vk) {
+            if let Some(vk) = ai.sapling.as_ref().map(|si| &si.vk.fvk().vk) {
                 let n = Note::from_parts(
                     recipient,
                     NoteValue::from_raw(note.value),

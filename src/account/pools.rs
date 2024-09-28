@@ -4,12 +4,7 @@ use rusqlite::Connection;
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    network::Network,
-    data::fb::RecipientT,
-    db::{account::get_account_info, chain::snap_to_checkpoint},
-    pay::PaymentBuilder,
-    warp::legacy::CommitmentTreeFrontier,
-    EXPIRATION_HEIGHT_DELTA,
+    data::fb::{RecipientT, TransactionBytesT}, db::{account::get_account_info, chain::snap_to_checkpoint}, network::Network, pay::PaymentBuilder, warp::legacy::CommitmentTreeFrontier, EXPIRATION_HEIGHT_DELTA
 };
 
 pub fn transfer_pools<R: RngCore + CryptoRng>(
@@ -26,7 +21,7 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
     s: &CommitmentTreeFrontier,
     o: &CommitmentTreeFrontier,
     rng: R,
-) -> Result<Vec<u8>> {
+) -> Result<TransactionBytesT> {
     let ai = get_account_info(network, connection, account)?;
     let to_address = ai.to_address(network, Some(to_pool).into()).unwrap();
     let split_amount = if split_amount == 0 {

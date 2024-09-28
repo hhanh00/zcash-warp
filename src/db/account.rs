@@ -147,6 +147,7 @@ pub fn get_account_info(
                         &vk,
                     )
                     .unwrap();
+                    let vk = vk.to_diversifiable_full_viewing_key();
                     let addr =
                         decode_payment_address(network.hrp_sapling_payment_address(), &saddr)
                             .unwrap();
@@ -208,7 +209,7 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
     let transparent = connection
         .query_row(
             "SELECT SUM(value) FROM utxos
-        WHERE account = ?1 AND height <= ?2 AND spent IS NULL",
+        WHERE account = ?1 AND height <= ?2 AND (spent IS NULL OR spent = 0)",
             params![account, height],
             |r| r.get::<_, Option<u64>>(0),
         )?
@@ -217,7 +218,7 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
         .query_row(
             "SELECT SUM(value) FROM notes
         WHERE account = ?1 AND height <= ?2 AND orchard = 0
-        AND spent IS NULL",
+        AND (spent IS NULL OR spent = 0)",
             params![account, height],
             |r| r.get::<_, Option<u64>>(0),
         )?
@@ -226,7 +227,7 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
         .query_row(
             "SELECT SUM(value) FROM notes
         WHERE account = ?1 AND height <= ?2 AND orchard = 1
-        AND spent IS NULL",
+        AND (spent IS NULL OR spent = 0)",
             params![account, height],
             |r| r.get::<_, Option<u64>>(0),
         )?

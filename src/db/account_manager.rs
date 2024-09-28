@@ -1,10 +1,8 @@
 use anyhow::Result;
 use bip39::{Mnemonic, Seed};
+use blake2b_simd::Params;
 use orchard::keys::Scope;
-use prost::bytes::BufMut;
 use rusqlite::{params, Connection, OptionalExtension};
-use sapling_crypto::zip32::{ExtendedFullViewingKey, ExtendedSpendingKey};
-use secp256k1::{All, Secp256k1, SecretKey};
 use zcash_client_backend::{
     encoding::{
         decode_extended_full_viewing_key, decode_extended_spending_key,
@@ -13,11 +11,13 @@ use zcash_client_backend::{
     },
     keys::UnifiedFullViewingKey,
 };
-use zcash_primitives::consensus::NetworkConstants as _;
+use zcash_primitives::{consensus::NetworkConstants as _, legacy::{keys::IncomingViewingKey, TransparentAddress}};
 
 use crate::{
     data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
-    keys::{derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38},
+    keys::{
+        derive_bip32, derive_orchard_zip32, derive_zip32, export_sk_bip38, import_sk_bip38, to_extended_full_viewing_key, AccountKeys, KEY_FINGERPRINT_PERSO
+    },
     network::Network,
     types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
 };
@@ -53,10 +53,7 @@ pub fn parse_seed_phrase(phrase: &str) -> Result<Seed> {
 
 pub enum KeyType {
     Seed(String, Seed, u32),
-    SaplingSK(ExtendedSpendingKey),
-    SaplingVK(ExtendedFullViewingKey),
-    UnifiedVK(UnifiedFullViewingKey),
-    Transparent(SecretKey),
+    AccountKeys(AccountKeys),
 }
 
 pub struct KeyFingerprint(pub Vec<u8>);
@@ -73,46 +70,56 @@ impl From<&KeyType> for u8 {
     fn from(value: &KeyType) -> Self {
         match value {
             KeyType::Seed(_, _, _) => T_SK | T_VK | S_SK | S_VK | O_SK | O_VK | SEED,
-            KeyType::SaplingSK(_) => S_SK | S_VK,
-            KeyType::SaplingVK(_) => S_VK,
-            KeyType::UnifiedVK(_) => S_VK | O_VK,
-            KeyType::Transparent(_) => T_SK | T_VK,
+            KeyType::AccountKeys(AccountKeys {
+                tsk,
+                tvk,
+                ssk,
+                svk,
+                osk,
+                ovk,
+            }) => {
+                let mut kt = 0;
+                if tsk.is_some() {
+                    kt |= T_SK;
+                }
+                if tvk.is_some() {
+                    kt |= T_VK;
+                }
+                if ssk.is_some() {
+                    kt |= S_SK;
+                }
+                if svk.is_some() {
+                    kt |= S_VK;
+                }
+                if osk.is_some() {
+                    kt |= O_SK;
+                }
+                if ovk.is_some() {
+                    kt |= O_VK;
+                }
+                kt
+            }
         }
     }
 }
 
 impl KeyType {
-    pub fn to_fingerprint(&self, network: &Network) -> Result<KeyFingerprint> {
+    pub fn to_fingerprint(&self) -> Result<KeyFingerprint> {
         let mut fingerprint_buffer = vec![];
         match self {
             KeyType::Seed(_, seed, aindex) => {
-                let si = derive_zip32(network, &seed, *aindex);
-                fingerprint_buffer.put_u8(1);
-                fingerprint_buffer.write_all(&si.addr.to_bytes()[..])?;
+                let key = Params::new()
+                    .hash_length(32)
+                    .personal(KEY_FINGERPRINT_PERSO)
+                    .to_state()
+                    .update(seed.as_bytes())
+                    .update(&aindex.to_le_bytes())
+                    .finalize();
+                key.as_bytes().to_vec();
+                fingerprint_buffer.write_all(key.as_bytes())?;
             }
-            KeyType::SaplingSK(sk) => {
-                let (_, address) = sk.default_address();
-                fingerprint_buffer.put_u8(1);
-                fingerprint_buffer.write_all(&address.to_bytes()[..])?;
-            }
-            KeyType::SaplingVK(vk) => {
-                let (_, address) = vk.default_address();
-                fingerprint_buffer.put_u8(1);
-                fingerprint_buffer.write_all(&address.to_bytes()[..])?;
-            }
-            KeyType::UnifiedVK(vk) => {
-                let Some(fvk) = vk.orchard() else {
-                    anyhow::bail!("UVK must have an orchard receiver")
-                };
-                let address = fvk.address_at(0u64, Scope::External);
-                fingerprint_buffer.put_u8(2);
-                fingerprint_buffer.write_all(&address.to_raw_address_bytes()[..])?;
-            }
-            KeyType::Transparent(sk) => {
-                let secp = Secp256k1::<All>::new();
-                let pk = sk.public_key(&secp);
-                fingerprint_buffer.put_u8(0);
-                fingerprint_buffer.write_all(&pk.serialize()[..])?;
+            KeyType::AccountKeys(ak) => {
+                fingerprint_buffer.write_all(&ak.to_hash()?)?;
             }
         };
         Ok(KeyFingerprint(fingerprint_buffer))
@@ -125,18 +132,70 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<KeyTyp
     }
     if let Ok(ssk) = decode_extended_spending_key(network.hrp_sapling_extended_spending_key(), key)
     {
-        return Ok(KeyType::SaplingSK(ssk));
+        let svk = ssk.to_diversifiable_full_viewing_key();
+        let ak = AccountKeys {
+            tsk: None,
+            tvk: None,
+            ssk: Some(ssk.clone()),
+            svk: Some(svk.clone()),
+            osk: None,
+            ovk: None,
+        };
+        return Ok(KeyType::AccountKeys(ak));
     }
     if let Ok(svk) =
         decode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), key)
     {
-        return Ok(KeyType::SaplingVK(svk));
+        let svk = svk.to_diversifiable_full_viewing_key();
+        let ak = AccountKeys {
+            tsk: None,
+            tvk: None,
+            ssk: None,
+            svk: Some(svk.clone()),
+            osk: None,
+            ovk: None,
+        };
+        return Ok(KeyType::AccountKeys(ak));
     }
     if let Ok(uvk) = UnifiedFullViewingKey::decode(network, key) {
-        return Ok(KeyType::UnifiedVK(uvk));
+        let tvk = uvk.transparent().map(|tk| { 
+            let ivk = tk.derive_external_ivk().unwrap();
+            let (address, _) = ivk.default_address();
+            address
+        });
+        let svk = uvk.sapling();
+        let ak = AccountKeys {
+            tsk: None,
+            tvk,
+            ssk: None,
+            svk: svk.cloned(),
+            osk: None,
+            ovk: None,
+        };
+        return Ok(KeyType::AccountKeys(ak));
     }
     if let Ok(tsk) = import_sk_bip38(key) {
-        return Ok(KeyType::Transparent(tsk));
+        let ti = TransparentAccountInfo::from_secret_key(&tsk, true);
+        let ak = AccountKeys {
+            tsk: ti.sk.clone(),
+            tvk: Some(ti.addr.clone()),
+            ssk: None,
+            svk: None,
+            osk: None,
+            ovk: None,
+        };
+        return Ok(KeyType::AccountKeys(ak));
+    }
+    if let Ok(tvk) = TransparentAddress::decode(network, key) {
+        let ak = AccountKeys {
+            tsk: None,
+            tvk: Some(tvk.clone()),
+            ssk: None,
+            svk: None,
+            osk: None,
+            ovk: None,
+        };
+        return Ok(KeyType::AccountKeys(ak));
     }
     return Err(anyhow::anyhow!("Not a valid key"));
 }
@@ -157,7 +216,7 @@ pub fn create_new_account(
     birth: u32,
 ) -> Result<u32> {
     let kt = detect_key(network, &key, acc_index)?;
-    let fingerprint = kt.to_fingerprint(network)?;
+    let fingerprint = kt.to_fingerprint()?;
     let account = match &kt {
         KeyType::Seed(seed_str, seed, acc_index) => {
             let si = derive_zip32(network, &seed, *acc_index);
@@ -180,42 +239,31 @@ pub fn create_new_account(
             create_orchard_account(network, connection, account, &oi)?;
             account
         }
-        KeyType::SaplingSK(sk) => {
-            let account =
-                create_account(connection, (&kt).into(), &fingerprint, name, None, 0, birth)?;
-            let si = SaplingAccountInfo::from_sk(&sk);
-            create_sapling_account(network, connection, account, &si)?;
-            account
-        }
-        KeyType::SaplingVK(vk) => {
-            let account =
-                create_account(connection, (&kt).into(), &fingerprint, name, None, 0, birth)?;
-            let si = SaplingAccountInfo::from_vk(&vk);
-            create_sapling_account(network, connection, account, &si)?;
-            account
-        }
-        KeyType::UnifiedVK(uvk) => {
-            let account =
-                create_account(connection, (&kt).into(), &fingerprint, name, None, 0, birth)?;
-            let svk = uvk
-                .sapling()
-                .ok_or(anyhow::anyhow!("Missing sapling receiver"))?;
-            let si = SaplingAccountInfo::from_dvk(&svk);
-            create_sapling_account(network, connection, account, &si)?;
-            uvk.orchard()
-                .map(|ovk| {
-                    let oi = OrchardAccountInfo::from_vk(ovk);
-                    create_orchard_account(network, connection, account, &oi)
-                })
-                .transpose()?;
-            account
-        }
-        KeyType::Transparent(tsk) => {
-            let account =
-                create_account(connection, (&kt).into(), &fingerprint, name, None, 0, birth)?;
-            let ti = TransparentAccountInfo::from_secret_key(tsk, true);
-            create_transparent_account(network, connection, account, 0, &ti)?;
-            create_transparent_subaccount(network, connection, account, 0, &ti)?;
+        KeyType::AccountKeys(AccountKeys { tsk, tvk, ssk, svk, osk, ovk }) => {
+            let account = create_account(
+                connection,
+                (&kt).into(),
+                &fingerprint,
+                name,
+                None,
+                0,
+                birth,
+            )?;
+            if let Some(tvk) = tvk {
+                let ti = TransparentAccountInfo { sk: tsk.clone(), addr: tvk.clone(), index: None };
+                create_transparent_account(network, connection, account, 0, &ti)?;
+                create_transparent_subaccount(network, connection, account, 0, &ti)?;
+                }
+            if let Some(svk) = svk {
+                let (_, addr) = svk.default_address();
+                let si = SaplingAccountInfo { sk: ssk.clone(), vk: svk.clone(), addr };
+                create_sapling_account(network, connection, account, &si)?;
+            }
+            if let Some(ovk) = ovk {
+                let addr = ovk.address_at(0u64, Scope::External);
+                let oi = OrchardAccountInfo { sk: osk.clone(), vk: ovk.clone(), addr };
+                create_orchard_account(network, connection, account, &oi)?;
+            }
             account
         }
     };
@@ -251,8 +299,9 @@ pub fn create_sapling_account(
         .sk
         .as_ref()
         .map(|sk| encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), sk));
+    let efvk = to_extended_full_viewing_key(&si.vk)?;
     let vk =
-        encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &si.vk);
+        encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &efvk);
     let addr = encode_payment_address(network.hrp_sapling_payment_address(), &si.addr);
 
     connection.execute(
@@ -367,7 +416,8 @@ pub fn trim_excess_transparent_addresses(connection: &Connection, account: u32) 
         WHERE account = ?1 AND addr_index = ?2
         ON CONFLICT (account) DO UPDATE SET addr_index = excluded.addr_index,
         sk = excluded.sk, address = excluded.address",
-        params![account, max_addr_index])?; // update the account transparent address
+        params![account, max_addr_index],
+    )?; // update the account transparent address
     Ok(())
 }
 

@@ -5,8 +5,8 @@ use zcash_protocol::memo::{Memo, MemoBytes};
 
 use crate::{
     account::contacts::commit_unsaved_contacts, data::fb::{
-        PaymentRequest, PaymentRequestT, RecipientT, TransactionSummary, TransactionSummaryT,
-    }, db::{account::get_account_info, chain::snap_to_checkpoint}, fb_unwrap, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{
+        PaymentRequest, PaymentRequestT, RecipientT, TransactionBytes, TransactionBytesT, TransactionSummary, TransactionSummaryT
+    }, db::{account::get_account_info, chain::snap_to_checkpoint, notes::mark_notes_unconfirmed_spent}, fb_unwrap, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{
         make_payment,
         UnsignedTransaction,
     }, Client
@@ -105,7 +105,7 @@ pub fn sign(
     connection: &Connection,
     summary: &TransactionSummaryT,
     expiration_height: u32,
-) -> Result<Vec<u8>> {
+) -> Result<TransactionBytesT> {
     let data = fb_unwrap!(summary.data);
     let unsigned_tx = bincode::deserialize_from::<_, UnsignedTransaction>(&data[..])?;
     let txb = unsigned_tx.build(
@@ -114,13 +114,16 @@ pub fn sign(
         expiration_height,
         OsRng,
     )?;
-    tracing::info!("TXBLen {}", txb.len());
+    tracing::info!("TXBLen {}", txb.data.as_ref().unwrap().len());
     Ok(txb)
 }
 
 #[c_export]
-pub async fn tx_broadcast(client: &mut Client, txbytes: &[u8]) -> Result<String> {
+pub async fn tx_broadcast(connection: &Connection, client: &mut Client, txbytes: &TransactionBytesT) -> Result<String> {
     let bc_height = get_last_height(client).await?;
+    if let Some(id_notes) = txbytes.notes.as_deref() {
+        mark_notes_unconfirmed_spent(connection, id_notes)?;
+    }
     let id = broadcast(client, bc_height, txbytes).await?;
     Ok(id)
 }

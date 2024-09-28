@@ -234,3 +234,13 @@ table TransparentAddress {
   addr_index: uint32;
   address: string;
 }
+
+struct IdNote {
+  pool: uint8;
+  id: uint32;
+}
+
+table TransactionBytes {
+  notes: [IdNote];
+  data: [uint8];
+}

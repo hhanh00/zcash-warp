@@ -1,5 +1,5 @@
 use crate::{
-    data::fb::{InputTransparentT, ShieldedNoteT},
+    data::fb::{IdNoteT, InputTransparentT, ShieldedNoteT},
     types::CheckpointHeight,
     warp::{
         sync::{PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
@@ -51,8 +51,14 @@ pub fn list_received_notes(
     account: Option<u32>,
     height: CheckpointHeight,
     orchard: bool,
+    include_unconfirmed: bool,
 ) -> Result<Vec<ReceivedNote>> {
     let height: u32 = height.into();
+    let or_include_unconfirmed = if include_unconfirmed {
+        " OR spent = 0"
+    } else {
+        ""
+    };
     let (where_account, query_params) = match account {
         Some(_) => (
             format!(" AND n.account = ?3"),
@@ -61,12 +67,11 @@ pub fn list_received_notes(
         None => (String::new(), params![height, orchard]),
     };
     let mut s = connection.prepare(
-        &("SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
+        &format!("SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2 AND (spent IS NULL OR spent > ?1) AND NOT excluded".to_string() + &where_account
-        + " ORDER BY n.value DESC"),
-    )?;
+        AND orchard = ?2 AND (spent IS NULL OR spent > ?1 {or_include_unconfirmed}) AND NOT excluded
+        {where_account} ORDER BY n.value DESC"))?;
     let rows = s.query_map(query_params, |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -137,6 +142,24 @@ pub fn list_received_notes(
 pub fn mark_shielded_spent(connection: &Transaction, tx_value: &TxValueUpdate<Hash>) -> Result<()> {
     let mut s = connection.prepare("UPDATE notes SET spent = ?2 WHERE nf = ?1")?;
     s.execute(params![tx_value.id_spent.unwrap(), tx_value.height])?;
+    Ok(())
+}
+
+pub fn mark_notes_unconfirmed_spent(connection: &Connection, id_notes: &[IdNoteT]) -> Result<()> {
+    let mut upd_transparent =
+        connection.prepare("UPDATE utxos SET spent = 0 WHERE id_utxo = ?1")?;
+    let mut upd_shielded = connection.prepare("UPDATE notes SET spent = 0 WHERE id_note = ?1")?;
+    for note in id_notes {
+        match note.pool {
+            0 => {
+                upd_transparent.execute([note.id])?;
+            }
+            1 | 2 => {
+                upd_shielded.execute([note.id])?;
+            }
+            _ => unreachable!(),
+        }
+    }
     Ok(())
 }
 
@@ -338,10 +361,10 @@ pub fn get_unspent_notes(
     let mut s = connection.prepare(
         "SELECT n.id_note, n.height, t.timestamp, n.value, n.orchard, n.excluded
         FROM notes n JOIN txs t ON n.tx = t.id_tx
-        WHERE n.account = ?1 AND spent IS NULL
+        WHERE n.account = ?1 AND (spent IS NULL OR spent > ?2 OR spent = 0)
         ORDER BY n.height DESC",
     )?;
-    let rows = s.query_map([account], |r| {
+    let rows = s.query_map(params![account, bc_height], |r| {
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, u32>(1)?,
@@ -375,12 +398,15 @@ pub fn get_unspent_utxos(
     bc_height: u32,
 ) -> Result<Vec<InputTransparentT>> {
     let utxos = list_utxos(connection, Some(account), CheckpointHeight(bc_height))?;
-    let utxos = utxos.into_iter().map(|u| InputTransparentT {
-        txid: Some(u.txid.to_vec()),
-        vout: u.vout,
-        address: Some(u.address),
-        value: u.value,
-    }).collect::<Vec<_>>();
+    let utxos = utxos
+        .into_iter()
+        .map(|u| InputTransparentT {
+            txid: Some(u.txid.to_vec()),
+            vout: u.vout,
+            address: Some(u.address),
+            value: u.value,
+        })
+        .collect::<Vec<_>>();
     Ok(utxos)
 }
 
