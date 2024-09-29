@@ -5,7 +5,7 @@ use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
 
 use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result_bytes, CResult}};
+use crate::{coin::COINS, ffi::{map_result_bytes, CParam, CResult}};
 use flatbuffers::FlatBufferBuilder;
 
 pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Hash)>> {
@@ -104,9 +104,9 @@ pub fn get_tx_details_account(connection: &Connection, id_tx: u32) -> Result<(u3
 }
 
 #[c_export]
-pub fn get_tx_details(network: &Network, connection: &Connection, id_tx: u32) -> Result<TransactionInfoExtendedT> {
+pub fn get_tx_details(network: &Network, connection: &Connection, txid: &[u8]) -> Result<TransactionInfoExtendedT> {
     let tx_bin = connection.query_row(
-        "SELECT data FROM txdetails WHERE id_tx = ?1", [id_tx], |r| r.get::<_, Vec<u8>>(0))?;
+        "SELECT data FROM txdetails WHERE txid = ?1", [txid], |r| r.get::<_, Vec<u8>>(0))?;
     let tx: TransactionDetails = bincode::deserialize_from(&*tx_bin)?;
     let etx = tx.to_transaction_info_ext(network);
     Ok(etx)

@@ -5,11 +5,8 @@ use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::legacy::TransparentAddress;
 
 use crate::{
+    db::{account::list_transparent_addresses, notes::list_utxos},
     network::Network,
-    db::{
-        account::list_transparent_addresses,
-        notes::list_utxos,
-    },
     types::CheckpointHeight,
     warp::{OutPoint, TransparentTx, UTXO},
 };
@@ -56,10 +53,9 @@ impl TransparentSync {
     pub fn process_txs(&mut self, txs: &[TransparentTx]) -> Result<()> {
         for tx in txs {
             for vin in tx.vins.iter() {
-                let r = self
-                    .utxos
-                    .iter()
-                    .find(|&utxo| utxo.txid == vin.txid && utxo.vout == vin.vout);
+                let r = self.utxos.iter().find(|&utxo| {
+                    utxo.txid == vin.txid && utxo.vout == vin.vout && utxo.account == tx.account
+                });
                 if let Some(utxo) = r {
                     let tx_value = TxValueUpdate::<OutPoint> {
                         id_tx: 0,

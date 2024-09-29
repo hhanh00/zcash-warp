@@ -1,7 +1,6 @@
 use crate::{
     data::fb::TransactionInfoT,
     db::{contacts::list_contacts, tx::list_txs},
-    utils::to_txid_str,
 };
 use anyhow::Result;
 use rusqlite::Connection;
@@ -40,7 +39,7 @@ pub fn get_txs(
         }
         let ti = TransactionInfoT {
             id: rtx.id,
-            txid: Some(to_txid_str(&rtx.txid)),
+            txid: Some(rtx.txid.to_vec()),
             height: rtx.height,
             confirmations: bc_height - rtx.height + 1,
             timestamp: rtx.timestamp,

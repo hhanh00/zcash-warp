@@ -544,7 +544,7 @@ impl<'a> TransactionInfo<'a> {
   pub fn unpack(&self) -> TransactionInfoT {
     let id = self.id();
     let txid = self.txid().map(|x| {
-      x.to_string()
+      x.into_iter().collect()
     });
     let height = self.height();
     let confirmations = self.confirmations();
@@ -580,11 +580,11 @@ impl<'a> TransactionInfo<'a> {
     unsafe { self._tab.get::<u32>(TransactionInfo::VT_ID, Some(0)).unwrap()}
   }
   #[inline]
-  pub fn txid(&self) -> Option<&'a str> {
+  pub fn txid(&self) -> Option<flatbuffers::Vector<'a, u8>> {
     // Safety:
     // Created from valid Table for this object
     // which contains a valid value in this slot
-    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(TransactionInfo::VT_TXID, None)}
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionInfo::VT_TXID, None)}
   }
   #[inline]
   pub fn height(&self) -> u32 {
@@ -645,7 +645,7 @@ impl flatbuffers::Verifiable for TransactionInfo<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<u32>("id", Self::VT_ID, false)?
-     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("txid", Self::VT_TXID, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("txid", Self::VT_TXID, false)?
      .visit_field::<u32>("height", Self::VT_HEIGHT, false)?
      .visit_field::<u32>("confirmations", Self::VT_CONFIRMATIONS, false)?
      .visit_field::<u32>("timestamp", Self::VT_TIMESTAMP, false)?
@@ -659,7 +659,7 @@ impl flatbuffers::Verifiable for TransactionInfo<'_> {
 }
 pub struct TransactionInfoArgs<'a> {
     pub id: u32,
-    pub txid: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub txid: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub height: u32,
     pub confirmations: u32,
     pub timestamp: u32,
@@ -695,7 +695,7 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionInfoBuilder<'a, 'b, 
     self.fbb_.push_slot::<u32>(TransactionInfo::VT_ID, id, 0);
   }
   #[inline]
-  pub fn add_txid(&mut self, txid: flatbuffers::WIPOffset<&'b  str>) {
+  pub fn add_txid(&mut self, txid: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionInfo::VT_TXID, txid);
   }
   #[inline]
@@ -760,7 +760,7 @@ impl core::fmt::Debug for TransactionInfo<'_> {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct TransactionInfoT {
   pub id: u32,
-  pub txid: Option<String>,
+  pub txid: Option<Vec<u8>>,
   pub height: u32,
   pub confirmations: u32,
   pub timestamp: u32,
@@ -791,7 +791,7 @@ impl TransactionInfoT {
   ) -> flatbuffers::WIPOffset<TransactionInfo<'b>> {
     let id = self.id;
     let txid = self.txid.as_ref().map(|x|{
-      _fbb.create_string(x)
+      _fbb.create_vector(x)
     });
     let height = self.height;
     let confirmations = self.confirmations;

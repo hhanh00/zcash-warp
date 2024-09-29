@@ -134,7 +134,7 @@ struct CResult_u8 c_exclude_note(uint8_t coin, uint32_t id, bool reverse);
 
 struct CResult_u8 c_reverse_note_exclusion(uint8_t coin, uint32_t account);
 
-struct CResult______u8 c_get_tx_details(uint8_t coin, uint32_t id_tx);
+struct CResult______u8 c_get_tx_details(uint8_t coin, struct CParam txid);
 
 struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(uint8_t coin);
 

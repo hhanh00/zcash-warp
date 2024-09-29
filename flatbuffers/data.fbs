@@ -14,7 +14,7 @@ table Backup {
 
 table TransactionInfo {
   id: uint32;
-  txid: string;
+  txid: [uint8];
   height: uint32;
   confirmations: uint32;
   timestamp: uint32;

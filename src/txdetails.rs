@@ -88,7 +88,9 @@ impl ToString for CompressedMemo {
         let memo = Memo::from_bytes(&self.0).unwrap();
         match memo {
             Memo::Text(txt) => txt.to_string(),
-            _ => String::new(),
+            Memo::Empty => String::new(),
+            Memo::Future(_) => "(Future data)".to_string(),
+            Memo::Arbitrary(data) => hex::encode(&*data),
         }
     }
 }
