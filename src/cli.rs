@@ -453,6 +453,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Tran
                         cp_height,
                         &s_tree,
                         &o_tree,
+                        None,
                     )?
                     .to_summary()?;
                     *txbytes = display_tx(network, &connection, summary)?;
@@ -683,14 +684,14 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Tran
             };
             tracing::info!("{}", serde_json::to_string(&payment)?);
             let summary =
-                prepare_payment(network, &connection, &mut client, account, &payment).await?;
+                prepare_payment(network, &connection, &mut client, account, &payment, "").await?;
             *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::MultiPay { account, payment } => {
             let mut client = zec.connect_lwd().await?;
             let connection = zec.connection()?;
             let summary =
-                prepare_payment(network, &connection, &mut client, account, &payment).await?;
+                prepare_payment(network, &connection, &mut client, account, &payment, "").await?;
             *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::GetTx { account, id } => {
@@ -745,7 +746,7 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Tran
                 snap_to_checkpoint(&connection, bc_height - zec.config.confirmations + 1)?;
             let payment = parse_payment_uri(&uri, cp_height.0, cp_height.0 + 50)?;
             let summary =
-                prepare_payment(network, &connection, &mut client, account, &payment).await?;
+                prepare_payment(network, &connection, &mut client, account, &payment, "").await?;
             *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::BroadcastLatest { clear } => {

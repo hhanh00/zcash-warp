@@ -330,6 +330,7 @@ impl UnsignedTransaction {
         let tx_bytes = TransactionBytesT {
             notes: Some(id_notes),
             data: Some(tx_bytes),
+            redirect: self.redirect.clone(),
         };
         Ok(tx_bytes)
     }

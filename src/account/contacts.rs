@@ -81,10 +81,10 @@ pub fn commit_unsaved_contacts(
     cp_height: CheckpointHeight,
     s: &CommitmentTreeFrontier,
     o: &CommitmentTreeFrontier,
+    redirect: Option<String>,
 ) -> anyhow::Result<UnsignedTransaction> {
     let ai = get_account_info(network, connection, account)?;
     let address = ai.to_address(network, PoolMask(src_pools)).unwrap();
-    tracing::info!("Contact -> {}", address);
     let contacts = get_unsaved_contacts(connection, account)?;
     let contacts = contacts
         .into_iter()
@@ -123,6 +123,7 @@ pub fn commit_unsaved_contacts(
         &payment,
         s,
         o,
+        redirect,
     )?;
     Ok(utx)
 }

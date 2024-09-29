@@ -173,6 +173,7 @@ pub struct UnsignedTransaction {
     pub roots: [Hash; 2],
     pub edges: [AuthPath; 2],
     pub fees: FeeManager,
+    pub redirect: Option<String>,
 }
 
 impl UnsignedTransaction {
@@ -230,6 +231,7 @@ impl UnsignedTransaction {
             num_outputs: Some(self.fees.num_outputs.to_vec()),
             privacy_level,
             data: Some(data),
+            redirect: self.redirect.clone(),
         })
     }
 }
@@ -278,6 +280,7 @@ pub fn make_payment(
     payment: &PaymentRequestT,
     s_tree: &CommitmentTreeFrontier,
     o_tree: &CommitmentTreeFrontier,
+    redirect: Option<String>,
 ) -> Result<UnsignedTransaction> {
     let mut pb = PaymentBuilder::new(
         network, connection, account, CheckpointHeight(payment.height),
@@ -290,6 +293,6 @@ pub fn make_payment(
         let fee = pb.fee_manager.fee();
         utx.add_to_change(fee as i64)?;
     }
-    let utx = pb.finalize(utx)?;
+    let utx = pb.finalize(utx, redirect)?;
     Ok(utx)
 }

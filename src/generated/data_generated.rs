@@ -3991,6 +3991,7 @@ impl<'a> TransactionSummary<'a> {
   pub const VT_NUM_INPUTS: flatbuffers::VOffsetT = 18;
   pub const VT_NUM_OUTPUTS: flatbuffers::VOffsetT = 20;
   pub const VT_DATA: flatbuffers::VOffsetT = 22;
+  pub const VT_REDIRECT: flatbuffers::VOffsetT = 24;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -4006,6 +4007,7 @@ impl<'a> TransactionSummary<'a> {
     builder.add_orchard_net(args.orchard_net);
     builder.add_sapling_net(args.sapling_net);
     builder.add_transparent_ins(args.transparent_ins);
+    if let Some(x) = args.redirect { builder.add_redirect(x); }
     if let Some(x) = args.data { builder.add_data(x); }
     if let Some(x) = args.num_outputs { builder.add_num_outputs(x); }
     if let Some(x) = args.num_inputs { builder.add_num_inputs(x); }
@@ -4034,6 +4036,9 @@ impl<'a> TransactionSummary<'a> {
     let data = self.data().map(|x| {
       x.into_iter().collect()
     });
+    let redirect = self.redirect().map(|x| {
+      x.to_string()
+    });
     TransactionSummaryT {
       height,
       recipients,
@@ -4045,6 +4050,7 @@ impl<'a> TransactionSummary<'a> {
       num_inputs,
       num_outputs,
       data,
+      redirect,
     }
   }
 
@@ -4118,6 +4124,13 @@ impl<'a> TransactionSummary<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionSummary::VT_DATA, None)}
   }
+  #[inline]
+  pub fn redirect(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(TransactionSummary::VT_REDIRECT, None)}
+  }
 }
 
 impl flatbuffers::Verifiable for TransactionSummary<'_> {
@@ -4137,6 +4150,7 @@ impl flatbuffers::Verifiable for TransactionSummary<'_> {
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("num_inputs", Self::VT_NUM_INPUTS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("num_outputs", Self::VT_NUM_OUTPUTS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("data", Self::VT_DATA, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("redirect", Self::VT_REDIRECT, false)?
      .finish();
     Ok(())
   }
@@ -4152,6 +4166,7 @@ pub struct TransactionSummaryArgs<'a> {
     pub num_inputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub num_outputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    pub redirect: Option<flatbuffers::WIPOffset<&'a str>>,
 }
 impl<'a> Default for TransactionSummaryArgs<'a> {
   #[inline]
@@ -4167,6 +4182,7 @@ impl<'a> Default for TransactionSummaryArgs<'a> {
       num_inputs: None,
       num_outputs: None,
       data: None,
+      redirect: None,
     }
   }
 }
@@ -4217,6 +4233,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionSummaryBuilder<'a, '
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_DATA, data);
   }
   #[inline]
+  pub fn add_redirect(&mut self, redirect: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_REDIRECT, redirect);
+  }
+  #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransactionSummaryBuilder<'a, 'b, A> {
     let start = _fbb.start_table();
     TransactionSummaryBuilder {
@@ -4244,6 +4264,7 @@ impl core::fmt::Debug for TransactionSummary<'_> {
       ds.field("num_inputs", &self.num_inputs());
       ds.field("num_outputs", &self.num_outputs());
       ds.field("data", &self.data());
+      ds.field("redirect", &self.redirect());
       ds.finish()
   }
 }
@@ -4260,6 +4281,7 @@ pub struct TransactionSummaryT {
   pub num_inputs: Option<Vec<u8>>,
   pub num_outputs: Option<Vec<u8>>,
   pub data: Option<Vec<u8>>,
+  pub redirect: Option<String>,
 }
 impl Default for TransactionSummaryT {
   fn default() -> Self {
@@ -4274,6 +4296,7 @@ impl Default for TransactionSummaryT {
       num_inputs: None,
       num_outputs: None,
       data: None,
+      redirect: None,
     }
   }
 }
@@ -4300,6 +4323,9 @@ impl TransactionSummaryT {
     let data = self.data.as_ref().map(|x|{
       _fbb.create_vector(x)
     });
+    let redirect = self.redirect.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
     TransactionSummary::create(_fbb, &TransactionSummaryArgs{
       height,
       recipients,
@@ -4311,6 +4337,7 @@ impl TransactionSummaryT {
       num_inputs,
       num_outputs,
       data,
+      redirect,
     })
   }
 }
@@ -6874,6 +6901,7 @@ impl<'a> flatbuffers::Follow<'a> for TransactionBytes<'a> {
 impl<'a> TransactionBytes<'a> {
   pub const VT_NOTES: flatbuffers::VOffsetT = 4;
   pub const VT_DATA: flatbuffers::VOffsetT = 6;
+  pub const VT_REDIRECT: flatbuffers::VOffsetT = 8;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -6885,6 +6913,7 @@ impl<'a> TransactionBytes<'a> {
     args: &'args TransactionBytesArgs<'args>
   ) -> flatbuffers::WIPOffset<TransactionBytes<'bldr>> {
     let mut builder = TransactionBytesBuilder::new(_fbb);
+    if let Some(x) = args.redirect { builder.add_redirect(x); }
     if let Some(x) = args.data { builder.add_data(x); }
     if let Some(x) = args.notes { builder.add_notes(x); }
     builder.finish()
@@ -6897,9 +6926,13 @@ impl<'a> TransactionBytes<'a> {
     let data = self.data().map(|x| {
       x.into_iter().collect()
     });
+    let redirect = self.redirect().map(|x| {
+      x.to_string()
+    });
     TransactionBytesT {
       notes,
       data,
+      redirect,
     }
   }
 
@@ -6917,6 +6950,13 @@ impl<'a> TransactionBytes<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(TransactionBytes::VT_DATA, None)}
   }
+  #[inline]
+  pub fn redirect(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(TransactionBytes::VT_REDIRECT, None)}
+  }
 }
 
 impl flatbuffers::Verifiable for TransactionBytes<'_> {
@@ -6928,6 +6968,7 @@ impl flatbuffers::Verifiable for TransactionBytes<'_> {
     v.visit_table(pos)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, IdNote>>>("notes", Self::VT_NOTES, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("data", Self::VT_DATA, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("redirect", Self::VT_REDIRECT, false)?
      .finish();
     Ok(())
   }
@@ -6935,6 +6976,7 @@ impl flatbuffers::Verifiable for TransactionBytes<'_> {
 pub struct TransactionBytesArgs<'a> {
     pub notes: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, IdNote>>>,
     pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+    pub redirect: Option<flatbuffers::WIPOffset<&'a str>>,
 }
 impl<'a> Default for TransactionBytesArgs<'a> {
   #[inline]
@@ -6942,6 +6984,7 @@ impl<'a> Default for TransactionBytesArgs<'a> {
     TransactionBytesArgs {
       notes: None,
       data: None,
+      redirect: None,
     }
   }
 }
@@ -6958,6 +7001,10 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionBytesBuilder<'a, 'b,
   #[inline]
   pub fn add_data(&mut self, data: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionBytes::VT_DATA, data);
+  }
+  #[inline]
+  pub fn add_redirect(&mut self, redirect: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionBytes::VT_REDIRECT, redirect);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>) -> TransactionBytesBuilder<'a, 'b, A> {
@@ -6979,6 +7026,7 @@ impl core::fmt::Debug for TransactionBytes<'_> {
     let mut ds = f.debug_struct("TransactionBytes");
       ds.field("notes", &self.notes());
       ds.field("data", &self.data());
+      ds.field("redirect", &self.redirect());
       ds.finish()
   }
 }
@@ -6987,12 +7035,14 @@ impl core::fmt::Debug for TransactionBytes<'_> {
 pub struct TransactionBytesT {
   pub notes: Option<Vec<IdNoteT>>,
   pub data: Option<Vec<u8>>,
+  pub redirect: Option<String>,
 }
 impl Default for TransactionBytesT {
   fn default() -> Self {
     Self {
       notes: None,
       data: None,
+      redirect: None,
     }
   }
 }
@@ -7007,9 +7057,13 @@ impl TransactionBytesT {
     let data = self.data.as_ref().map(|x|{
       _fbb.create_vector(x)
     });
+    let redirect = self.redirect.as_ref().map(|x|{
+      _fbb.create_string(x)
+    });
     TransactionBytes::create(_fbb, &TransactionBytesArgs{
       notes,
       data,
+      redirect,
     })
   }
 }

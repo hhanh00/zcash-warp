@@ -57,7 +57,7 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
     builder.add_account_funds(connection)?;
     builder.set_use_change(true)?;
     let utx = builder.prepare()?;
-    let utx = builder.finalize(utx)?;
+    let utx = builder.finalize(utx, None)?;
     let tx = utx.build(
         network,
         connection,

@@ -120,6 +120,8 @@ struct CResult_u8 c_edit_contact_address(uint8_t coin, uint32_t id, char *addres
 
 struct CResult_u8 c_delete_contact(uint8_t coin, uint32_t id);
 
+struct CResult_u8 c_on_contacts_saved(uint8_t coin, uint32_t account);
+
 struct CResult______u8 c_list_messages(uint8_t coin, uint32_t account);
 
 struct CResult_u8 c_mark_all_read(uint8_t coin, uint32_t account, bool reverse);
@@ -227,7 +229,10 @@ struct CResult______u8 c_split(uint8_t coin, struct CParam data, uint32_t thresh
 
 struct CResult______u8 c_merge(uint8_t coin, struct CParam parts);
 
-struct CResult______u8 c_prepare_payment(uint8_t coin, uint32_t account, struct CParam payment);
+struct CResult______u8 c_prepare_payment(uint8_t coin,
+                                         uint32_t account,
+                                         struct CParam payment,
+                                         char *redirect);
 
 struct CResult_bool c_can_sign(uint8_t coin, uint32_t account, struct CParam summary);
 
@@ -238,7 +243,7 @@ struct CResult_____c_char c_tx_broadcast(uint8_t coin, struct CParam txbytes);
 struct CResult______u8 c_save_contacts(uint8_t coin,
                                        uint32_t account,
                                        uint32_t height,
-                                       uint32_t confirmations);
+                                       char *redirect);
 
 struct CResult______u8 c_fetch_tx_details(uint8_t coin, uint32_t account, uint32_t id);
 

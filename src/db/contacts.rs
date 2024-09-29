@@ -154,3 +154,10 @@ pub fn get_unsaved_contacts(connection: &Connection, account: u32) -> Result<Vec
     }
     Ok(cards)
 }
+
+#[c_export]
+pub fn on_contacts_saved(connection: &Connection, account: u32) -> Result<()> {
+    connection.execute(
+        "UPDATE contacts SET saved = TRUE WHERE account = ?1", [account])?;
+    Ok(())
+}

@@ -4,12 +4,19 @@ use rusqlite::Connection;
 use zcash_protocol::memo::{Memo, MemoBytes};
 
 use crate::{
-    account::contacts::commit_unsaved_contacts, data::fb::{
-        PaymentRequest, PaymentRequestT, RecipientT, TransactionBytes, TransactionBytesT, TransactionSummary, TransactionSummaryT
-    }, db::{account::get_account_info, chain::snap_to_checkpoint, notes::mark_notes_unconfirmed_spent}, fb_unwrap, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{
-        make_payment,
-        UnsignedTransaction,
-    }, Client
+    account::contacts::commit_unsaved_contacts,
+    data::fb::{
+        PaymentRequest, PaymentRequestT, RecipientT, TransactionBytes, TransactionBytesT,
+        TransactionSummary, TransactionSummaryT,
+    },
+    db::{
+        account::get_account_info, chain::snap_to_checkpoint, notes::mark_notes_unconfirmed_spent,
+    },
+    fb_unwrap,
+    lwd::{broadcast, get_last_height, get_tree_state},
+    network::Network,
+    pay::{make_payment, UnsignedTransaction},
+    Client,
 };
 
 use crate::{
@@ -17,7 +24,7 @@ use crate::{
     ffi::{map_result, map_result_bytes, map_result_string, CParam, CResult},
 };
 use flatbuffers::FlatBufferBuilder;
-use std::ffi::c_char;
+use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 pub(crate) const COST_PER_ACTION: u64 = 5_000;
@@ -29,6 +36,7 @@ pub async fn prepare_payment(
     client: &mut Client,
     account: u32,
     payment: &PaymentRequestT,
+    redirect: &str,
 ) -> Result<TransactionSummaryT> {
     tracing::info!("{:?}", payment);
     let cp_height = snap_to_checkpoint(&connection, payment.height)?;
@@ -48,7 +56,20 @@ pub async fn prepare_payment(
         height: cp_height.0,
         expiration: payment.expiration,
     };
-    let unsigned_tx = make_payment(network, &connection, account, &payment, &s_tree, &o_tree)?;
+    let redirect = if redirect.is_empty() {
+        None
+    } else {
+        Some(redirect.to_string())
+    };
+    let unsigned_tx = make_payment(
+        network,
+        &connection,
+        account,
+        &payment,
+        &s_tree,
+        &o_tree,
+        redirect,
+    )?;
     let summary = unsigned_tx.to_summary()?;
     Ok(summary)
 }
@@ -108,18 +129,17 @@ pub fn sign(
 ) -> Result<TransactionBytesT> {
     let data = fb_unwrap!(summary.data);
     let unsigned_tx = bincode::deserialize_from::<_, UnsignedTransaction>(&data[..])?;
-    let txb = unsigned_tx.build(
-        network,
-        connection,
-        expiration_height,
-        OsRng,
-    )?;
+    let txb = unsigned_tx.build(network, connection, expiration_height, OsRng)?;
     tracing::info!("TXBLen {}", txb.data.as_ref().unwrap().len());
     Ok(txb)
 }
 
 #[c_export]
-pub async fn tx_broadcast(connection: &Connection, client: &mut Client, txbytes: &TransactionBytesT) -> Result<String> {
+pub async fn tx_broadcast(
+    connection: &Connection,
+    client: &mut Client,
+    txbytes: &TransactionBytesT,
+) -> Result<String> {
     let bc_height = get_last_height(client).await?;
     if let Some(id_notes) = txbytes.notes.as_deref() {
         mark_notes_unconfirmed_spent(connection, id_notes)?;
@@ -135,9 +155,9 @@ pub async fn save_contacts(
     client: &mut Client,
     account: u32,
     height: u32,
-    confirmations: u32,
+    redirect: &str,
 ) -> Result<TransactionSummaryT> {
-    let cp_height = snap_to_checkpoint(&connection, height - confirmations + 1)?;
+    let cp_height = snap_to_checkpoint(&connection, height)?;
     let (s_tree, o_tree) = get_tree_state(client, cp_height).await?;
     let unsigned_tx = commit_unsaved_contacts(
         network,
@@ -147,6 +167,7 @@ pub async fn save_contacts(
         cp_height,
         &s_tree,
         &o_tree,
+        Some(redirect.to_string()),
     )?;
     unsigned_tx.to_summary().map_err(anyhow::Error::msg)
 }
