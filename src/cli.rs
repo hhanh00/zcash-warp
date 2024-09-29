@@ -586,7 +586,8 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Tran
             }
             CheckpointCommand::Rewind { height } => {
                 let mut connection = zec.connection()?;
-                rewind(&mut connection, height)?;
+                let mut client = zec.connect_lwd().await?;
+                rewind(&network, &mut connection, &mut client, height).await?;
             }
         },
         Command::GenerateSeed => {

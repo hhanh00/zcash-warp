@@ -177,7 +177,7 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
             timestamp: block.time,
         };
         if prev_hash != bh.prev_hash {
-            rewind_checkpoint(&mut connection)?;
+            rewind_checkpoint(&coin.network, &mut connection, &mut client).await?;
             return Err(SyncError::Reorg(bh.height));
         }
         prev_hash = bh.hash;

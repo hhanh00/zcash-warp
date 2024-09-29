@@ -1,15 +1,20 @@
 use anyhow::Result;
-use rusqlite::{params, Connection, Transaction};
-use zcash_protocol::consensus::{Network, NetworkUpgrade, Parameters as _};
+use rusqlite::{params, Connection, OptionalExtension as _, Transaction};
+use zcash_protocol::consensus::{NetworkUpgrade, Parameters as _};
 
 use crate::db::notes::update_account_balances;
-use crate::{data::fb::CheckpointT, warp::BlockHeader};
+use crate::network::Network;
 use crate::types::CheckpointHeight;
-use crate::Hash;
+use crate::utils::chain::reset_chain;
+use crate::{data::fb::CheckpointT, warp::BlockHeader};
+use crate::{Client, Hash};
 
-use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, map_result_bytes, CResult}};
+use crate::{
+    coin::COINS,
+    ffi::{map_result, map_result_bytes, CResult},
+};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
+use warp_macros::c_export;
 
 pub fn snap_to_checkpoint(connection: &Connection, height: u32) -> Result<CheckpointHeight> {
     let height = connection.query_row(
@@ -71,7 +76,11 @@ pub fn truncate_scan(connection: &Connection) -> Result<()> {
     Ok(())
 }
 
-pub fn reset_scan(network: &Network, connection: &mut Connection, height: Option<u32>) -> Result<u32> {
+pub fn reset_scan(
+    network: &Network,
+    connection: &mut Connection,
+    height: Option<u32>,
+) -> Result<u32> {
     let activation: u32 = network
         .activation_height(NetworkUpgrade::Sapling)
         .unwrap()
@@ -93,41 +102,51 @@ pub fn reset_scan(network: &Network, connection: &mut Connection, height: Option
     Ok(height)
 }
 
-pub fn rewind_checkpoint(connection: &mut Connection) -> Result<()> {
+pub async fn rewind_checkpoint(network: &Network, connection: &mut Connection, client: &mut Client) -> Result<()> {
     let checkpoint = get_sync_height(connection)?;
     if checkpoint > 0 {
-        rewind(connection, checkpoint - 1)?;
+        rewind(network, connection, client, checkpoint - 1).await?;
     }
     Ok(())
 }
 
 #[c_export]
-pub fn rewind(connection: &mut Connection, height: u32) -> Result<()> {
-    let db_tx = connection.transaction()?;
-    let height = db_tx.query_row(
-        "SELECT height FROM blcks WHERE height <= ?1 ORDER BY height DESC LIMIT 1",
-        [height],
-        |r| r.get::<_, u32>(0),
-    )?;
-    tracing::info!("Dropping sync data after @{height}");
-    db_tx.execute("DELETE FROM blcks WHERE height > ?1", [height])?;
-    db_tx.execute("DELETE FROM txs WHERE height > ?1", [height])?;
-    db_tx.execute("DELETE FROM notes WHERE height > ?1", [height])?;
-    db_tx.execute("DELETE FROM witnesses WHERE height > ?1", [height])?;
-    db_tx.execute("DELETE FROM txdetails WHERE height > ?1", [height])?;
-    db_tx.execute("DELETE FROM msgs WHERE height > ?1", [height])?;
-    db_tx.execute("UPDATE notes SET spent = NULL WHERE spent > ?1", [height])?;
-    db_tx.execute("UPDATE notes SET spent = NULL WHERE spent = 0", [])?;
-    update_account_balances(&db_tx, height)?;
-    db_tx.commit()?;
+pub async fn rewind(
+    network: &Network,
+    connection: &mut Connection,
+    client: &mut Client,
+    height: u32,
+) -> Result<()> {
+    let height = connection
+        .query_row(
+            "SELECT height FROM blcks WHERE height <= ?1 ORDER BY height DESC LIMIT 1",
+            [height],
+            |r| r.get::<_, u32>(0),
+        )
+        .optional()?;
+    if let Some(height) = height {
+        let db_tx = connection.transaction()?;
+        tracing::info!("Dropping sync data after @{height}");
+        db_tx.execute("DELETE FROM blcks WHERE height > ?1", [height])?;
+        db_tx.execute("DELETE FROM txs WHERE height > ?1", [height])?;
+        db_tx.execute("DELETE FROM notes WHERE height > ?1", [height])?;
+        db_tx.execute("DELETE FROM witnesses WHERE height > ?1", [height])?;
+        db_tx.execute("DELETE FROM txdetails WHERE height > ?1", [height])?;
+        db_tx.execute("DELETE FROM msgs WHERE height > ?1", [height])?;
+        db_tx.execute("UPDATE notes SET spent = NULL WHERE spent > ?1", [height])?;
+        db_tx.execute("UPDATE notes SET spent = NULL WHERE spent = 0", [])?;
+        update_account_balances(&db_tx, height)?;
+        db_tx.commit()?;
+    } else {
+        reset_chain(network, connection, client, 0).await?;
+    }
 
     Ok(())
 }
 
 #[c_export]
 pub fn list_checkpoints(connection: &Connection) -> Result<Vec<CheckpointT>> {
-    let mut s =
-        connection.prepare("SELECT height, hash, timestamp FROM blcks ORDER BY height")?;
+    let mut s = connection.prepare("SELECT height, hash, timestamp FROM blcks ORDER BY height")?;
     let rows = s.query_map([], |r| -> Result<(u32, Hash, u32), _> {
         Ok((r.get(0)?, r.get(1)?, r.get(2)?))
     })?;
