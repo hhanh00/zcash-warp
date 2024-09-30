@@ -132,7 +132,7 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
     let mut s = connection.prepare(
         "SELECT m.id_msg, m.account, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
         m.recipient, m.subject, m.body, m.read, t.id_tx FROM msgs m JOIN txs t
-        ON m.txid = t.txid WHERE m.account = ?1 ORDER BY m.height DESC",
+        ON m.txid = t.txid AND m.account = t.account WHERE m.account = ?1 ORDER BY m.height DESC",
     )?;
     let rows = s.query_map([account], select_message)?;
     let mut msgs = vec![];

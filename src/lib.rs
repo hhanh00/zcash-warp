@@ -13,7 +13,6 @@ pub mod coin;
 pub mod db;
 mod keys;
 pub mod lwd;
-pub mod messages;
 pub mod pay;
 pub mod txdetails;
 pub mod types;
