@@ -63,10 +63,10 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         "CREATE TABLE IF NOT EXISTS accounts(
         id_account INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
-        key_type INTEGER NOT NULL,
         fingerprint BLOB NOT NULL UNIQUE,
         seed TEXT,
         aindex INTEGER NOT NULL,
+        dindex INTEGER NOT NULL,
         birth INTEGER NOT NULL,
         balance INTEGER NOT NULL,
         saved BOOL NOT NULL)",
@@ -76,18 +76,20 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
     connection.execute(
         "CREATE TABLE IF NOT EXISTS t_accounts(
         account INTEGER PRIMARY KEY,
-        addr_index INTEGER NOT NULL,
+        xsk BLOB,
         sk TEXT,
+        vk BLOB,
+        addr_index INTEGER NOT NULL,
         address TEXT NOT NULL)",
         [],
     )?;
 
     connection.execute(
-        "CREATE TABLE IF NOT EXISTS t_subaccounts(
-        id_subaccount INTEGER PRIMARY KEY,
+        "CREATE TABLE IF NOT EXISTS t_addresses(
+        id_address INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,
-        addr_index INTEGER NOT NULL,
         sk TEXT,
+        addr_index INTEGER NOT NULL,
         address TEXT NOT NULL,
         UNIQUE (account, addr_index))",
         [],

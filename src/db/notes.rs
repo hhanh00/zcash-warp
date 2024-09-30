@@ -255,7 +255,7 @@ pub fn list_utxos(
         &("SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
         u.value FROM utxos u
         JOIN t_accounts t ON u.account = t.account
-        JOIN t_subaccounts s ON s.account = t.account AND s.addr_index = u.addr_index
+        JOIN t_addresses s ON s.account = t.account AND s.addr_index = u.addr_index
         WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)".to_string() + &where_account
         + " ORDER BY u.height DESC"),
     )?;

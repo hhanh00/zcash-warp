@@ -1,41 +1,41 @@
 use anyhow::Result;
 use bech32::{Bech32m, Hrp};
-use orchard::keys::Scope;
 use rusqlite::Connection;
 use zcash_client_backend::encoding::AddressCodec;
+use zcash_keys::keys::UnifiedAddressRequest;
 use zcash_primitives::legacy::TransparentAddress;
+use zip32::DiversifierIndex;
 
-use crate::{db::account::get_account_info, network::Network, types::PoolMask};
+use crate::{db::account::get_account_info, network::Network, types::{PoolMask, TransparentAccountInfo}};
 
 pub fn get_diversified_address(
     network: &Network,
     connection: &Connection,
     account: u32,
-    time: u32,
+    addr_index: u32,
     pools: PoolMask,
-) -> Result<Option<String>> {
+) -> Result<String> {
     let ai = get_account_info(network, connection, account)?;
     let ai = ai.select_pools(pools);
-    let saddr = ai
-        .sapling
-        .as_ref()
-        .map(|si| {
-            let mut di = [0u8; 11];
-            di[4..8].copy_from_slice(&time.to_le_bytes());
-            let di = zcash_primitives::zip32::DiversifierIndex::from(di);
-            let (_, saddr) = si
-                .vk
-                .find_address(di)
-                .ok_or(anyhow::anyhow!("No diversifier address found"))?;
-            Ok::<_, anyhow::Error>(saddr)
-        })
-        .transpose()?;
-    let oaddr = ai.orchard.as_ref().map(|oi| {
-        let di = orchard::keys::DiversifierIndex::from(time);
-        oi.vk.address_at(di, Scope::External)
-    });
-    let ua = zcash_client_backend::address::UnifiedAddress::from_receivers(oaddr, saddr, None);
-    let address = ua.map(|ua| ua.encode(network));
+    let pool_mask = ai.to_mask();
+    let address = match pool_mask {
+        0 => anyhow::bail!("No Receiver"),
+        1 => {
+            let tvk = ai.transparent.as_ref().and_then(|ti| ti.vk.as_ref());
+            let address = tvk.map(|tvk| TransparentAccountInfo::derive_address(tvk, addr_index).encode(network));
+            address.ok_or(anyhow::anyhow!("No Transparent Address"))?
+        }
+        _ => {
+            let uvk = ai.to_vk()?;
+            let di: DiversifierIndex = addr_index.try_into().unwrap();
+            let ua_request =
+                UnifiedAddressRequest::new(ai.orchard.is_some(), ai.sapling.is_some(), ai.transparent.is_some())
+                    .ok_or(anyhow::anyhow!("Must have shielded receiver"))?;
+            let (address, _) = uvk.find_address(di, ua_request)?;
+            let address = address.encode(network);
+            address
+        }
+    };
     Ok(address)
 }
 

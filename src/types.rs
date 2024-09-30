@@ -1,5 +1,4 @@
 use anyhow::Result;
-use bip39::Seed;
 use orchard::{
     keys::{FullViewingKey, SpendingKey},
     Address,
@@ -14,12 +13,17 @@ use zcash_client_backend::{
     address::UnifiedAddress,
     encoding::{encode_extended_full_viewing_key, encode_extended_spending_key, AddressCodec as _},
 };
-use zcash_keys::address::Address as RecipientAddress;
-use zcash_primitives::{consensus::NetworkConstants as _, legacy::TransparentAddress};
+use zcash_keys::{address::Address as RecipientAddress};
+use zcash_primitives::{
+    consensus::NetworkConstants as _,
+    legacy::{
+        keys::{AccountPrivKey, AccountPubKey},
+        TransparentAddress,
+    },
+};
 
 use crate::{
     data::fb::{BackupT, ContactCardT},
-    db::account_manager::parse_seed_phrase,
     keys::{export_sk_bip38, to_extended_full_viewing_key, AccountKeys},
     network::Network,
 };
@@ -74,15 +78,11 @@ impl From<Option<u8>> for PoolMask {
 }
 
 #[derive(Debug)]
-pub enum AccountType {
-    Seed(Seed),
-    AccountKeys(AccountKeys),
-}
-
-#[derive(Debug)]
 pub struct TransparentAccountInfo {
     pub index: Option<u32>,
-    pub sk: Option<secp256k1::SecretKey>,
+    pub xsk: Option<AccountPrivKey>,
+    pub sk: Option<SecretKey>,
+    pub vk: Option<AccountPubKey>,
     pub addr: TransparentAddress,
 }
 
@@ -107,6 +107,7 @@ pub struct AccountInfo {
     pub fingerprint: Vec<u8>,
     pub seed: Option<String>,
     pub aindex: u32,
+    pub dindex: Option<u32>,
     pub birth: u32,
     pub saved: bool,
     pub transparent: Option<TransparentAccountInfo>,
@@ -115,18 +116,13 @@ pub struct AccountInfo {
 }
 
 impl SaplingAccountInfo {
-    pub fn from_sk(sk: &ExtendedSpendingKey) -> Self {
+    pub fn from_sk(sk: &ExtendedSpendingKey, di: u32) -> Self {
         let vk = sk.to_diversifiable_full_viewing_key();
-        let (_, addr) = vk.default_address();
-        Self {
-            sk: Some(sk.clone()),
-            vk,
-            addr,
-        }
+        Self::from_vk(&vk, di)
     }
 
-    pub fn from_vk(vk: &DiversifiableFullViewingKey) -> Self {
-        let (_, addr) = vk.default_address();
+    pub fn from_vk(vk: &DiversifiableFullViewingKey, di: u32) -> Self {
+        let (_, addr) = vk.find_address(di.into()).unwrap();
         Self {
             sk: None,
             vk: vk.clone(),
@@ -136,8 +132,8 @@ impl SaplingAccountInfo {
 }
 
 impl OrchardAccountInfo {
-    pub fn from_vk(vk: &FullViewingKey) -> Self {
-        let addr = vk.address_at(0u64, orchard::keys::Scope::External);
+    pub fn from_vk(vk: &FullViewingKey, di: u32) -> Self {
+        let addr = vk.address_at(di as u64, orchard::keys::Scope::External);
         Self {
             sk: None,
             vk: vk.clone(),
@@ -147,14 +143,22 @@ impl OrchardAccountInfo {
 }
 
 impl AccountInfo {
-    pub fn account_type(&self) -> Result<AccountType> {
-        if let Some(phrase) = &self.seed {
-            let seed = parse_seed_phrase(&phrase)?;
-            return Ok(AccountType::Seed(seed));
-        }
+    pub fn pools(&self) -> PoolMask {
+        let t = if self.transparent.is_some() { 1 } else { 0 };
+        let s = if self.sapling.is_some() { 2 } else { 0 };
+        let o = if self.orchard.is_some() { 4 } else { 0 };
+        PoolMask(t | s | o)
+    }
+
+    pub fn keys(&self) -> Result<AccountKeys> {
         let mut ak = AccountKeys {
+            seed: self.seed.clone(),
+            aindex: self.aindex,
+            dindex: self.dindex.clone(),
+            txsk: None,
             tsk: None,
             tvk: None,
+            taddr: None,
             ssk: None,
             svk: None,
             osk: None,
@@ -162,8 +166,10 @@ impl AccountInfo {
         };
 
         if let Some(ti) = self.transparent.as_ref() {
+            ak.txsk = ti.xsk.clone();
             ak.tsk = ti.sk.clone();
-            ak.tvk = Some(ti.addr.clone());
+            ak.tvk = ti.vk.clone();
+            ak.taddr = Some(ti.addr.clone());
         }
         if let Some(si) = self.sapling.as_ref() {
             ak.ssk = si.sk.clone();
@@ -173,7 +179,7 @@ impl AccountInfo {
             ak.osk = oi.sk.clone();
             ak.ovk = Some(oi.vk.clone());
         }
-        Ok(AccountType::AccountKeys(ak))
+        Ok(ak)
     }
 
     pub fn to_backup(&self, network: &Network) -> BackupT {
@@ -182,21 +188,16 @@ impl AccountInfo {
                 encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)
             })
         });
-        let dfvk = self
-            .sapling
-            .as_ref()
-            .map(|si| si.vk.clone());
+        let tfvk = self.transparent.as_ref().and_then(|ti| ti.vk.clone());
+        let dfvk = self.sapling.as_ref().map(|si| si.vk.clone());
         let fvk = dfvk.as_ref().map(|dfvk| {
             let efvk = to_extended_full_viewing_key(&dfvk).unwrap();
-            encode_extended_full_viewing_key(
-                network.hrp_sapling_extended_full_viewing_key(),
-                &efvk,
-            )
+            encode_extended_full_viewing_key(network.hrp_sapling_extended_full_viewing_key(), &efvk)
         });
         let ofvk = self.orchard.as_ref().map(|o| o.vk.clone());
 
         let uvk = if dfvk.is_some() || ofvk.is_some() {
-            Some(UnifiedFullViewingKey::new(None, dfvk, ofvk).unwrap())
+            Some(UnifiedFullViewingKey::new(tfvk, dfvk, ofvk).unwrap())
         } else {
             None
         };
@@ -230,6 +231,7 @@ impl AccountInfo {
 
     pub fn to_view_keys(&self) -> ViewKeys {
         ViewKeys {
+            transparent: self.transparent.as_ref().and_then(|ti| ti.vk.clone()),
             sapling: self.sapling.as_ref().map(|si| si.vk.clone()),
             orchard: self.orchard.as_ref().map(|oi| oi.vk.clone()),
         }
@@ -307,6 +309,7 @@ pub struct SecretKeys {
 
 #[derive(Debug)]
 pub struct ViewKeys {
+    pub transparent: Option<AccountPubKey>,
     pub sapling: Option<DiversifiableFullViewingKey>,
     pub orchard: Option<FullViewingKey>,
 }
@@ -328,6 +331,31 @@ pub struct OptionAccountInfo {
     pub transparent: Option<TransparentAccountInfo>,
     pub sapling: Option<SaplingAccountInfo>,
     pub orchard: Option<OrchardAccountInfo>,
+}
+
+impl OptionAccountInfo {
+    pub fn to_vk(&self) -> Result<UnifiedFullViewingKey> {
+        let tvk = self.transparent.as_ref().and_then(|ti| ti.vk.clone());
+        let svk = self.sapling.as_ref().map(|si| si.vk.clone());
+        let ovk = self.orchard.as_ref().map(|oi| oi.vk.clone());
+        let uvk = UnifiedFullViewingKey::new(tvk, svk, ovk)?;
+        Ok(uvk)
+    }
+
+    pub fn to_mask(&self) -> u8 {
+        let t = if self.transparent.is_some() { 1 } else { 0 };
+        let s = if self.sapling.is_some() { 2 } else { 0 };
+        let o = if self.orchard.is_some() { 4 } else { 0 };
+        t | s | o
+    }
+
+    pub fn to_uvk(&self) -> Result<UnifiedFullViewingKey> {
+        let tvk = self.transparent.as_ref().and_then(|ti| ti.vk.clone());
+        let svk = self.sapling.as_ref().map(|si| si.vk.clone());
+        let ovk = self.orchard.as_ref().map(|oi| oi.vk.clone());
+        let uvk = UnifiedFullViewingKey::new(tvk, svk, ovk)?;
+        Ok(uvk)
+    }
 }
 
 #[derive(Debug, Clone)]

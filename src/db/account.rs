@@ -7,6 +7,7 @@ use zcash_client_backend::encoding::{
 };
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::consensus::NetworkConstants as _;
+use zcash_primitives::legacy::keys::{AccountPrivKey, AccountPubKey};
 use zcash_primitives::legacy::TransparentAddress;
 
 use crate::account::contacts::recipient_contains;
@@ -27,24 +28,22 @@ use warp_macros::c_export;
 #[c_export]
 pub fn list_accounts(coin: u8, connection: &Connection) -> Result<Vec<AccountNameT>> {
     let mut s = connection.prepare(
-        "SELECT id_account, key_type, name, birth, balance FROM accounts ORDER BY id_account",
+        "SELECT id_account, name, birth, balance FROM accounts ORDER BY id_account",
     )?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
-            r.get::<_, u8>(1)?,
-            r.get::<_, String>(2)?,
-            r.get::<_, u32>(3)?,
-            r.get::<_, u64>(4)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, u32>(2)?,
+            r.get::<_, u64>(3)?,
         ))
     })?;
     let mut accounts = vec![];
     for r in rows {
-        let (id, key_type, name, birth, balance) = r?;
+        let (id, name, birth, balance) = r?;
         accounts.push(AccountNameT {
             coin,
             id,
-            key_type,
             name: Some(name),
             birth,
             balance,
@@ -60,7 +59,7 @@ pub fn list_account_transparent_addresses(
     account: u32,
 ) -> Result<Vec<TransparentAddressT>> {
     let mut s = connection.prepare(
-        "SELECT addr_index, address FROM t_subaccounts WHERE account = ?1 ORDER BY addr_index",
+        "SELECT addr_index, address FROM t_addresses WHERE account = ?1 ORDER BY addr_index",
     )?;
     let rows = s.query_map([account], |r| {
         Ok((r.get::<_, u32>(0)?, r.get::<_, String>(1)?))
@@ -77,7 +76,7 @@ pub fn list_account_transparent_addresses(
 }
 
 pub fn list_transparent_addresses(connection: &Connection) -> Result<Vec<(u32, u32, String)>> {
-    let mut s = connection.prepare("SELECT account, addr_index, address FROM t_subaccounts ORDER BY addr_index")?;
+    let mut s = connection.prepare("SELECT account, addr_index, address FROM t_addresses ORDER BY addr_index")?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -98,8 +97,8 @@ pub fn get_account_info(
     account: u32,
 ) -> Result<AccountInfo> {
     let ai = connection.query_row(
-        "SELECT a.name, a.fingerprint, a.seed, a.aindex, a.birth,
-        t.addr_index as tidx, t.sk as tsk, t.address as taddr,
+        "SELECT a.name, a.fingerprint, a.seed, a.aindex, a.dindex, a.birth,
+        t.addr_index as tidx, t.xsk as txsk, t.sk as tsk, t.vk as tvk, t.address as taddr,
         s.sk as ssk, s.vk as svk, s.address as saddr,
         o.sk as osk, o.vk as ovk,
         a.saved
@@ -114,6 +113,7 @@ pub fn get_account_info(
             let fingerprint = r.get::<_, Vec<u8>>("fingerprint")?;
             let seed = r.get::<_, Option<String>>("seed")?;
             let aindex = r.get::<_, u32>("aindex")?;
+            let dindex = r.get::<_, Option<u32>>("dindex")?;
             let birth = r.get::<_, u32>("birth")?;
             let saved = r.get::<_, Option<bool>>("saved")?;
 
@@ -122,10 +122,14 @@ pub fn get_account_info(
                 None => None,
                 Some(taddr) => {
                     let index = r.get::<_, Option<u32>>("tidx")?;
+                    let txsk = r.get::<_, Option<Vec<u8>>>("txsk")?;
+                    let xsk = txsk.map(|txsk| AccountPrivKey::from_bytes(&*txsk).unwrap());
                     let tsk = r.get::<_, Option<String>>("tsk")?;
                     let sk = tsk.map(|tsk| import_sk_bip38(&tsk).unwrap());
+                    let tvk = r.get::<_, Option<Vec<u8>>>("tvk")?;
+                    let vk = tvk.map(|tvk| AccountPubKey::deserialize(&tvk.try_into().unwrap()).unwrap());
                     let addr = TransparentAddress::decode(network, &taddr).unwrap();
-                    let ti = TransparentAccountInfo { index, sk, addr };
+                    let ti = TransparentAccountInfo { index, xsk, sk, vk, addr };
                     Some(ti)
                 }
             };
@@ -165,7 +169,7 @@ pub fn get_account_info(
                         sk
                     });
                     let vk = FullViewingKey::from_bytes(&vk.try_into().unwrap()).unwrap();
-                    let addr = vk.address_at(0u64, Scope::External);
+                    let addr = vk.address_at(dindex.unwrap_or_default(), Scope::External);
                     let oi = OrchardAccountInfo { sk, vk, addr };
                     Some(oi)
                 }
@@ -177,6 +181,7 @@ pub fn get_account_info(
                 fingerprint,
                 seed,
                 aindex,
+                dindex,
                 birth,
                 transparent: ti,
                 sapling: si,
@@ -190,7 +195,7 @@ pub fn get_account_info(
 }
 
 pub fn list_account_tsk(connection: &Connection, account: u32) -> Result<Vec<TransparentSK>> {
-    let mut s = connection.prepare("SELECT address, sk FROM t_subaccounts WHERE account = ?1")?;
+    let mut s = connection.prepare("SELECT address, sk FROM t_addresses WHERE account = ?1")?;
     let rows = s.query_map([account], |r| {
         Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
     })?;

@@ -3336,10 +3336,9 @@ impl<'a> flatbuffers::Follow<'a> for AccountName<'a> {
 impl<'a> AccountName<'a> {
   pub const VT_COIN: flatbuffers::VOffsetT = 4;
   pub const VT_ID: flatbuffers::VOffsetT = 6;
-  pub const VT_KEY_TYPE: flatbuffers::VOffsetT = 8;
-  pub const VT_NAME: flatbuffers::VOffsetT = 10;
-  pub const VT_BIRTH: flatbuffers::VOffsetT = 12;
-  pub const VT_BALANCE: flatbuffers::VOffsetT = 14;
+  pub const VT_NAME: flatbuffers::VOffsetT = 8;
+  pub const VT_BIRTH: flatbuffers::VOffsetT = 10;
+  pub const VT_BALANCE: flatbuffers::VOffsetT = 12;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -3355,7 +3354,6 @@ impl<'a> AccountName<'a> {
     builder.add_birth(args.birth);
     if let Some(x) = args.name { builder.add_name(x); }
     builder.add_id(args.id);
-    builder.add_key_type(args.key_type);
     builder.add_coin(args.coin);
     builder.finish()
   }
@@ -3363,7 +3361,6 @@ impl<'a> AccountName<'a> {
   pub fn unpack(&self) -> AccountNameT {
     let coin = self.coin();
     let id = self.id();
-    let key_type = self.key_type();
     let name = self.name().map(|x| {
       x.to_string()
     });
@@ -3372,7 +3369,6 @@ impl<'a> AccountName<'a> {
     AccountNameT {
       coin,
       id,
-      key_type,
       name,
       birth,
       balance,
@@ -3392,13 +3388,6 @@ impl<'a> AccountName<'a> {
     // Created from valid Table for this object
     // which contains a valid value in this slot
     unsafe { self._tab.get::<u32>(AccountName::VT_ID, Some(0)).unwrap()}
-  }
-  #[inline]
-  pub fn key_type(&self) -> u8 {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<u8>(AccountName::VT_KEY_TYPE, Some(0)).unwrap()}
   }
   #[inline]
   pub fn name(&self) -> Option<&'a str> {
@@ -3432,7 +3421,6 @@ impl flatbuffers::Verifiable for AccountName<'_> {
     v.visit_table(pos)?
      .visit_field::<u8>("coin", Self::VT_COIN, false)?
      .visit_field::<u32>("id", Self::VT_ID, false)?
-     .visit_field::<u8>("key_type", Self::VT_KEY_TYPE, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
      .visit_field::<u32>("birth", Self::VT_BIRTH, false)?
      .visit_field::<u64>("balance", Self::VT_BALANCE, false)?
@@ -3443,7 +3431,6 @@ impl flatbuffers::Verifiable for AccountName<'_> {
 pub struct AccountNameArgs<'a> {
     pub coin: u8,
     pub id: u32,
-    pub key_type: u8,
     pub name: Option<flatbuffers::WIPOffset<&'a str>>,
     pub birth: u32,
     pub balance: u64,
@@ -3454,7 +3441,6 @@ impl<'a> Default for AccountNameArgs<'a> {
     AccountNameArgs {
       coin: 0,
       id: 0,
-      key_type: 0,
       name: None,
       birth: 0,
       balance: 0,
@@ -3474,10 +3460,6 @@ impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> AccountNameBuilder<'a, 'b, A> {
   #[inline]
   pub fn add_id(&mut self, id: u32) {
     self.fbb_.push_slot::<u32>(AccountName::VT_ID, id, 0);
-  }
-  #[inline]
-  pub fn add_key_type(&mut self, key_type: u8) {
-    self.fbb_.push_slot::<u8>(AccountName::VT_KEY_TYPE, key_type, 0);
   }
   #[inline]
   pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b  str>) {
@@ -3511,7 +3493,6 @@ impl core::fmt::Debug for AccountName<'_> {
     let mut ds = f.debug_struct("AccountName");
       ds.field("coin", &self.coin());
       ds.field("id", &self.id());
-      ds.field("key_type", &self.key_type());
       ds.field("name", &self.name());
       ds.field("birth", &self.birth());
       ds.field("balance", &self.balance());
@@ -3523,7 +3504,6 @@ impl core::fmt::Debug for AccountName<'_> {
 pub struct AccountNameT {
   pub coin: u8,
   pub id: u32,
-  pub key_type: u8,
   pub name: Option<String>,
   pub birth: u32,
   pub balance: u64,
@@ -3533,7 +3513,6 @@ impl Default for AccountNameT {
     Self {
       coin: 0,
       id: 0,
-      key_type: 0,
       name: None,
       birth: 0,
       balance: 0,
@@ -3547,7 +3526,6 @@ impl AccountNameT {
   ) -> flatbuffers::WIPOffset<AccountName<'b>> {
     let coin = self.coin;
     let id = self.id;
-    let key_type = self.key_type;
     let name = self.name.as_ref().map(|x|{
       _fbb.create_string(x)
     });
@@ -3556,7 +3534,6 @@ impl AccountNameT {
     AccountName::create(_fbb, &AccountNameArgs{
       coin,
       id,
-      key_type,
       name,
       birth,
       balance,

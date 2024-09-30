@@ -13,7 +13,6 @@ use crate::{
         notes::{list_received_notes, list_utxos},
     },
     fb_unwrap,
-    keys::AccountKeys,
     network::Network,
     types::{CheckpointHeight, PoolMask},
     utils::{pay::COST_PER_ACTION, ua::single_receiver_address},
@@ -108,28 +107,7 @@ impl PaymentBuilder {
     }
 
     pub fn add_account_funds(&mut self, connection: &Connection) -> Result<()> {
-        let account_pools = match self.ai.account_type()? {
-            crate::types::AccountType::Seed { .. } => 7, // T + S + O
-            crate::types::AccountType::AccountKeys(AccountKeys {
-                tvk,
-                svk,
-                ovk,
-                ..
-            }) => {
-                let mut pools = 0;
-                if tvk.is_some() {
-                    pools |= 1;
-                }
-                if svk.is_some() {
-                    pools |= 2;
-                }
-                if ovk.is_some() {
-                    pools |= 4;
-                }
-                pools
-            }
-        } as u8;
-        let account_pools = account_pools & self.src_pools.0; // exclude pools
+        let account_pools = self.ai.pools().0 & self.src_pools.0; // exclude pools
         self.account_pools = PoolMask(account_pools);
 
         let has_tex = self.outputs.iter().any(|o| {

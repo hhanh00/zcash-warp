@@ -116,7 +116,6 @@ table PaymentRequest {
 table AccountName {
   coin: uint8;
   id: uint32;
-  key_type: uint8;
   name: string;
   birth: uint32;
   balance: uint64;

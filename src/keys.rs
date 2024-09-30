@@ -1,6 +1,6 @@
 use anyhow::Result;
 use base58check::{FromBase58Check, ToBase58Check};
-use bip39::{Mnemonic, Seed};
+use bip39::Mnemonic;
 use blake2b_simd::Params;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use prost::bytes::BufMut as _;
@@ -11,11 +11,14 @@ use sapling_crypto::zip32::{
 };
 use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
-use tiny_hderive::bip32::ExtendedPrivKey;
+use zcash_keys::keys::{UnifiedAddressRequest, UnifiedSpendingKey};
+use zcash_primitives::legacy::keys::{
+    AccountPrivKey, AccountPubKey, IncomingViewingKey as _, NonHardenedChildIndex, TransparentKeyScope
+};
 use zcash_primitives::legacy::TransparentAddress;
-use zcash_protocol::consensus::NetworkConstants as _;
-use zip32::ChildIndex;
+use zip32::{AccountId, DiversifierIndex};
 
+use crate::db::account_manager::parse_seed_phrase;
 use crate::types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 
 use crate::{
@@ -28,8 +31,13 @@ use warp_macros::c_export;
 
 #[derive(Debug)]
 pub struct AccountKeys {
+    pub seed: Option<String>,
+    pub aindex: u32,
+    pub dindex: Option<u32>,
+    pub txsk: Option<AccountPrivKey>,
     pub tsk: Option<SecretKey>,
-    pub tvk: Option<TransparentAddress>,
+    pub tvk: Option<AccountPubKey>,
+    pub taddr: Option<TransparentAddress>,
     pub ssk: Option<ExtendedSpendingKey>,
     pub svk: Option<DiversifiableFullViewingKey>,
     pub osk: Option<SpendingKey>,
@@ -39,8 +47,44 @@ pub struct AccountKeys {
 pub const KEY_FINGERPRINT_PERSO: &[u8] = b"Acnt_Fingerprint";
 
 impl AccountKeys {
+    pub fn from_seed(network: &Network, phrase: &str, acc_index: u32) -> Result<Self> {
+        let seed = parse_seed_phrase(phrase)?;
+        let usk = UnifiedSpendingKey::from_seed(
+            network,
+            seed.as_bytes(),
+            AccountId::try_from(acc_index).unwrap(),
+        )?;
+        let uvk = usk.to_unified_full_viewing_key();
+        let (_, di) = usk.default_address(UnifiedAddressRequest::all().unwrap());
+        let di: u32 = di.try_into().unwrap();
+        let addr_index = NonHardenedChildIndex::from_index(di).unwrap();
+        let txsk = usk.transparent().clone();
+        let tsk = usk
+            .transparent()
+            .derive_secret_key(TransparentKeyScope::EXTERNAL, addr_index)
+            .unwrap();
+        let tvk = uvk.transparent().cloned();
+        let taddr = tvk
+            .as_ref()
+            .map(|tvk| TransparentAccountInfo::derive_address(tvk, di));
+
+        Ok(AccountKeys {
+            seed: Some(phrase.to_string()),
+            aindex: acc_index,
+            dindex: Some(di),
+            txsk: Some(txsk),
+            tsk: Some(tsk),
+            tvk,
+            taddr,
+            ssk: Some(usk.sapling().clone()),
+            svk: uvk.sapling().cloned(),
+            osk: Some(usk.orchard().clone()),
+            ovk: uvk.orchard().cloned(),
+        })
+    }
+
     pub fn to_hash(&self) -> Result<Vec<u8>> {
-        let tvk = self.tvk.map(|tvk: TransparentAddress| tvk.script().0).unwrap_or_default();
+        let taddr = self.taddr.map(|tvk: TransparentAddress| tvk.script().0);
         let svk = self
             .svk
             .as_ref()
@@ -55,11 +99,95 @@ impl AccountKeys {
             .hash_length(32)
             .personal(KEY_FINGERPRINT_PERSO)
             .to_state()
-            .update(&tvk)
+            .update(&taddr.unwrap_or_default())
             .update(&svk)
             .update(&ovk)
             .finalize();
         Ok(key.as_bytes().to_vec())
+    }
+
+    pub fn to_transparent(&self) -> Option<TransparentAccountInfo> {
+        if let Some(taddr) = self.taddr.as_ref() {
+            Some(TransparentAccountInfo {
+                index: self.dindex,
+                xsk: self.txsk.clone(),
+                sk: self.tsk.clone(),
+                vk: self.tvk.clone(),
+                addr: taddr.clone(),
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn to_sapling(&self) -> Option<SaplingAccountInfo> {
+        if let Some(svk) = self.svk.as_ref() {
+            let di = DiversifierIndex::try_from(self.dindex.unwrap()).unwrap();
+            let addr = svk.address(di).unwrap();
+            Some(SaplingAccountInfo {
+                sk: self.ssk.clone(),
+                vk: svk.clone(),
+                addr,
+            })
+        } else {
+            None
+        }
+    }
+
+    pub fn to_orchard(&self) -> Option<OrchardAccountInfo> {
+        if let Some(ovk) = self.ovk.as_ref() {
+            let di = DiversifierIndex::try_from(self.dindex.unwrap()).unwrap();
+            let addr = ovk.address_at(di, Scope::External);
+            Some(OrchardAccountInfo {
+                sk: self.osk.clone(),
+                vk: ovk.clone(),
+                addr,
+            })
+        } else {
+            None
+        }
+    }
+
+    // pub fn find(&self, start: u32) -> Result<AccountKeys> {
+    //     let di = DiversifierIndex::try_from(start).unwrap();
+    //     let di = if let Some(svk) = self.svk.as_ref() {
+    //         let (di, _) = svk.find_address(di).unwrap();
+    //         di
+    //     } else {
+    //         di
+    //     };
+    //     self.at_index(di)
+    // }
+
+    // pub fn at_index(&self, di: DiversifierIndex) -> Result<Self> {
+    //     let dindex: u32 = di.try_into().unwrap();
+    //     let taddr = self
+    //         .tvk
+    //         .as_ref()
+    //         .map(|tvk| TransparentAccountInfo::derive_address(tvk, dindex));
+    //     Ok(AccountKeys {
+    //         seed: self.seed.clone(),
+    //         aindex: self.aindex,
+    //         dindex: Some(dindex),
+    //         txsk: self.txsk.clone(),
+    //         tsk: self.tsk.clone(),
+    //         tvk: self.tvk.clone(),
+    //         taddr,
+    //         ssk: self.ssk.clone(),
+    //         svk: self.svk.clone(),
+    //         osk: self.osk.clone(),
+    //         ovk: self.ovk.clone(),
+    //     })
+    // }
+
+    fn _check_invariants(&self) {
+        // if seed -> di, tsk, tvk, taddr, ssk, svk, osk, ovk
+        // if ssk -> di, ssk, svk
+        // if svk -> di, svk
+        // if usk -> same as seed
+        // if uvk -> di, tvk, taddr, svk, ovk
+        // if tsk -> tsk, taddr (NO di)
+        // if taddr -> taddr (NO di)
     }
 }
 
@@ -91,37 +219,6 @@ pub fn import_sk_bip38(key: &str) -> Result<SecretKey> {
     Ok(secret_key)
 }
 
-pub fn derive_zip32(network: &Network, seed: &Seed, acc_index: u32) -> SaplingAccountInfo {
-    let master = ExtendedSpendingKey::master(seed.as_bytes());
-    let path = [
-        ChildIndex::hardened(32),
-        ChildIndex::hardened(network.coin_type()),
-        ChildIndex::hardened(acc_index),
-    ];
-    let sk = ExtendedSpendingKey::from_path(&master, &path);
-    SaplingAccountInfo::from_sk(&sk)
-}
-
-pub fn derive_bip32(
-    network: &Network,
-    seed: &Seed,
-    acc_index: u32,
-    change: u32,
-    addr_index: u32,
-    compressed: bool,
-) -> TransparentAccountInfo {
-    let bip44_path = format!(
-        "m/44'/{}'/{}'/{}/{}",
-        network.coin_type(),
-        acc_index,
-        change,
-        addr_index
-    );
-    let ext = ExtendedPrivKey::derive(seed.as_bytes(), &*bip44_path).unwrap();
-    let sk = SecretKey::from_slice(&ext.secret()).unwrap();
-    TransparentAccountInfo::from_secret_key(&sk, compressed)
-}
-
 impl TransparentAccountInfo {
     pub fn from_secret_key(sk: &SecretKey, compressed: bool) -> Self {
         let secp = Secp256k1::<All>::new();
@@ -135,26 +232,19 @@ impl TransparentAccountInfo {
         let addr = TransparentAddress::PublicKeyHash(pub_key.into());
         TransparentAccountInfo {
             index: None,
+            xsk: None,
             sk: Some(sk.clone()),
+            vk: None,
             addr,
         }
     }
-}
 
-pub fn derive_orchard_zip32(network: &Network, seed: &Seed, acc_index: u32) -> OrchardAccountInfo {
-    let sk = SpendingKey::from_zip32_seed(
-        seed.as_bytes(),
-        network.coin_type(),
-        acc_index.try_into().unwrap(),
-    )
-    .unwrap();
-    let vk = FullViewingKey::from(&sk);
-    let addr = vk.address_at(0u64, Scope::External);
-
-    OrchardAccountInfo {
-        sk: Some(sk),
-        vk,
-        addr,
+    pub fn derive_address(tvk: &AccountPubKey, addr_index: u32) -> TransparentAddress {
+        let addr_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
+        tvk.derive_external_ivk()
+            .unwrap()
+            .derive_address(addr_index)
+            .unwrap()
     }
 }
 

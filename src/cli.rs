@@ -4,11 +4,13 @@ use std::{
 };
 
 use crate::{
+    account::address::get_diversified_address,
     data::fb::{TransactionBytesT, ZipDbConfigT},
-    db::{account::list_account_transparent_addresses, notes::list_utxos},
+    db::{account::{get_account_info, list_account_transparent_addresses}, notes::list_utxos},
     fb_unwrap,
     network::{regtest, Network},
     pay::sweep::scan_transparent_addresses,
+    types::PoolMask,
     utils::chain::reset_chain,
 };
 use anyhow::Result;
@@ -231,6 +233,18 @@ pub enum CheckpointCommand {
 }
 
 #[derive(Parser, Clone, Debug)]
+pub struct Keys {
+    #[structopt(subcommand)]
+    command: KeysCommand,
+}
+
+#[derive(Subcommand, Clone, Debug)]
+pub enum KeysCommand {
+    ViewingKey { account: u32, pools: u8 },
+    GetDiversifiedAddress { account: u32, index: u32, pools: u8 },
+}
+
+#[derive(Parser, Clone, Debug)]
 pub struct QRData {
     #[structopt(subcommand)]
     command: QRDataCommand,
@@ -251,6 +265,7 @@ pub enum Command {
     Message(Message),
     Note(Note),
     Database(Database),
+    Keys(Keys),
     QRData(QRData),
     Checkpoint(Checkpoint),
     CreateDatabase,
@@ -344,7 +359,11 @@ fn display_tx(
 }
 
 #[tokio::main]
-async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut TransactionBytesT) -> Result<()> {
+async fn process_command(
+    command: Command,
+    zec: &mut CoinDef,
+    txbytes: &mut TransactionBytesT,
+) -> Result<()> {
     let network = &zec.network;
     match command {
         Command::CreateDatabase => {
@@ -555,6 +574,26 @@ async fn process_command(command: Command, zec: &mut CoinDef, txbytes: &mut Tran
             DatabaseCommand::GenerateKeys => {
                 let keys = generate_zip_database_keys()?;
                 println!("{keys:?}");
+            }
+        },
+        Command::Keys(keys_command) => match keys_command.command {
+            KeysCommand::ViewingKey { account, pools } => {
+                let connection = zec.connection()?;
+                let ai = get_account_info(network, &connection, account)?;
+                let ai = ai.select_pools(PoolMask(pools));
+                let uvk = ai.to_vk()?;
+                let uvk = uvk.encode(network);
+                println!("{uvk}");
+            }
+            KeysCommand::GetDiversifiedAddress {
+                account,
+                index,
+                pools,
+            } => {
+                let connection = zec.connection()?;
+                let address =
+                    get_diversified_address(network, &connection, account, index, PoolMask(pools))?;
+                println!("{address}");
             }
         },
         Command::QRData(qr_command) => match qr_command.command {

@@ -157,7 +157,6 @@ struct CResult_u8 c_configure(uint8_t coin, struct CParam config);
 struct CResult______u8 c_derive_zip32_keys(uint8_t coin,
                                            uint32_t account,
                                            uint32_t acc_index,
-                                           uint32_t change,
                                            uint32_t addr_index);
 
 struct CResult_u8 c_check_db_password(char *path, char *password);
