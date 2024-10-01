@@ -9,7 +9,9 @@ use tonic::transport::{Certificate, ClientTlsConfig};
 
 use crate::network::{regtest, Network};
 
-use crate::{data::fb::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client};
+use crate::{
+    data::fb::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client,
+};
 
 type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 

@@ -4,7 +4,12 @@ use rusqlite::Connection;
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    data::fb::{RecipientT, TransactionBytesT}, db::{account::get_account_info, chain::snap_to_checkpoint}, network::Network, pay::PaymentBuilder, warp::legacy::CommitmentTreeFrontier, EXPIRATION_HEIGHT_DELTA
+    data::fb::{RecipientT, TransactionBytesT},
+    db::{account::get_account_info, chain::snap_to_checkpoint},
+    network::Network,
+    pay::PaymentBuilder,
+    warp::legacy::CommitmentTreeFrontier,
+    EXPIRATION_HEIGHT_DELTA,
 };
 
 pub fn transfer_pools<R: RngCore + CryptoRng>(
@@ -58,11 +63,6 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
     builder.set_use_change(true)?;
     let utx = builder.prepare()?;
     let utx = builder.finalize(utx, None)?;
-    let tx = utx.build(
-        network,
-        connection,
-        height + EXPIRATION_HEIGHT_DELTA,
-        rng,
-    )?;
+    let tx = utx.build(network, connection, height + EXPIRATION_HEIGHT_DELTA, rng)?;
     Ok(tx)
 }

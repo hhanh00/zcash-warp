@@ -2,6 +2,7 @@ use jubjub::Fr;
 use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
+use crate::network::Network;
 use crate::{
     db::{
         account::{get_account_info, list_accounts},
@@ -16,7 +17,6 @@ use anyhow::Result;
 use rayon::prelude::*;
 use sapling_crypto::{value::NoteValue, Note, PaymentAddress, Rseed};
 use tracing::info;
-use crate::network::Network;
 
 use crate::warp::{hasher::SaplingHasher, Edge, Hasher, MERKLE_DEPTH};
 

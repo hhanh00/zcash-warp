@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use crate::network::Network;
 use anyhow::Result;
 use orchard::Address;
 use prost::bytes::{Buf as _, BufMut as _};
@@ -11,7 +12,6 @@ use zcash_primitives::{
     legacy::TransparentAddress,
     memo::{Memo, MemoBytes},
 };
-use crate::network::Network;
 
 use crate::{
     data::fb::{ContactCardT, PaymentRequestT, RecipientT},
@@ -33,6 +33,7 @@ use warp_macros::c_export;
 
 #[c_export]
 pub fn add_contact(
+    network: &Network,
     connection: &Connection,
     account: u32,
     name: &str,
@@ -46,7 +47,7 @@ pub fn add_contact(
         address: Some(address.to_string()),
         saved,
     };
-    store_contact(connection, &contact)?;
+    store_contact(network, connection, &contact)?;
     Ok(())
 }
 
@@ -116,15 +117,7 @@ pub fn commit_unsaved_contacts(
         height: cp_height.0,
         expiration: cp_height.0 + 50,
     };
-    let utx = make_payment(
-        network,
-        connection,
-        account,
-        &payment,
-        s,
-        o,
-        redirect,
-    )?;
+    let utx = make_payment(network, connection, account, &payment, s, o, redirect)?;
     Ok(utx)
 }
 

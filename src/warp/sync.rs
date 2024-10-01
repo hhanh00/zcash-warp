@@ -1,14 +1,24 @@
 use crate::{
-    coin::{connect_lwd, CoinDef, COINS}, db::{
+    coin::{connect_lwd, CoinDef, COINS},
+    db::{
         chain::{get_block_header, get_sync_height, rewind_checkpoint, store_block},
         notes::{
-            mark_shielded_spent, mark_transparent_spent, store_received_note, store_utxo, update_account_balances, update_tx_timestamp
+            mark_shielded_spent, mark_transparent_spent, store_received_note, store_utxo,
+            update_account_balances, update_tx_timestamp,
         },
         tx::add_tx_value,
-    }, fb_unwrap, ffi::{map_result, CResult}, lwd::{get_compact_block_range, get_transparent, get_tree_state}, txdetails::CompressedMemo, types::CheckpointHeight, utils::chain::{get_activation_height, reset_chain}, warp::{
+    },
+    fb_unwrap,
+    ffi::{map_result, CResult},
+    lwd::{get_compact_block_range, get_transparent, get_tree_state},
+    txdetails::CompressedMemo,
+    types::CheckpointHeight,
+    utils::chain::{get_activation_height, reset_chain},
+    warp::{
         hasher::{OrchardHasher, SaplingHasher},
         BlockHeader,
-    }, Hash
+    },
+    Hash,
 };
 use anyhow::Result;
 use header::BlockHeaderStore;
@@ -50,6 +60,7 @@ pub struct ReceivedTx {
 pub struct ExtendedReceivedTx {
     pub rtx: ReceivedTx,
     pub address: Option<String>,
+    pub contact: Option<String>,
     pub memo: Option<String>,
 }
 
@@ -264,7 +275,13 @@ pub async extern "C" fn warp_synchronize(coin: u8, end_height: u32) -> CResult<u
         if start_height == 0 {
             let activation_height = get_activation_height(&coin.network)?;
             let mut client = coin.connect_lwd().await?;
-            reset_chain(&coin.network, &mut *connection, &mut client, activation_height).await?;
+            reset_chain(
+                &coin.network,
+                &mut *connection,
+                &mut client,
+                activation_height,
+            )
+            .await?;
             anyhow::bail!("no sync data. Have you run reset?");
         }
         if start_height < end_height {

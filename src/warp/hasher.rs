@@ -18,8 +18,13 @@ impl Hasher for SaplingHasher {
     fn parallel_combine(&self, depth: u8, layer: &[Hash], pairs: usize) -> Vec<Hash> {
         super::sapling::parallel_hash(depth, layer, pairs)
     }
-    
-    fn parallel_combine_opt(&self, depth: u8, layer: &[Option<Hash>], pairs: usize) -> Vec<Option<Hash>> {
+
+    fn parallel_combine_opt(
+        &self,
+        depth: u8,
+        layer: &[Option<Hash>],
+        pairs: usize,
+    ) -> Vec<Option<Hash>> {
         super::sapling::parallel_hash_opt(depth, layer, pairs)
     }
 }

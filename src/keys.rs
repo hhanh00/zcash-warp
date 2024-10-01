@@ -13,7 +13,8 @@ use secp256k1::{All, PublicKey, Secp256k1, SecretKey};
 use sha2::Sha256;
 use zcash_keys::keys::{UnifiedAddressRequest, UnifiedSpendingKey};
 use zcash_primitives::legacy::keys::{
-    AccountPrivKey, AccountPubKey, IncomingViewingKey as _, NonHardenedChildIndex, TransparentKeyScope
+    AccountPrivKey, AccountPubKey, IncomingViewingKey as _, NonHardenedChildIndex,
+    TransparentKeyScope,
 };
 use zcash_primitives::legacy::TransparentAddress;
 use zip32::{AccountId, DiversifierIndex};

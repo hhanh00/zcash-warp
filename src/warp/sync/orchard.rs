@@ -7,6 +7,7 @@ use orchard::{
 use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
+use crate::network::Network;
 use crate::{
     db::{
         account::{get_account_info, list_accounts},
@@ -20,7 +21,6 @@ use crate::{
 use anyhow::Result;
 use rayon::prelude::*;
 use tracing::info;
-use crate::network::Network;
 
 use crate::warp::{Edge, Hasher, MERKLE_DEPTH};
 

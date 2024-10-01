@@ -16,9 +16,7 @@ use zcash_primitives::{
 
 use crate::{
     data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
-    keys::{
-        export_sk_bip38, import_sk_bip38, to_extended_full_viewing_key, AccountKeys,
-    },
+    keys::{export_sk_bip38, import_sk_bip38, to_extended_full_viewing_key, AccountKeys},
     network::Network,
     types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
     utils::keys::find_address_index,
@@ -174,6 +172,7 @@ pub fn create_new_account(
     )?;
     if let Some(ti) = ak.to_transparent() {
         create_transparent_account(network, connection, account, &ti)?;
+        create_transparent_address(network, connection, account, 0, &ti)?;
         create_transparent_address(network, connection, account, dindex, &ti)?;
     }
     if let Some(si) = ak.to_sapling() {
@@ -306,15 +305,18 @@ pub fn new_transparent_address(
     account: u32,
 ) -> Result<()> {
     let ai = get_account_info(network, connection, account)?;
-    ai.transparent.as_ref().map(|ti| {
-        let addr_index = connection.query_row(
-            "SELECT MAX(addr_index) FROM t_addresses WHERE account = ?1",
-            [account],
-            |r| r.get::<_, u32>(0),
-        )? + 1;
-        create_transparent_address(network, connection, account, addr_index, &ti)?;
-        Ok::<_, anyhow::Error>(())
-    }).transpose()?;
+    ai.transparent
+        .as_ref()
+        .map(|ti| {
+            let addr_index = connection.query_row(
+                "SELECT MAX(addr_index) FROM t_addresses WHERE account = ?1",
+                [account],
+                |r| r.get::<_, u32>(0),
+            )? + 1;
+            create_transparent_address(network, connection, account, addr_index, &ti)?;
+            Ok::<_, anyhow::Error>(())
+        })
+        .transpose()?;
     Ok(())
 }
 

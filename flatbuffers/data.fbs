@@ -84,6 +84,7 @@ table ShieldedMessage {
   height: uint32;
   timestamp: uint32;
   incoming: bool;
+  contact: string;
   nout: uint32;
   memo: UserMemo;
   read: bool;

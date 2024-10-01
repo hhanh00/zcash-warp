@@ -1,20 +1,26 @@
+use crate::{
+    data::fb::{Config, ConfigT},
+    Hash,
+};
 use anyhow::Result;
-use crate::{data::fb::{Config, ConfigT}, Hash};
 use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
 
+use crate::{
+    coin::COINS,
+    ffi::{map_result, CParam, CResult},
+};
 use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, CParam, CResult}};
 
-pub mod keys;
-pub mod db;
-pub mod ua;
-pub mod uri;
 pub mod chain;
-pub mod messages;
-pub mod zip_db;
 pub mod data_split;
+pub mod db;
+pub mod keys;
+pub mod messages;
 pub mod pay;
 pub mod tx;
+pub mod ua;
+pub mod uri;
+pub mod zip_db;
 
 pub fn init_tracing() {
     let _ = tracing_subscriber::registry()
@@ -31,8 +37,9 @@ pub extern "C" fn c_setup() {
 
 #[macro_export]
 macro_rules! fb_unwrap {
-    ($v: expr) => {$v.as_ref().unwrap()
-    }
+    ($v: expr) => {
+        $v.as_ref().unwrap()
+    };
 }
 
 #[macro_export]

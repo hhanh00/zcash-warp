@@ -367,7 +367,11 @@ impl PaymentBuilder {
         Ok(transaction)
     }
 
-    pub fn finalize(self, mut utx: AdjustableUnsignedTransaction, redirect: Option<String>) -> Result<UnsignedTransaction> {
+    pub fn finalize(
+        self,
+        mut utx: AdjustableUnsignedTransaction,
+        redirect: Option<String>,
+    ) -> Result<UnsignedTransaction> {
         tracing::debug!("{:?}", utx.tx_notes);
         let change = utx.change;
         if change < 0 {

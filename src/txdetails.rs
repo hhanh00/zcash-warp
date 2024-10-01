@@ -15,7 +15,6 @@ use zcash_primitives::{
 };
 
 use crate::{
-    network::Network,
     account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
     coin::connect_lwd,
     data::fb::{
@@ -29,6 +28,7 @@ use crate::{
         tx::{get_tx, list_new_txids, store_tx_details, update_tx_primary_address_memo},
     },
     lwd::{get_transaction, get_txin_coins},
+    network::Network,
     types::{Addresses, PoolMask},
     utils::ua::ua_of_orchard,
     warp::{
@@ -310,7 +310,7 @@ pub async fn retrieve_tx_details(
         store_tx_details(&connection.lock(), id_tx, account, height, &txid, &tx_bin)?;
         let (tx_address, tx_memo) =
             get_tx_primary_address_memo(network, &account_addrs, &rtx, &txd)?;
-        update_tx_primary_address_memo(&connection.lock(), id_tx, tx_address, tx_memo)?;
+        update_tx_primary_address_memo(network, &connection.lock(), id_tx, tx_address, tx_memo)?;
         decode_tx_details(network, &connection.lock(), account, id_tx, &txd)?;
     }
     Ok(())
@@ -363,7 +363,8 @@ pub fn decode_tx_details(
         ) = output
         {
             let note_address = if orchard {
-                ua_of_orchard(&Address::from_raw_address_bytes(&fnote.note.address).unwrap()).encode(network)
+                ua_of_orchard(&Address::from_raw_address_bytes(&fnote.note.address).unwrap())
+                    .encode(network)
             } else {
                 let a = PaymentAddress::from_bytes(&fnote.note.address).unwrap();
                 a.encode(network)
@@ -377,6 +378,7 @@ pub fn decode_tx_details(
 
             let memo = Memo::from_bytes(&fnote.memo.0)?;
             visit_memo(
+                network,
                 connection,
                 account,
                 id_tx,
@@ -393,12 +395,13 @@ pub fn decode_tx_details(
     }
     let contacts = contact_decoder.finalize()?;
     for c in contacts.iter() {
-        add_contact(connection, account, &c.name, &c.address, true)?;
+        add_contact(network, connection, account, &c.name, &c.address, true)?;
     }
     Ok(())
 }
 
 fn visit_memo(
+    network: &Network,
     connection: &Connection,
     account: u32,
     id_tx: u32,
@@ -424,7 +427,7 @@ fn visit_memo(
                 recipient,
                 &*text,
             )?;
-            store_message(connection, account, &tx, nout, &msg)?;
+            store_message(network, connection, account, &tx, nout, &msg)?;
         }
         _ => {}
     }
@@ -454,6 +457,7 @@ fn parse_memo_text(
         timestamp,
         incoming,
         memo: Some(Box::new(memo)),
+        contact: None,
         read: false,
     };
     Ok(msg)
@@ -506,7 +510,10 @@ pub fn get_tx_primary_address_memo(
             if let Some(oaddr) = addrs.orchard.as_ref() {
                 for oout in txd.oouts.iter() {
                     if let Some(oout) = &oout.note {
-                        let oout_addr = ua_of_orchard(&Address::from_raw_address_bytes(&oout.note.address).unwrap()).encode(network);
+                        let oout_addr = ua_of_orchard(
+                            &Address::from_raw_address_bytes(&oout.note.address).unwrap(),
+                        )
+                        .encode(network);
                         if &oout_addr != oaddr {
                             address = Some(oout_addr.clone());
                             let m = Memo::from_bytes(&oout.memo.0)?;
@@ -590,7 +597,10 @@ impl TransactionDetails {
                 let note = sin.note.as_ref();
                 InputShieldedT {
                     nf: Some(sin.nf.to_vec()),
-                    address: note.map(|n| ua_of_orchard(&Address::from_raw_address_bytes(&n.address).unwrap()).encode(network)),
+                    address: note.map(|n| {
+                        ua_of_orchard(&Address::from_raw_address_bytes(&n.address).unwrap())
+                            .encode(network)
+                    }),
                     value: note.map(|n| n.value).unwrap_or_default(),
                     rcm: note.map(|n| n.rcm.to_vec()),
                     rho: note.and_then(|n| n.rho.map(|r| r.to_vec())),
@@ -605,7 +615,10 @@ impl TransactionDetails {
                 OutputShieldedT {
                     cmx: Some(sout.cmx.to_vec()),
                     incoming: note.map(|n| n.incoming).unwrap_or_default(),
-                    address: note.map(|n| ua_of_orchard(&Address::from_raw_address_bytes(&n.note.address).unwrap()).encode(network)),
+                    address: note.map(|n| {
+                        ua_of_orchard(&Address::from_raw_address_bytes(&n.note.address).unwrap())
+                            .encode(network)
+                    }),
                     value: note.map(|n| n.note.value).unwrap_or_default(),
                     rcm: note.map(|n| n.note.rcm.to_vec()),
                     rho: note.map(|n| n.note.rho.map(|r| r.to_vec()).unwrap_or_default()),

@@ -102,7 +102,11 @@ pub fn reset_scan(
     Ok(height)
 }
 
-pub async fn rewind_checkpoint(network: &Network, connection: &mut Connection, client: &mut Client) -> Result<()> {
+pub async fn rewind_checkpoint(
+    network: &Network,
+    connection: &mut Connection,
+    client: &mut Client,
+) -> Result<()> {
     let checkpoint = get_sync_height(connection)?;
     if checkpoint > 0 {
         rewind(network, connection, client, checkpoint - 1).await?;

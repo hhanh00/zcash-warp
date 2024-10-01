@@ -6,11 +6,18 @@ use crate::{
     db::{
         account_manager::get_min_birth,
         chain::{store_block, truncate_scan},
-    }, lwd::{get_compact_block, get_last_height}, network::Network, warp::BlockHeader, Client
+    },
+    lwd::{get_compact_block, get_last_height},
+    network::Network,
+    warp::BlockHeader,
+    Client,
 };
 
+use crate::{
+    coin::COINS,
+    ffi::{map_result, CResult},
+};
 use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, CResult}};
 
 #[c_export]
 pub async fn get_activation_date(network: &Network, client: &mut Client) -> Result<u32> {
@@ -57,7 +64,11 @@ pub fn get_activation_height(network: &Network) -> Result<u32> {
 }
 
 #[c_export]
-pub async fn get_time_by_height(network: &Network, client: &mut Client, height: u32) -> Result<u32> {
+pub async fn get_time_by_height(
+    network: &Network,
+    client: &mut Client,
+    height: u32,
+) -> Result<u32> {
     let ah = network.activation_height(NetworkUpgrade::Sapling).unwrap();
     let height = height.max(u32::from(ah) + 1);
 

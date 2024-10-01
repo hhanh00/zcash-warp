@@ -1,7 +1,7 @@
 use anyhow::Result;
 use raptorq::{Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation};
 
-use crate::data::fb::{PacketT, PacketsT, Packets};
+use crate::data::fb::{PacketT, Packets, PacketsT};
 use crate::fb_unwrap;
 use crate::ffi::CParam;
 use crate::{

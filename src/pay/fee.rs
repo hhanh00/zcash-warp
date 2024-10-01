@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use crate::utils::pay::COST_PER_ACTION;
 
@@ -26,7 +26,7 @@ impl FeeManager {
         let s = if self.num_inputs[1] > 0 || self.num_outputs[1] > 0 {
             // if any sapling, # bundle outputs = max(2, # outputs)
             // if any input, # bundle inputs = max(1, # inputs)
-            // # logical sapling = max(# bundle in, bundle out) = 
+            // # logical sapling = max(# bundle in, bundle out) =
             // max(2, # inputs, # outputs)
             // I O -> BI BO -> L
             // 0 0 -> 0  0  -> 0
@@ -46,10 +46,14 @@ impl FeeManager {
             0
         };
         let f = t + s + o;
-        tracing::debug!("fee: {}:{} {}:{} {}:{}", 
-            self.num_inputs[0], self.num_outputs[0],
-            self.num_inputs[1], self.num_outputs[1],
-            self.num_inputs[2], self.num_outputs[2],
+        tracing::debug!(
+            "fee: {}:{} {}:{} {}:{}",
+            self.num_inputs[0],
+            self.num_outputs[0],
+            self.num_inputs[1],
+            self.num_outputs[1],
+            self.num_inputs[2],
+            self.num_outputs[2],
         );
         tracing::debug!("fee: {t} {s} {o} -> {f}");
         f as u64 * COST_PER_ACTION

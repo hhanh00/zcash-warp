@@ -200,4 +200,3 @@ pub async fn purge_blocks(
 
     Ok(())
 }
-

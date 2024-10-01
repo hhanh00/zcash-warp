@@ -2,7 +2,8 @@ use std::time::Instant;
 
 use anyhow::Result;
 use rpc::{
-    BlockId, BlockRange, CompactBlock, Empty, GetAddressUtxosArg, RawTransaction, TransparentAddressBlockFilter, TreeState, TxFilter
+    BlockId, BlockRange, CompactBlock, Empty, GetAddressUtxosArg, RawTransaction,
+    TransparentAddressBlockFilter, TreeState, TxFilter,
 };
 use tokio::runtime::Handle;
 use tonic::{Request, Streaming};
@@ -14,12 +15,20 @@ use zcash_primitives::{
 };
 
 use crate::{
-    coin::connect_lwd, data::fb::TransactionBytesT, network::Network, types::CheckpointHeight, warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2, UTXO}, Client
+    coin::connect_lwd,
+    data::fb::TransactionBytesT,
+    network::Network,
+    types::CheckpointHeight,
+    warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2, UTXO},
+    Client,
 };
 
-use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result, CResult}};
+use crate::{
+    coin::COINS,
+    ffi::{map_result, CResult},
+};
 use std::ffi::{c_char, CStr};
+use warp_macros::c_export;
 
 #[path = "./generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod rpc;
@@ -264,7 +273,12 @@ pub async fn get_transaction(
     Ok((height, tx))
 }
 
-pub async fn get_utxos(client: &mut Client, account: u32, addr_index: u32, address: &str) -> Result<Vec<UTXO>> {
+pub async fn get_utxos(
+    client: &mut Client,
+    account: u32,
+    addr_index: u32,
+    address: &str,
+) -> Result<Vec<UTXO>> {
     let mut utxos = vec![];
     let mut utxo_reps = client
         .get_address_utxos_stream(Request::new(GetAddressUtxosArg {
@@ -291,7 +305,6 @@ pub async fn get_utxos(client: &mut Client, account: u32, addr_index: u32, addre
     }
     Ok(utxos)
 }
-
 
 #[c_export]
 pub async fn ping(lwd_url: &str) -> Result<u64> {

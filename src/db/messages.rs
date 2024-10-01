@@ -2,7 +2,10 @@ use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension as _, Row};
 
 use crate::{
-    data::fb::{ShieldedMessageT, UserMemoT}, fb_unwrap, txdetails::TransactionDetails
+    data::fb::{ShieldedMessageT, UserMemoT},
+    fb_unwrap,
+    network::Network,
+    txdetails::TransactionDetails,
 };
 
 use crate::{
@@ -11,6 +14,8 @@ use crate::{
 };
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
+
+use super::contacts::address_to_bytes;
 
 pub fn navigate_message_by_height(
     connection: &Connection,
@@ -103,6 +108,7 @@ pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT>
         body,
         read,
         id_tx,
+        contact,
     ) = r;
     let memo = UserMemoT {
         reply_to: false,
@@ -121,6 +127,7 @@ pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT>
         timestamp,
         incoming,
         nout,
+        contact,
         memo: Some(Box::new(memo)),
         read,
     };
@@ -131,8 +138,11 @@ pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT>
 pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<ShieldedMessageT>> {
     let mut s = connection.prepare(
         "SELECT m.id_msg, m.account, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
-        m.recipient, m.subject, m.body, m.read, t.id_tx FROM msgs m JOIN txs t
-        ON m.txid = t.txid AND m.account = t.account WHERE m.account = ?1 ORDER BY m.height DESC",
+        m.recipient, m.subject, m.body, m.read, t.id_tx, c.name FROM msgs m 
+        JOIN txs t ON m.txid = t.txid AND m.account = t.account
+        LEFT JOIN contact_receivers r ON r.account = m.account AND r.address = m.receiver
+        LEFT JOIN contacts c ON c.id_contact = r.contact
+        WHERE m.account = ?1 ORDER BY m.height DESC",
     )?;
     let rows = s.query_map([account], select_message)?;
     let mut msgs = vec![];
@@ -151,6 +161,7 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
             body,
             read,
             id_tx,
+            contact,
         ) = r?;
 
         let memo = UserMemoT {
@@ -170,6 +181,7 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
             timestamp,
             incoming,
             nout,
+            contact,
             memo: Some(Box::new(memo)),
             read,
         };
@@ -194,6 +206,7 @@ fn select_message(
     String,
     bool,
     u32,
+    Option<String>,
 )> {
     Ok((
         r.get(0)?,
@@ -209,10 +222,12 @@ fn select_message(
         r.get(10)?,
         r.get(11)?,
         r.get(12)?,
+        r.get(13)?,
     ))
 }
 
 pub fn store_message(
+    network: &Network,
     connection: &Connection,
     account: u32,
     tx: &TransactionDetails,
@@ -222,11 +237,17 @@ pub fn store_message(
     let mut s = connection.prepare_cached(
         "INSERT INTO msgs
         (account, height, timestamp, txid, nout, incoming,
-        sender, recipient, subject, body, read)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, false)
+        sender, recipient, receiver, subject, body, read)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, false)
         ON CONFLICT DO NOTHING",
     )?;
     let memo = fb_unwrap!(message.memo);
+    let r = if message.incoming {
+        memo.sender.clone()
+    } else {
+        memo.recipient.clone()
+    };
+    let r = r.map(|r| address_to_bytes(network, &r).unwrap());
     s.execute(params![
         account,
         tx.height,
@@ -236,6 +257,7 @@ pub fn store_message(
         message.incoming,
         memo.sender,
         memo.recipient,
+        r,
         memo.subject,
         memo.body
     ])?;

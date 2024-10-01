@@ -6,7 +6,10 @@ use std::{
 use crate::{
     account::address::get_diversified_address,
     data::fb::{TransactionBytesT, ZipDbConfigT},
-    db::{account::{get_account_info, list_account_transparent_addresses}, notes::list_utxos},
+    db::{
+        account::{get_account_info, list_account_transparent_addresses},
+        notes::list_utxos,
+    },
     fb_unwrap,
     network::{regtest, Network},
     pay::sweep::scan_transparent_addresses,
@@ -443,7 +446,7 @@ async fn process_command(
                     name,
                     address,
                 } => {
-                    add_contact(&connection, account, &name, &address, false)?;
+                    add_contact(network, &connection, account, &name, &address, false)?;
                 }
                 ContactCommand::Get { id } => {
                     let contact = get_contact(network, &connection, id)?;
@@ -453,7 +456,7 @@ async fn process_command(
                     edit_contact_name(&connection, id, &name)?;
                 }
                 ContactCommand::EditAddress { id, address } => {
-                    edit_contact_address(&connection, id, &address)?;
+                    edit_contact_address(network, &connection, id, &address)?;
                 }
                 ContactCommand::Delete { id } => {
                     delete_contact(&connection, id)?;
@@ -767,7 +770,7 @@ async fn process_command(
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
             let connection = zec.connection()?;
-            let txs = get_txs(network, &connection, account, bc_height)?;
+            let txs = get_txs(&connection, account, bc_height)?;
 
             for tx in txs.iter() {
                 println!("{}", serde_json::to_string_pretty(tx).unwrap());

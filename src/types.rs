@@ -13,7 +13,7 @@ use zcash_client_backend::{
     address::UnifiedAddress,
     encoding::{encode_extended_full_viewing_key, encode_extended_spending_key, AddressCodec as _},
 };
-use zcash_keys::{address::Address as RecipientAddress};
+use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::{
     consensus::NetworkConstants as _,
     legacy::{

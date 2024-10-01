@@ -129,6 +129,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         timestamp INTEGER NOT NULL,
         value INTEGER NOT NULL,
         address TEXT,
+        receiver BLOB,
         memo TEXT,
         UNIQUE (account, txid))",
         [],
@@ -195,6 +196,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         incoming BOOL NOT NULL,
         sender TEXT,
         recipient TEXT NOT NULL,
+        receiver BLOB,
         subject TEXT NOT NULL,
         body TEXT NOT NULL,
         read BOOL NOT NULL,
@@ -211,11 +213,20 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         UNIQUE (account, name))",
         [],
     )?;
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS contact_receivers(
+        id_contact_receiver INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        contact INTEGER NOT NULL,
+        pool INTEGER NOT NULL,
+        address BLOB NOT NULL,
+        UNIQUE (contact, pool))",
+        [],
+    )?;
 
     if upgrade {
-        let mut s = connection.prepare(
-            "SELECT a.name, a.seed, a.aindex, a.sk, a.ivk FROM src_db.accounts a",
-        )?;
+        let mut s = connection
+            .prepare("SELECT a.name, a.seed, a.aindex, a.sk, a.ivk FROM src_db.accounts a")?;
         let rows = s.query_map([], |r| {
             Ok((
                 r.get::<_, String>(0)?,

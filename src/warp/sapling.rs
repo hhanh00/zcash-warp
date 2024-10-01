@@ -1,10 +1,10 @@
+use crate::Hash;
 use group::{ff::PrimeField as _, Curve as _, GroupEncoding as _};
 use jubjub::{AffinePoint, ExtendedNielsPoint, ExtendedPoint, Fr, SubgroupPoint};
 use lazy_static::lazy_static;
 use rayon::prelude::*;
 use sapling_crypto::constants::PEDERSEN_HASH_CHUNKS_PER_GENERATOR;
 use std::io::Read;
-use crate::Hash;
 
 lazy_static! {
     pub static ref GENERATORS_EXP: Vec<ExtendedNielsPoint> = read_generators_bin();
@@ -127,14 +127,13 @@ fn hash_normalize(extended: &[ExtendedPoint]) -> Vec<[u8; 32]> {
 pub fn parallel_hash_opt(depth: u8, layer: &[Option<Hash>], pairs: usize) -> Vec<Option<Hash>> {
     let hash_extended: Vec<Option<ExtendedPoint>> = (0..pairs)
         .into_par_iter()
-        .map(|i| { 
+        .map(|i| {
             let l = &layer[2 * i];
             let r = &layer[2 * i + 1];
             match (l, r) {
                 (Some(l), Some(r)) => Some(hash_combine_inner(depth, l, r)),
                 _ => None,
             }
-            
         })
         .collect();
 
@@ -143,10 +142,15 @@ pub fn parallel_hash_opt(depth: u8, layer: &[Option<Hash>], pairs: usize) -> Vec
     ExtendedPoint::batch_normalize(&ext, &mut hash_affine);
     let mut h_cursor = hash_affine.iter();
 
-    hash_extended.iter().map(|n| n.map(|_| {
-        let ep = h_cursor.next().unwrap();
-        ep.get_u().to_repr()
-    })).collect::<Vec<_>>()
+    hash_extended
+        .iter()
+        .map(|n| {
+            n.map(|_| {
+                let ep = h_cursor.next().unwrap();
+                ep.get_u().to_repr()
+            })
+        })
+        .collect::<Vec<_>>()
 }
 
 fn read_generators_bin() -> Vec<ExtendedNielsPoint> {

@@ -1,12 +1,21 @@
 use crate::{
-    data::fb::TransactionInfoExtendedT, network::Network, txdetails::TransactionDetails, warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate}, Hash
+    data::fb::TransactionInfoExtendedT,
+    network::Network,
+    txdetails::TransactionDetails,
+    warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate},
+    Hash,
 };
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
 
-use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result_bytes, CParam, CResult}};
+use crate::{
+    coin::COINS,
+    ffi::{map_result_bytes, CParam, CResult},
+};
 use flatbuffers::FlatBufferBuilder;
+use warp_macros::c_export;
+
+use super::contacts::address_to_bytes;
 
 pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Hash)>> {
     let mut s = connection.prepare(
@@ -32,8 +41,10 @@ pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Has
 
 pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedReceivedTx>> {
     let mut s = connection.prepare(
-        "SELECT id_tx, txid, height, timestamp, value, address, memo FROM txs
-        WHERE account = ?1 ORDER BY height DESC",
+        "SELECT t.id_tx, t.txid, t.height, t.timestamp, t.value, t.address, c.name, t.memo FROM txs t
+        LEFT JOIN contact_receivers r ON r.address = t.receiver AND r.account = t.account
+        LEFT JOIN contacts c ON c.id_contact = r.contact
+        WHERE t.account = ?1 ORDER BY t.height DESC",
     )?;
     let rows = s.query_map([account], |r| {
         Ok((
@@ -44,11 +55,12 @@ pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedRec
             r.get::<_, i64>(4)?,
             r.get::<_, Option<String>>(5)?,
             r.get::<_, Option<String>>(6)?,
+            r.get::<_, Option<String>>(7)?,
         ))
     })?;
     let mut txs = vec![];
     for r in rows {
-        let (id_tx, txid, height, timestamp, value, address, memo) = r?;
+        let (id_tx, txid, height, timestamp, value, address, contact, memo) = r?;
         let rtx = ReceivedTx {
             id: id_tx,
             account,
@@ -58,7 +70,12 @@ pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedRec
             value,
             ivtx: 0,
         };
-        let ertx = ExtendedReceivedTx { rtx, address, memo };
+        let ertx = ExtendedReceivedTx {
+            rtx,
+            address,
+            contact,
+            memo,
+        };
         txs.push(ertx);
     }
     Ok(txs)
@@ -91,7 +108,10 @@ pub fn get_tx(connection: &Connection, id_tx: u32) -> Result<ReceivedTx> {
     Ok(tx)
 }
 
-pub fn get_tx_details_account(connection: &Connection, id_tx: u32) -> Result<(u32, TransactionDetails)> {
+pub fn get_tx_details_account(
+    connection: &Connection,
+    id_tx: u32,
+) -> Result<(u32, TransactionDetails)> {
     let (account, tx_bin) = connection.query_row(
         "SELECT t.account, d.data FROM txs t
         JOIN txdetails d ON t.id_tx = d.id_tx 
@@ -104,9 +124,15 @@ pub fn get_tx_details_account(connection: &Connection, id_tx: u32) -> Result<(u3
 }
 
 #[c_export]
-pub fn get_tx_details(network: &Network, connection: &Connection, txid: &[u8]) -> Result<TransactionInfoExtendedT> {
-    let tx_bin = connection.query_row(
-        "SELECT data FROM txdetails WHERE txid = ?1", [txid], |r| r.get::<_, Vec<u8>>(0))?;
+pub fn get_tx_details(
+    network: &Network,
+    connection: &Connection,
+    txid: &[u8],
+) -> Result<TransactionInfoExtendedT> {
+    let tx_bin =
+        connection.query_row("SELECT data FROM txdetails WHERE txid = ?1", [txid], |r| {
+            r.get::<_, Vec<u8>>(0)
+        })?;
     let tx: TransactionDetails = bincode::deserialize_from(&*tx_bin)?;
     let etx = tx.to_transaction_info_ext(network);
     Ok(etx)
@@ -127,25 +153,35 @@ pub fn add_tx_value<IDSpent: std::fmt::Debug>(
     connection: &Transaction,
     tx_value: &TxValueUpdate<IDSpent>,
 ) -> Result<()> {
-    let mut s_tx =
-        connection.prepare_cached("INSERT INTO txs(account, txid, height, timestamp, value)
-        VALUES (?1, ?2, ?3, ?4, 0) ON CONFLICT DO NOTHING")?;
-    s_tx.execute(params![tx_value.account, tx_value.txid, tx_value.height, tx_value.timestamp])?;
-    let mut s_tx =
-        connection.prepare_cached("UPDATE txs SET value = value + ?3 WHERE txid = ?1 AND account = ?2")?;
+    let mut s_tx = connection.prepare_cached(
+        "INSERT INTO txs(account, txid, height, timestamp, value)
+        VALUES (?1, ?2, ?3, ?4, 0) ON CONFLICT DO NOTHING",
+    )?;
+    s_tx.execute(params![
+        tx_value.account,
+        tx_value.txid,
+        tx_value.height,
+        tx_value.timestamp
+    ])?;
+    let mut s_tx = connection
+        .prepare_cached("UPDATE txs SET value = value + ?3 WHERE txid = ?1 AND account = ?2")?;
     s_tx.execute(params![tx_value.txid, tx_value.account, tx_value.value])?;
     Ok(())
 }
 
 pub fn update_tx_primary_address_memo(
+    network: &Network,
     connection: &Connection,
     id_tx: u32,
     address: Option<String>,
     memo: Option<String>,
 ) -> Result<()> {
+    let receiver = address
+        .as_ref()
+        .map(|a| address_to_bytes(network, a).unwrap());
     connection.execute(
-        "UPDATE txs SET address = ?2, memo = ?3 WHERE id_tx = ?1",
-        params![id_tx, address, memo],
+        "UPDATE txs SET address = ?2, receiver = ?3, memo = ?4 WHERE id_tx = ?1",
+        params![id_tx, address, receiver, memo],
     )?;
     Ok(())
 }

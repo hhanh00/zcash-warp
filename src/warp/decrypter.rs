@@ -1,8 +1,8 @@
 use std::sync::mpsc::Sender;
 
 use crate::{
-    network::Network,
     lwd::rpc::{CompactOrchardAction, CompactSaplingOutput},
+    network::Network,
     warp::{
         sync::{ReceivedNote, ReceivedTx},
         Witness,

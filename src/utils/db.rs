@@ -59,7 +59,13 @@ pub fn get_address(
     mask: u8,
 ) -> Result<String> {
     let address = if mask & 8 != 0 {
-        Some(get_diversified_address(network, connection, account, time, PoolMask(mask))?)
+        Some(get_diversified_address(
+            network,
+            connection,
+            account,
+            time,
+            PoolMask(mask),
+        )?)
     } else {
         let ai = get_account_info(network, &connection, account)?;
         ai.to_address(network, PoolMask(mask))

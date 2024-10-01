@@ -6,19 +6,19 @@ use tonic::transport::Channel;
 #[path = "./generated/data_generated.rs"]
 mod data;
 
-pub mod network;
 pub mod account;
 pub mod cli;
 pub mod coin;
 pub mod db;
+pub mod ffi;
 mod keys;
 pub mod lwd;
+pub mod network;
 pub mod pay;
 pub mod txdetails;
 pub mod types;
 pub mod utils;
 pub mod warp;
-pub mod ffi;
 
 pub type Client = CompactTxStreamerClient<Channel>;
 pub type PooledSQLConnection = PooledConnection<SqliteConnectionManager>;

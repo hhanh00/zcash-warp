@@ -10,7 +10,12 @@ use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT}, fb_unwrap, network::Network, types::{AccountInfo, CheckpointHeight, PoolMask}, warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO}, Hash
+    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT},
+    fb_unwrap,
+    network::Network,
+    types::{AccountInfo, CheckpointHeight, PoolMask},
+    warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO},
+    Hash,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -215,7 +220,7 @@ impl UnsignedTransaction {
         } else if self.fees.num_inputs[0] != 0 || self.fees.num_outputs[0] != 0 {
             1 // either transparent in or out
         } else if net.1.abs() as u64 > fee || net.2.abs() as u64 > fee {
-            2 // shielded net > fee 
+            2 // shielded net > fee
         } else {
             3 // fully shielded
         };
@@ -283,8 +288,14 @@ pub fn make_payment(
     redirect: Option<String>,
 ) -> Result<UnsignedTransaction> {
     let mut pb = PaymentBuilder::new(
-        network, connection, account, CheckpointHeight(payment.height),
-        fb_unwrap!(payment.recipients), PoolMask(payment.src_pools), s_tree, o_tree,
+        network,
+        connection,
+        account,
+        CheckpointHeight(payment.height),
+        fb_unwrap!(payment.recipients),
+        PoolMask(payment.src_pools),
+        s_tree,
+        o_tree,
     )?;
     pb.add_account_funds(&connection)?;
     pb.set_use_change(payment.use_change)?;

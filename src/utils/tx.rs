@@ -1,12 +1,21 @@
+use crate::network::Network;
 use anyhow::Result;
 use rusqlite::Connection;
-use crate::network::Network;
 
-use crate::{coin::connect_lwd, data::fb::TransactionInfoExtendedT, db::tx::{get_txid, store_tx_details}, lwd::get_transaction, txdetails::analyze_raw_transaction};
+use crate::{
+    coin::connect_lwd,
+    data::fb::TransactionInfoExtendedT,
+    db::tx::{get_txid, store_tx_details},
+    lwd::get_transaction,
+    txdetails::analyze_raw_transaction,
+};
 
-use warp_macros::c_export;
-use crate::{coin::COINS, ffi::{map_result_bytes, CResult}};
+use crate::{
+    coin::COINS,
+    ffi::{map_result_bytes, CResult},
+};
 use flatbuffers::FlatBufferBuilder;
+use warp_macros::c_export;
 
 #[c_export]
 pub async fn fetch_tx_details(

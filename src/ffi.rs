@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::{
-    ffi::{c_char, CString}, mem, ptr
+    ffi::{c_char, CString},
+    mem, ptr,
 };
 
 #[repr(C)]
@@ -16,7 +17,7 @@ pub struct CParam {
     pub len: u32,
 }
 
-impl <T> CResult<T> {
+impl<T> CResult<T> {
     pub fn new(value: T) -> Self {
         Self {
             value,

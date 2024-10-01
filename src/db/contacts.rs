@@ -1,18 +1,26 @@
+use crate::fb_unwrap;
+use crate::network::Network;
+use crate::utils::ua::split_address;
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use zcash_keys::address::Address as RecipientAddress;
-use crate::fb_unwrap;
-use crate::network::Network;
 
-use warp_macros::c_export;
 use crate::coin::COINS;
 use crate::ffi::{map_result, map_result_bytes, CParam, CResult};
-use crate::{data::fb::{ContactCard, ContactCardT}, types::Contact};
+use crate::{
+    data::fb::{ContactCard, ContactCardT},
+    types::Contact,
+};
 use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use std::ffi::{CStr, c_char};
+use std::ffi::{c_char, CStr};
+use warp_macros::c_export;
 
 #[c_export]
-pub fn store_contact(connection: &Connection, contact: &ContactCardT) -> Result<u32> {
+pub fn store_contact(
+    network: &Network,
+    connection: &Connection,
+    contact: &ContactCardT,
+) -> Result<u32> {
     let id = connection.query_row(
         "INSERT INTO contacts(account, name, address, saved)
         VALUES (?1, ?2, ?3, ?4) ON CONFLICT DO UPDATE
@@ -26,13 +34,14 @@ pub fn store_contact(connection: &Connection, contact: &ContactCardT) -> Result<
         ],
         |r| r.get::<_, u32>(0),
     )?;
+    upsert_contact_receivers(network, connection, id, contact.address.as_deref().unwrap())?;
     Ok(id)
 }
 
 #[c_export]
 pub fn list_contact_cards(connection: &Connection) -> Result<Vec<ContactCardT>> {
-    let mut s =
-        connection.prepare("SELECT id_contact, account, name, address, saved FROM contacts ORDER BY name")?;
+    let mut s = connection
+        .prepare("SELECT id_contact, account, name, address, saved FROM contacts ORDER BY name")?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -59,14 +68,17 @@ pub fn list_contact_cards(connection: &Connection) -> Result<Vec<ContactCardT>> 
 
 pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<Contact>> {
     let cards = list_contact_cards(connection)?;
-    let contacts = cards.iter().map(|card| {
-        let recipient = RecipientAddress::decode(network, fb_unwrap!(card.address)).unwrap();
-        let contact = Contact {
-            card: card.clone(),
-            address: recipient,
-        };
-        contact
-    }).collect::<Vec<_>>();
+    let contacts = cards
+        .iter()
+        .map(|card| {
+            let recipient = RecipientAddress::decode(network, fb_unwrap!(card.address)).unwrap();
+            let contact = Contact {
+                card: card.clone(),
+                address: recipient,
+            };
+            contact
+        })
+        .collect::<Vec<_>>();
     Ok(contacts)
 }
 
@@ -113,33 +125,94 @@ pub fn edit_contact_name(connection: &Connection, id: u32, name: &str) -> Result
     Ok(())
 }
 
+pub fn address_to_bytes(network: &Network, address: &str) -> Result<Vec<u8>> {
+    let (t, s, o, _) = split_address(network, address)?;
+    if let Some(t) = t {
+        Ok(t.script().0.to_vec())
+    } else if let Some(s) = s {
+        Ok(s.to_bytes().to_vec())
+    } else if let Some(o) = o {
+        Ok(o.to_raw_address_bytes().to_vec())
+    } else {
+        Err(anyhow::anyhow!("No Receiver"))
+    }
+}
+
 #[c_export]
-pub fn edit_contact_address(connection: &Connection, id: u32, address: &str) -> Result<()> {
+pub fn edit_contact_address(
+    network: &Network,
+    connection: &Connection,
+    id: u32,
+    address: &str,
+) -> Result<()> {
     connection.execute(
         "UPDATE contacts SET address = ?2 WHERE id_contact = ?1",
         params![id, address],
     )?;
+    upsert_contact_receivers(network, connection, id, address)?;
+    Ok(())
+}
+
+pub fn upsert_contact_receivers(
+    network: &Network,
+    connection: &Connection,
+    id: u32,
+    address: &str,
+) -> Result<()> {
+    let account = connection.query_row(
+        "SELECT account FROM contacts WHERE id_contact = ?1",
+        [id],
+        |r| r.get::<_, u32>(0),
+    )?;
+
+    let (t, s, o, _) = split_address(network, address)?;
+    connection.execute("DELETE FROM contact_receivers WHERE contact = ?1", [id])?;
+    if let Some(t) = t {
+        connection.execute(
+            "INSERT INTO contact_receivers
+            (account, contact, pool, address)
+            VALUES (?1, ?2, ?3, ?4)",
+            params![account, id, 0, t.script().0.to_vec()],
+        )?;
+    }
+    if let Some(s) = s {
+        connection.execute(
+            "INSERT INTO contact_receivers
+            (account, contact, pool, address)
+            VALUES (?1, ?2, ?3, ?4)",
+            params![account, id, 1, s.to_bytes().to_vec()],
+        )?;
+    }
+    if let Some(o) = o {
+        connection.execute(
+            "INSERT INTO contact_receivers
+            (account, contact, pool, address)
+            VALUES (?1, ?2, ?3, ?4)",
+            params![account, id, 2, o.to_raw_address_bytes().to_vec()],
+        )?;
+    }
+
     Ok(())
 }
 
 #[c_export]
 pub fn delete_contact(connection: &Connection, id: u32) -> Result<()> {
-    connection.execute(
-        "DELETE FROM contacts WHERE id_contact = ?1",
-        [id],
-    )?;
+    connection.execute("DELETE FROM contacts WHERE id_contact = ?1", [id])?;
     Ok(())
 }
 
 pub fn get_unsaved_contacts(connection: &Connection, account: u32) -> Result<Vec<ContactCardT>> {
     let mut s = connection.prepare(
         "SELECT id_contact, name, address FROM contacts
-        WHERE account = ?1 AND saved = FALSE")?;
-    let rows = s.query_map([account], |r| Ok((
-        r.get::<_, u32>(0)?,
-        r.get::<_, String>(1)?,
-        r.get::<_, String>(2)?,
-    )))?;
+        WHERE account = ?1 AND saved = FALSE",
+    )?;
+    let rows = s.query_map([account], |r| {
+        Ok((
+            r.get::<_, u32>(0)?,
+            r.get::<_, String>(1)?,
+            r.get::<_, String>(2)?,
+        ))
+    })?;
     let mut cards = vec![];
     for r in rows {
         let (id, name, address) = r?;
@@ -158,6 +231,8 @@ pub fn get_unsaved_contacts(connection: &Connection, account: u32) -> Result<Vec
 #[c_export]
 pub fn on_contacts_saved(connection: &Connection, account: u32) -> Result<()> {
     connection.execute(
-        "UPDATE contacts SET saved = TRUE WHERE account = ?1", [account])?;
+        "UPDATE contacts SET saved = TRUE WHERE account = ?1",
+        [account],
+    )?;
     Ok(())
 }

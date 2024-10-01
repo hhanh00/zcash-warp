@@ -27,9 +27,8 @@ use warp_macros::c_export;
 
 #[c_export]
 pub fn list_accounts(coin: u8, connection: &Connection) -> Result<Vec<AccountNameT>> {
-    let mut s = connection.prepare(
-        "SELECT id_account, name, birth, balance FROM accounts ORDER BY id_account",
-    )?;
+    let mut s = connection
+        .prepare("SELECT id_account, name, birth, balance FROM accounts ORDER BY id_account")?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -76,7 +75,8 @@ pub fn list_account_transparent_addresses(
 }
 
 pub fn list_transparent_addresses(connection: &Connection) -> Result<Vec<(u32, u32, String)>> {
-    let mut s = connection.prepare("SELECT account, addr_index, address FROM t_addresses ORDER BY addr_index")?;
+    let mut s = connection
+        .prepare("SELECT account, addr_index, address FROM t_addresses ORDER BY addr_index")?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -127,9 +127,16 @@ pub fn get_account_info(
                     let tsk = r.get::<_, Option<String>>("tsk")?;
                     let sk = tsk.map(|tsk| import_sk_bip38(&tsk).unwrap());
                     let tvk = r.get::<_, Option<Vec<u8>>>("tvk")?;
-                    let vk = tvk.map(|tvk| AccountPubKey::deserialize(&tvk.try_into().unwrap()).unwrap());
+                    let vk = tvk
+                        .map(|tvk| AccountPubKey::deserialize(&tvk.try_into().unwrap()).unwrap());
                     let addr = TransparentAddress::decode(network, &taddr).unwrap();
-                    let ti = TransparentAccountInfo { index, xsk, sk, vk, addr };
+                    let ti = TransparentAccountInfo {
+                        index,
+                        xsk,
+                        sk,
+                        vk,
+                        addr,
+                    };
                     Some(ti)
                 }
             };

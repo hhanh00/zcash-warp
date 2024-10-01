@@ -4,7 +4,8 @@ use zcash_protocol::memo::Memo;
 
 use crate::{
     data::fb::{ShieldedMessageT, UserMemoT},
-    db::messages::{navigate_message_by_height, navigate_message_by_subject}, fb_unwrap,
+    db::messages::{navigate_message_by_height, navigate_message_by_subject},
+    fb_unwrap,
 };
 
 use crate::{
@@ -12,7 +13,10 @@ use crate::{
     ffi::{map_result_bytes, CResult},
 };
 use flatbuffers::FlatBufferBuilder;
-use std::{ffi::{c_char, CStr}, str::FromStr as _};
+use std::{
+    ffi::{c_char, CStr},
+    str::FromStr as _,
+};
 use warp_macros::c_export;
 
 pub fn navigate_message(
@@ -110,12 +114,14 @@ impl UserMemoT {
         let sender = sender.unwrap_or_default();
         let memo_text = match &self.subject {
             Some(subject) if !subject.is_empty() => {
-                format!("\u{1F6E1}MSG\n{}\n{}\n{}", sender,
-                subject, fb_unwrap!(self.body))
+                format!(
+                    "\u{1F6E1}MSG\n{}\n{}\n{}",
+                    sender,
+                    subject,
+                    fb_unwrap!(self.body)
+                )
             }
-            _ => {
-                self.body.clone().unwrap_or_default()
-            }
+            _ => self.body.clone().unwrap_or_default(),
         };
         Ok(Memo::from_str(&memo_text)?)
     }
