@@ -94,7 +94,10 @@ pub fn cli_init_coin(config: &ConfigT) -> Result<()> {
 
 lazy_static! {
     pub static ref COINS: [Mutex<CoinDef>; 1] = [
+        #[cfg(feature = "regtest")]
         Mutex::new(CoinDef::from_network(0, Network::Regtest(regtest()))),
+        #[cfg(not(feature = "regtest"))]
+        Mutex::new(CoinDef::from_network(0, Network::Main)),
         // Mutex::new(CoinDef::from_network(Network::YCashMainNetwork)),
     ];
 }

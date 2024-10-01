@@ -470,64 +470,66 @@ pub fn get_tx_primary_address_memo(
     txd: &TransactionDetails,
 ) -> Result<(Option<String>, Option<String>)> {
     let mut address = None;
+    let mut self_address = None;
     let mut memo = None;
-    'once: loop {
-        if tx.value > 0 {
-            // incoming
-            for tin in txd.tins.iter() {
-                address = tin.coin.address.clone();
-                break 'once;
-            }
-        } else {
-            if let Some(taddr) = addrs.transparent.as_ref() {
-                for tout in txd.touts.iter() {
-                    if let Some(tout_addr) = tout.coin.address.as_ref() {
-                        if tout_addr != taddr {
-                            address = Some(tout_addr.clone());
-                            break 'once;
-                        }
-                    }
+    if tx.value > 0 {
+        // incoming
+        for tin in txd.tins.iter() {
+            address = tin.coin.address.clone();
+        }
+    } else if let Some(taddr) = addrs.transparent.as_ref() {
+        for tout in txd.touts.iter() {
+            if let Some(tout_addr) = tout.coin.address.as_ref() {
+                if tout_addr != taddr {
+                    address = Some(tout_addr.clone());
+                } else {
+                    self_address = Some(tout_addr.clone());
                 }
             }
+        }
+    }
 
-            if let Some(saddr) = addrs.sapling.as_ref() {
-                for sout in txd.souts.iter() {
-                    if let Some(sout) = &sout.note {
-                        let pa = PaymentAddress::from_bytes(&sout.note.address).unwrap();
-                        let sout_addr = pa.encode(network);
-                        if &sout_addr != saddr {
-                            address = Some(sout_addr.clone());
-                            let m = Memo::from_bytes(&sout.memo.0)?;
-                            if let Memo::Text(text) = m {
-                                memo = Some(text.to_string());
-                            }
-                            break 'once;
-                        }
-                    }
+    if let Some(saddr) = addrs.sapling.as_ref() {
+        for sout in txd.souts.iter() {
+            if let Some(sout) = &sout.note {
+                let pa = PaymentAddress::from_bytes(&sout.note.address).unwrap();
+                let sout_addr = pa.encode(network);
+                if &sout_addr != saddr {
+                    address = Some(sout_addr.clone());
+                } else {
+                    self_address = Some(sout_addr.clone());
                 }
-            }
-
-            if let Some(oaddr) = addrs.orchard.as_ref() {
-                for oout in txd.oouts.iter() {
-                    if let Some(oout) = &oout.note {
-                        let oout_addr = ua_of_orchard(
-                            &Address::from_raw_address_bytes(&oout.note.address).unwrap(),
-                        )
-                        .encode(network);
-                        if &oout_addr != oaddr {
-                            address = Some(oout_addr.clone());
-                            let m = Memo::from_bytes(&oout.memo.0)?;
-                            if let Memo::Text(text) = m {
-                                memo = Some(text.to_string());
-                            }
-                            break 'once;
-                        }
+                if memo.is_none() {
+                    let m = Memo::from_bytes(&sout.memo.0)?;
+                    if let Memo::Text(text) = m {
+                        memo = Some(text.to_string());
                     }
                 }
             }
         }
-        break 'once;
     }
+
+    if let Some(oaddr) = addrs.orchard.as_ref() {
+        for oout in txd.oouts.iter() {
+            if let Some(oout) = &oout.note {
+                let oout_addr =
+                    ua_of_orchard(&Address::from_raw_address_bytes(&oout.note.address).unwrap())
+                        .encode(network);
+                if &oout_addr != oaddr {
+                    address = Some(oout_addr.clone());
+                } else {
+                    self_address = Some(oout_addr.clone());
+                }
+                if memo.is_none() {
+                    let m = Memo::from_bytes(&oout.memo.0)?;
+                    if let Memo::Text(text) = m {
+                        memo = Some(text.to_string());
+                    }
+                }
+            }
+        }
+    }
+    address = address.or(self_address);
 
     Ok((address, memo))
 }

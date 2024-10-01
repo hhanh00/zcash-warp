@@ -172,8 +172,10 @@ pub fn create_new_account(
     )?;
     if let Some(ti) = ak.to_transparent() {
         create_transparent_account(network, connection, account, &ti)?;
-        create_transparent_address(network, connection, account, 0, &ti)?;
         create_transparent_address(network, connection, account, dindex, &ti)?;
+        if dindex != 0 {
+            create_transparent_address(network, connection, account, 0, &ti)?;
+        }
     }
     if let Some(si) = ak.to_sapling() {
         create_sapling_account(network, connection, account, &si)?;

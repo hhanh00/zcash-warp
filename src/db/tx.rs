@@ -20,7 +20,7 @@ use super::contacts::address_to_bytes;
 pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Hash)>> {
     let mut s = connection.prepare(
         "SELECT t.id_tx, t.account, t.timestamp, t.txid FROM txs t
-        LEFT JOIN txdetails d ON t.txid = d.txid WHERE d.txid IS NULL",
+        LEFT JOIN txdetails d ON t.id_tx = d.id_tx WHERE d.id_tx IS NULL",
     )?;
     let rows = s.query_map([], |r| {
         Ok((

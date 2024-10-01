@@ -181,8 +181,9 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         id_tx INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,
         height INTEGER NOT NULL,
-        txid BLOB NOT NULL UNIQUE,
-        data BLOB NOT NULL)",
+        txid BLOB NOT NULL,
+        data BLOB NOT NULL,
+        UNIQUE (account, txid))",
         [],
     )?;
     connection.execute(
@@ -200,7 +201,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         subject TEXT NOT NULL,
         body TEXT NOT NULL,
         read BOOL NOT NULL,
-        UNIQUE (txid, nout))",
+        UNIQUE (account, txid, nout))",
         [],
     )?;
     connection.execute(

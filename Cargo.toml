@@ -73,8 +73,9 @@ zcash_address.workspace = true
 zcash_encoding.workspace = true
 zcash_note_encryption.workspace = true
 
-#[features]
+[features]
 #sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
+regtest = []
 
 [build-dependencies]
 tonic-build = { version = "0.12", features = [ "prost" ] }
