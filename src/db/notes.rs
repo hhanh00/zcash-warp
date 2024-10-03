@@ -8,7 +8,7 @@ use crate::{
     Hash,
 };
 use anyhow::{Error, Result};
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 
 use crate::{
     coin::COINS,
@@ -46,96 +46,99 @@ pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Optio
     Ok(r)
 }
 
-pub fn list_received_notes(
-    connection: &Connection,
-    account: Option<u32>,
-    height: CheckpointHeight,
-    orchard: bool,
-    include_unconfirmed: bool,
-) -> Result<Vec<ReceivedNote>> {
-    let height: u32 = height.into();
-    let or_include_unconfirmed = if include_unconfirmed {
-        " OR spent = 0"
-    } else {
-        ""
-    };
-    let (where_account, query_params) = match account {
-        Some(_) => (
-            format!(" AND n.account = ?3"),
-            params![height, orchard, account],
-        ),
-        None => (String::new(), params![height, orchard]),
-    };
-    let mut s = connection.prepare(
-        &format!("SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
-        n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
-        FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2 AND (spent IS NULL OR spent > ?1 {or_include_unconfirmed}) AND NOT excluded
-        {where_account} ORDER BY n.value DESC"))?;
-    let rows = s.query_map(query_params, |r| {
-        Ok((
-            r.get::<_, u32>(0)?,
-            r.get::<_, u32>(1)?,
-            r.get::<_, u32>(2)?,
-            r.get::<_, u32>(3)?,
-            r.get::<_, u32>(4)?,
-            r.get::<_, [u8; 43]>(5)?,
-            r.get::<_, u64>(6)?,
-            r.get::<_, Hash>(7)?,
-            r.get::<_, Hash>(8)?,
-            r.get::<_, Option<Hash>>(9)?,
-            r.get::<_, Option<u32>>(10)?,
-            r.get::<_, Hash>(11)?,
-            r.get::<_, u32>(12)?,
-            r.get::<_, i64>(13)?,
-            r.get::<_, Vec<u8>>(14)?,
-        ))
-    })?;
-    let mut notes = vec![];
-    for r in rows {
-        let (
-            id_note,
+fn select_note(row: &Row) -> Result<ReceivedNote, rusqlite::Error> {
+    let (
+        id_note,
+        account,
+        position,
+        height,
+        vout,
+        address,
+        value,
+        rcm,
+        nf,
+        rho,
+        spent,
+        txid,
+        timestamp,
+        tx_value,
+        witness,
+    ) = (
+        row.get::<_, u32>(0)?,
+        row.get::<_, u32>(1)?,
+        row.get::<_, u32>(2)?,
+        row.get::<_, u32>(3)?,
+        row.get::<_, u32>(4)?,
+        row.get::<_, [u8; 43]>(5)?,
+        row.get::<_, u64>(6)?,
+        row.get::<_, Hash>(7)?,
+        row.get::<_, Hash>(8)?,
+        row.get::<_, Option<Hash>>(9)?,
+        row.get::<_, Option<u32>>(10)?,
+        row.get::<_, Hash>(11)?,
+        row.get::<_, u32>(12)?,
+        row.get::<_, i64>(13)?,
+        row.get::<_, Vec<u8>>(14)?,
+    );
+    let note = ReceivedNote {
+        is_new: false,
+        id: id_note,
+        account,
+        position,
+        height,
+        address,
+        value,
+        rcm,
+        nf,
+        rho,
+        vout,
+        tx: ReceivedTx {
+            id: 0,
             account,
-            position,
             height,
-            vout,
-            address,
-            value,
-            rcm,
-            nf,
-            rho,
-            spent,
             txid,
             timestamp,
-            tx_value,
-            witness,
-        ) = r?;
-        let note = ReceivedNote {
-            is_new: false,
-            id: id_note,
-            account,
-            position,
-            height,
-            address,
-            value,
-            rcm,
-            nf,
-            rho,
-            vout,
-            tx: ReceivedTx {
-                id: 0,
-                account,
-                height,
-                txid,
-                timestamp,
-                value: tx_value,
-                ivtx: 0, // not persisted
-            },
-            spent,
-            witness: bincode::deserialize_from(&*witness).unwrap(),
-        };
-        notes.push(note);
-    }
+            value: tx_value,
+            ivtx: 0, // not persisted
+        },
+        spent,
+        witness: bincode::deserialize_from(&*witness).unwrap(),
+    };
+    Ok(note)
+}
+
+pub fn list_all_received_notes(
+    connection: &Connection,
+    height: CheckpointHeight,
+    orchard: bool,
+) -> Result<Vec<ReceivedNote>> {
+    let height: u32 = height.into();
+    let mut s = connection.prepare(
+        "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
+        n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
+        FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
+        AND orchard = ?2 AND (spent IS NULL OR spent > ?1 OR spent = 0) AND NOT excluded
+        ORDER BY n.value DESC")?;
+    let rows = s.query_map(params![height, orchard], select_note)?;
+    let notes = rows.collect::<Result<Vec<_>, _>>()?;
+    Ok(notes)
+}
+
+pub fn list_received_notes(
+    connection: &Connection,
+    account: u32,
+    height: CheckpointHeight,
+    orchard: bool,
+) -> Result<Vec<ReceivedNote>> {
+    let height: u32 = height.into();
+    let mut s = connection.prepare(
+        "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
+        n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
+        FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
+        AND orchard = ?2 AND (spent IS NULL OR spent > ?1 AND n.account = ?3) AND NOT excluded
+        ORDER BY n.value DESC")?;
+    let rows = s.query_map(params![height, orchard, account], select_note)?;
+    let notes = rows.collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
 }
 
@@ -241,54 +244,68 @@ pub fn store_witness(
     Ok(())
 }
 
+fn select_utxo(r: &Row) -> Result<UTXO, rusqlite::Error> {
+    let (id_utxo, account, addr_index, height, timestamp, txid, vout, address, value) = (
+        r.get(0)?,
+        r.get(1)?,
+        r.get(2)?,
+        r.get(3)?,
+        r.get(4)?,
+        r.get::<_, Vec<u8>>(5)?,
+        r.get(6)?,
+        r.get(7)?,
+        r.get(8)?,
+    );
+
+    let utxo = UTXO {
+        is_new: false,
+        id: id_utxo,
+        account,
+        addr_index,
+        height,
+        timestamp,
+        txid: txid.try_into().unwrap(),
+        vout,
+        address,
+        value,
+    };
+    Ok(utxo)
+}
+
+pub fn list_all_utxos(connection: &Connection, height: CheckpointHeight) -> Result<Vec<UTXO>> {
+    let height: u32 = height.into();
+    // include the unconfirmed spents
+    let mut s = connection.prepare(
+        "SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
+        u.value FROM utxos u
+        JOIN t_accounts t ON u.account = t.account
+        JOIN t_addresses s ON s.account = t.account AND s.addr_index = u.addr_index
+        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1 OR u.spent = 0)
+        ORDER BY u.height DESC"
+    )?;
+    let rows = s.query_map([height], select_utxo)?;
+    let utxos = rows.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(utxos)
+}
+
 pub fn list_utxos(
     connection: &Connection,
-    account: Option<u32>,
+    account: u32,
     height: CheckpointHeight,
 ) -> Result<Vec<UTXO>> {
     let height: u32 = height.into();
-    let (where_account, query_params) = match account {
-        Some(_) => (format!(" AND u.account = ?2"), params![height, account]),
-        None => (String::new(), params![height]),
-    };
+    // exclude unconfirmed spents
     let mut s = connection.prepare(
         &("SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
         u.value FROM utxos u
         JOIN t_accounts t ON u.account = t.account
         JOIN t_addresses s ON s.account = t.account AND s.addr_index = u.addr_index
-        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)".to_string() + &where_account
-        + " ORDER BY u.height DESC"),
+        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
+        AND u.account = ?2 ORDER BY u.height DESC"),
     )?;
-    let rows = s.query_map(query_params, |r| {
-        Ok((
-            r.get::<_, u32>(0)?,
-            r.get::<_, u32>(1)?,
-            r.get::<_, u32>(2)?,
-            r.get::<_, u32>(3)?,
-            r.get::<_, u32>(4)?,
-            r.get::<_, Vec<u8>>(5)?,
-            r.get::<_, u32>(6)?,
-            r.get::<_, String>(7)?,
-            r.get::<_, u64>(8)?,
-        ))
-    })?;
-    let mut utxos = vec![];
-    for r in rows {
-        let (id_utxo, account, addr_index, height, timestamp, txid, vout, address, value) = r?;
-        let utxo = UTXO {
-            is_new: false,
-            id: id_utxo,
-            account,
-            addr_index,
-            height,
-            timestamp,
-            txid: txid.try_into().unwrap(),
-            vout,
-            address,
-            value,
-        };
-        utxos.push(utxo);
-    }
+    let rows = s.query_map(params![height, account], select_utxo)?;
+    let utxos = rows.collect::<Result<Vec<_>, _>>()?;
 
     Ok(utxos)
 }
@@ -397,7 +414,7 @@ pub fn get_unspent_utxos(
     account: u32,
     bc_height: u32,
 ) -> Result<Vec<InputTransparentT>> {
-    let utxos = list_utxos(connection, Some(account), CheckpointHeight(bc_height))?;
+    let utxos = list_utxos(connection, account, CheckpointHeight(bc_height))?;
     let utxos = utxos
         .into_iter()
         .map(|u| InputTransparentT {

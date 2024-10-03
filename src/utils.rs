@@ -23,7 +23,8 @@ pub mod uri;
 pub mod zip_db;
 
 pub fn init_tracing() {
-    let _ = tracing_subscriber::registry()
+    let s = tracing_subscriber::registry();
+    let _ = s
         .with(fmt::layer().with_ansi(false).compact())
         .with(EnvFilter::from_default_env())
         .try_init();

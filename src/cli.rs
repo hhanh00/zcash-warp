@@ -11,7 +11,7 @@ use crate::{
         notes::list_utxos,
     },
     fb_unwrap,
-    network::{regtest, Network},
+    network::{Network, _regtest},
     pay::sweep::scan_transparent_addresses,
     types::PoolMask,
     utils::chain::reset_chain,
@@ -548,7 +548,7 @@ async fn process_command(
                     reverse_note_exclusion(&connection, account)?;
                 }
                 NoteCommand::Utxo { account } => {
-                    let utxos = list_utxos(&connection, Some(account), CheckpointHeight(u32::MAX))?;
+                    let utxos = list_utxos(&connection, account, CheckpointHeight(u32::MAX))?;
                     println!("{:?}", utxos);
                 }
             }
@@ -812,7 +812,7 @@ pub fn cli_main(config: &ConfigT) -> Result<()> {
     let mut zec = CoinDef::from_network(
         0,
         if config.regtest {
-            Network::Regtest(regtest())
+            Network::Regtest(_regtest())
         } else {
             Network::Main
         },

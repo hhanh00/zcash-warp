@@ -121,20 +121,15 @@ impl PaymentBuilder {
         });
 
         let transparent_inputs = if account_pools & 1 != 0 {
-            list_utxos(
-                connection,
-                Some(self.account),
-                CheckpointHeight(self.height),
-            )?
+            list_utxos(connection, self.account, CheckpointHeight(self.height))?
         } else {
             vec![]
         };
         let sapling_inputs = if account_pools & 2 != 0 && !has_tex {
             list_received_notes(
                 connection,
-                Some(self.account),
+                self.account,
                 CheckpointHeight(self.height),
-                false,
                 false,
             )?
         } else {
@@ -143,10 +138,9 @@ impl PaymentBuilder {
         let orchard_inputs = if account_pools & 4 != 0 && !has_tex {
             list_received_notes(
                 connection,
-                Some(self.account),
+                self.account,
                 CheckpointHeight(self.height),
                 true,
-                false,
             )?
         } else {
             vec![]

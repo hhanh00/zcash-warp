@@ -7,7 +7,7 @@ use rusqlite::OptionalExtension;
 use std::time::Duration;
 use tonic::transport::{Certificate, ClientTlsConfig};
 
-use crate::network::{regtest, Network};
+use crate::network::Network;
 
 use crate::{
     data::fb::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client,
@@ -82,6 +82,7 @@ pub async fn connect_lwd(url: &str) -> Result<Client> {
         let tls = ClientTlsConfig::new().ca_certificate(ca);
         channel = channel.tls_config(tls)?;
     }
+    tracing::info!("{url}");
     let client = CompactTxStreamerClient::connect(channel).await?;
     Ok(client)
 }
@@ -95,7 +96,7 @@ pub fn cli_init_coin(config: &ConfigT) -> Result<()> {
 lazy_static! {
     pub static ref COINS: [Mutex<CoinDef>; 1] = [
         #[cfg(feature = "regtest")]
-        Mutex::new(CoinDef::from_network(0, Network::Regtest(regtest()))),
+        Mutex::new(CoinDef::from_network(0, Network::Regtest(crate::network::_regtest()))),
         #[cfg(not(feature = "regtest"))]
         Mutex::new(CoinDef::from_network(0, Network::Main)),
         // Mutex::new(CoinDef::from_network(Network::YCashMainNetwork)),

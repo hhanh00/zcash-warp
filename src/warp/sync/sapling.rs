@@ -2,12 +2,10 @@ use jubjub::Fr;
 use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
+use crate::db::notes::list_all_received_notes;
 use crate::network::Network;
 use crate::{
-    db::{
-        account::{get_account_info, list_accounts},
-        notes::list_received_notes,
-    },
+    db::account::{get_account_info, list_accounts},
     lwd::rpc::{Bridge, CompactBlock},
     types::{AccountInfo, CheckpointHeight},
     warp::try_sapling_decrypt,
@@ -56,7 +54,7 @@ impl Synchronizer {
             let ai = get_account_info(network, connection, a.id)?;
             account_infos.push(ai);
         }
-        let notes = list_received_notes(connection, None, start, false, true)?;
+        let notes = list_all_received_notes(connection, start, false)?;
 
         Ok(Self {
             hasher: SaplingHasher::default(),

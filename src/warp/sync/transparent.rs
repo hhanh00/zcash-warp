@@ -5,7 +5,7 @@ use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::legacy::TransparentAddress;
 
 use crate::{
-    db::{account::list_transparent_addresses, notes::list_utxos},
+    db::{account::list_transparent_addresses, notes::list_all_utxos},
     network::Network,
     types::CheckpointHeight,
     warp::{OutPoint, TransparentTx, UTXO},
@@ -39,7 +39,7 @@ impl TransparentSync {
                 (*account, *addr_index, ta)
             })
             .collect::<Vec<_>>();
-        let utxos = list_utxos(connection, None, height)?;
+        let utxos = list_all_utxos(connection, height)?;
 
         Ok(Self {
             network: network.clone(),
@@ -106,11 +106,6 @@ impl TransparentSync {
                 });
             }
         }
-        // detect our spends in vins
-        // mark utxo as spent
-        // detect incoming funds in vouts
-        // add new utxo
-        // update txs table with net value
 
         Ok(())
     }

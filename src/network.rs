@@ -5,7 +5,7 @@ use zcash_protocol::{
 };
 
 lazy_static! {
-    pub static ref REGTEST: Network = Network::Regtest(regtest());
+    pub static ref REGTEST: Network = Network::Regtest(_regtest());
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -33,7 +33,7 @@ impl Parameters for Network {
     }
 }
 
-pub fn regtest() -> LocalNetwork {
+pub fn _regtest() -> LocalNetwork {
     LocalNetwork {
         overwinter: Some(BlockHeight::from_u32(1)),
         sapling: Some(BlockHeight::from_u32(1)),
