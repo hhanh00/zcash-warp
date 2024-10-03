@@ -117,7 +117,7 @@ pub fn list_all_received_notes(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2 AND (spent IS NULL OR spent > ?1 OR spent = 0) AND NOT excluded
+        AND orchard = ?2 AND (spent IS NULL OR spent = 0) AND NOT excluded
         ORDER BY n.value DESC")?;
     let rows = s.query_map(params![height, orchard], select_note)?;
     let notes = rows.collect::<Result<Vec<_>, _>>()?;
@@ -272,18 +272,17 @@ fn select_utxo(r: &Row) -> Result<UTXO, rusqlite::Error> {
     Ok(utxo)
 }
 
-pub fn list_all_utxos(connection: &Connection, height: CheckpointHeight) -> Result<Vec<UTXO>> {
-    let height: u32 = height.into();
+pub fn list_all_utxos(connection: &Connection) -> Result<Vec<UTXO>> {
     // include the unconfirmed spents
     let mut s = connection.prepare(
         "SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
         u.value FROM utxos u
         JOIN t_accounts t ON u.account = t.account
         JOIN t_addresses s ON s.account = t.account AND s.addr_index = u.addr_index
-        WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1 OR u.spent = 0)
+        WHERE u.spent IS NULL OR u.spent = 0
         ORDER BY u.height DESC"
     )?;
-    let rows = s.query_map([height], select_utxo)?;
+    let rows = s.query_map([], select_utxo)?;
     let utxos = rows.collect::<Result<Vec<_>, _>>()?;
 
     Ok(utxos)

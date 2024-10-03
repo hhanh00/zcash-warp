@@ -57,7 +57,7 @@ impl Synchronizer {
             let ai = get_account_info(network, connection, a.id)?;
             account_infos.push(ai);
         }
-        let notes = list_all_received_notes(connection, start, true)?;
+        let notes = list_all_received_notes(connection,start, true)?;
 
         Ok(Self {
             hasher: OrchardHasher::default(),

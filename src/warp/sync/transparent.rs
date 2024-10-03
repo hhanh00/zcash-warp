@@ -7,7 +7,6 @@ use zcash_primitives::legacy::TransparentAddress;
 use crate::{
     db::{account::list_transparent_addresses, notes::list_all_utxos},
     network::Network,
-    types::CheckpointHeight,
     warp::{OutPoint, TransparentTx, UTXO},
 };
 
@@ -22,12 +21,7 @@ pub struct TransparentSync {
 }
 
 impl TransparentSync {
-    pub fn new(
-        _coin: u8,
-        network: &Network,
-        connection: &Connection,
-        height: CheckpointHeight,
-    ) -> Result<Self> {
+    pub fn new(_coin: u8, network: &Network, connection: &Connection) -> Result<Self> {
         let addresses = list_transparent_addresses(connection)?
             .iter()
             .map(|(account, addr_index, address)| {
@@ -39,7 +33,7 @@ impl TransparentSync {
                 (*account, *addr_index, ta)
             })
             .collect::<Vec<_>>();
-        let utxos = list_all_utxos(connection, height)?;
+        let utxos = list_all_utxos(connection)?;
 
         Ok(Self {
             network: network.clone(),

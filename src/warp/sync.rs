@@ -142,7 +142,7 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
         orchard_state.to_edge(&orch_hasher),
     )?;
 
-    let mut trp_dec = TransparentSync::new(coin.coin, &coin.network, &connection, start)?;
+    let mut trp_dec = TransparentSync::new(coin.coin, &coin.network, &connection)?;
 
     let addresses = trp_dec.addresses.clone();
     for (account, addr_index, taddr) in addresses.into_iter() {
