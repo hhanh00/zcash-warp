@@ -63,7 +63,6 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         "CREATE TABLE IF NOT EXISTS accounts(
         id_account INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
-        fingerprint BLOB NOT NULL UNIQUE,
         seed TEXT,
         aindex INTEGER NOT NULL,
         dindex INTEGER NOT NULL,
@@ -145,12 +144,13 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         address BLOB NOT NULL,
         value INTEGER NOT NULL,
         rcm BLOB NOT NULL,
-        nf BLOB NOT NULL UNIQUE,
+        nf BLOB NOT NULL,
         rho BLOB,
         spent INTEGER,
         orchard BOOL NOT NULL,
         excluded BOOL NOT NULL,
-        UNIQUE (position, orchard))",
+        UNIQUE (account, position, orchard),
+        UNIQUE (account, nf))",
         [],
     )?;
     connection.execute(
@@ -173,7 +173,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         vout INTEGER NULL,
         value INTEGER NOT NULL,
         spent INTEGER,
-        UNIQUE (txid, vout))",
+        UNIQUE (account, txid, vout))",
         [],
     )?;
     connection.execute(
@@ -221,7 +221,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         contact INTEGER NOT NULL,
         pool INTEGER NOT NULL,
         address BLOB NOT NULL,
-        UNIQUE (contact, pool))",
+        UNIQUE (account, contact, pool))",
         [],
     )?;
 

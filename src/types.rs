@@ -104,7 +104,6 @@ pub struct OrchardAccountInfo {
 pub struct AccountInfo {
     pub account: u32,
     pub name: String,
-    pub fingerprint: Vec<u8>,
     pub seed: Option<String>,
     pub aindex: u32,
     pub dindex: Option<u32>,

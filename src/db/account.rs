@@ -97,7 +97,7 @@ pub fn get_account_info(
     account: u32,
 ) -> Result<AccountInfo> {
     let ai = connection.query_row(
-        "SELECT a.name, a.fingerprint, a.seed, a.aindex, a.dindex, a.birth,
+        "SELECT a.name, a.seed, a.aindex, a.dindex, a.birth,
         t.addr_index as tidx, t.xsk as txsk, t.sk as tsk, t.vk as tvk, t.address as taddr,
         s.sk as ssk, s.vk as svk, s.address as saddr,
         o.sk as osk, o.vk as ovk,
@@ -110,7 +110,6 @@ pub fn get_account_info(
         [account],
         |r| {
             let name = r.get::<_, String>("name")?;
-            let fingerprint = r.get::<_, Vec<u8>>("fingerprint")?;
             let seed = r.get::<_, Option<String>>("seed")?;
             let aindex = r.get::<_, u32>("aindex")?;
             let dindex = r.get::<_, Option<u32>>("dindex")?;
@@ -185,7 +184,6 @@ pub fn get_account_info(
             let ai = AccountInfo {
                 account,
                 name,
-                fingerprint,
                 seed,
                 aindex,
                 dindex,

@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use crate::{
     data::fb::{IdNoteT, TransactionBytesT},
     db::{
-        account::{get_account_info, list_account_tsk},
-        account_manager::get_account_by_fingerprint,
+        account::{get_account_info, list_account_tsk}, account_manager::get_account_by_name,
     },
     warp::{
         hasher::{empty_roots, OrchardHasher, SaplingHasher},
@@ -58,13 +57,10 @@ impl UnsignedTransaction {
         expiration_height: u32,
         mut rng: R,
     ) -> Result<TransactionBytesT> {
-        let account = get_account_by_fingerprint(connection, &self.account_id)?;
+        let account = get_account_by_name(connection, &self.account_name)?;
         let account = account.ok_or(anyhow::anyhow!("Account not in wallet"))?;
 
         let ai = get_account_info(network, connection, account)?;
-        if ai.fingerprint != self.account_id {
-            anyhow::bail!("Invalid Account");
-        }
 
         let mut tsk_store: HashMap<String, SecretKey> = HashMap::new();
         if let Some(_ti) = ai.transparent.as_ref() {

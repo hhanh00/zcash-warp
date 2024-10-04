@@ -1,7 +1,6 @@
 use anyhow::Result;
 use base58check::{FromBase58Check, ToBase58Check};
 use bip39::Mnemonic;
-use blake2b_simd::Params;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use prost::bytes::BufMut as _;
 use rand::{rngs::OsRng, CryptoRng, RngCore};
@@ -45,8 +44,6 @@ pub struct AccountKeys {
     pub ovk: Option<FullViewingKey>,
 }
 
-pub const KEY_FINGERPRINT_PERSO: &[u8] = b"Acnt_Fingerprint";
-
 impl AccountKeys {
     pub fn from_seed(network: &Network, phrase: &str, acc_index: u32) -> Result<Self> {
         let seed = parse_seed_phrase(phrase)?;
@@ -82,29 +79,6 @@ impl AccountKeys {
             osk: Some(usk.orchard().clone()),
             ovk: uvk.orchard().cloned(),
         })
-    }
-
-    pub fn to_hash(&self) -> Result<Vec<u8>> {
-        let taddr = self.taddr.map(|tvk: TransparentAddress| tvk.script().0);
-        let svk = self
-            .svk
-            .as_ref()
-            .map(|svk| svk.to_bytes().to_vec())
-            .unwrap_or_default();
-        let ovk = self
-            .ovk
-            .as_ref()
-            .map(|ovk| ovk.to_bytes().to_vec())
-            .unwrap_or_default();
-        let key = Params::new()
-            .hash_length(32)
-            .personal(KEY_FINGERPRINT_PERSO)
-            .to_state()
-            .update(&taddr.unwrap_or_default())
-            .update(&svk)
-            .update(&ovk)
-            .finalize();
-        Ok(key.as_bytes().to_vec())
     }
 
     pub fn to_transparent(&self) -> Option<TransparentAccountInfo> {

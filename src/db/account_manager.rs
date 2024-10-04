@@ -159,11 +159,9 @@ pub fn create_new_account(
     birth: u32,
 ) -> Result<u32> {
     let ak = detect_key(network, &key, acc_index)?;
-    let fingerprint = ak.to_hash()?;
     let dindex = ak.dindex.unwrap_or_default();
     let account = create_account(
         connection,
-        &fingerprint,
         name,
         ak.seed.as_deref(),
         acc_index,
@@ -188,7 +186,6 @@ pub fn create_new_account(
 
 pub fn create_account(
     connection: &Connection,
-    fingerprint: &[u8],
     name: &str,
     seed: Option<&str>,
     acc_index: u32,
@@ -196,9 +193,9 @@ pub fn create_account(
     birth: u32,
 ) -> Result<u32> {
     connection.execute(
-        "INSERT INTO accounts(name, fingerprint, seed, aindex, dindex, birth, balance, saved)
+        "INSERT INTO accounts(name, seed, aindex, dindex, birth, balance, saved)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, FALSE)",
-        params![name, fingerprint, seed, acc_index, addr_index, birth],
+        params![name, seed, acc_index, addr_index, birth],
     )?;
     let account = connection.last_insert_rowid();
     Ok(account as u32)
@@ -255,14 +252,18 @@ pub fn create_transparent_address(
     ti: &TransparentAccountInfo,
 ) -> Result<()> {
     let address_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
-    let sk = ti.xsk.as_ref().map(|sk| {
+    let sk_from_xsk = ti.xsk.as_ref().map(|sk| {
         let sk = sk.derive_external_secret_key(address_index).unwrap();
         export_sk_bip38(&sk)
     });
-    let addr = ti
+    let sk_from_sk = ti.sk.as_ref().map(|sk| export_sk_bip38(sk));
+    let sk = sk_from_xsk.or(sk_from_sk);
+    let addr_from_vk = ti
         .vk
         .as_ref()
         .map(|tvk| TransparentAccountInfo::derive_address(tvk, addr_index).encode(network));
+    let addr_from_addr = ti.addr.encode(network);
+    let addr = addr_from_vk.or(Some(addr_from_addr));
 
     connection.execute(
         "INSERT INTO t_addresses(account, addr_index, sk, address)
@@ -289,6 +290,12 @@ pub fn create_orchard_account(
     Ok(())
 }
 
+pub fn get_account_by_name(connection: &Connection, name: &str) -> Result<Option<u32>> {
+    let account = connection.query_row("SELECT id_account FROM accounts WHERE name = ?1", 
+    [name], |r| r.get::<_, u32>(0)).optional()?;
+    Ok(account)
+}
+
 pub fn get_account_seed(connection: &Connection, account: u32) -> Result<(Seed, u32)> {
     let (phrase, aindex) = connection.query_row(
         "SELECT seed, aindex FROM accounts WHERE id_account = ?1",
@@ -310,6 +317,9 @@ pub fn new_transparent_address(
     ai.transparent
         .as_ref()
         .map(|ti| {
+            if ti.vk.is_none() {
+                anyhow::bail!("Cannot derive additional addresses without an extended public key");
+            }
             let addr_index = connection.query_row(
                 "SELECT MAX(addr_index) FROM t_addresses WHERE account = ?1",
                 [account],
@@ -394,20 +404,6 @@ pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     connection.execute("DELETE FROM contacts WHERE account = ?1", params![account])?;
     connection.execute("DELETE FROM props WHERE account = ?1", params![account])?;
     Ok(())
-}
-
-pub fn get_account_by_fingerprint(
-    connection: &Connection,
-    fingerprint: &[u8],
-) -> Result<Option<u32>> {
-    let account = connection
-        .query_row(
-            "SELECT id_account FROM accounts WHERE fingerprint = ?1",
-            [fingerprint],
-            |r| r.get::<_, u32>(0),
-        )
-        .optional()?;
-    Ok(account)
 }
 
 #[c_export]

@@ -84,9 +84,6 @@ pub fn can_sign(
     let utx = fb_unwrap!(summary.data);
     let utx = bincode::deserialize_from::<_, UnsignedTransaction>(&utx[..])?;
     let ai = get_account_info(network, connection, account)?;
-    if utx.account_id != ai.fingerprint {
-        anyhow::bail!("Invalid fingerprint");
-    }
     let mut pools_required = 0;
     for n in utx.tx_notes.iter() {
         match &n.note {
