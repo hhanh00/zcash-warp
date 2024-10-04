@@ -152,7 +152,7 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
             account,
             addr_index,
             taddr,
-            start.into(),
+            start.0 + 1,
             end,
         )
         .await?;
