@@ -194,7 +194,7 @@ pub fn create_account(
 ) -> Result<u32> {
     connection.execute(
         "INSERT INTO accounts(name, seed, aindex, dindex, birth, balance, saved)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, FALSE)",
+        VALUES (?1, ?2, ?3, ?4, ?5, 0, FALSE)",
         params![name, seed, acc_index, addr_index, birth],
     )?;
     let account = connection.last_insert_rowid();
@@ -291,8 +291,13 @@ pub fn create_orchard_account(
 }
 
 pub fn get_account_by_name(connection: &Connection, name: &str) -> Result<Option<u32>> {
-    let account = connection.query_row("SELECT id_account FROM accounts WHERE name = ?1", 
-    [name], |r| r.get::<_, u32>(0)).optional()?;
+    let account = connection
+        .query_row(
+            "SELECT id_account FROM accounts WHERE name = ?1",
+            [name],
+            |r| r.get::<_, u32>(0),
+        )
+        .optional()?;
     Ok(account)
 }
 
@@ -344,14 +349,6 @@ pub fn trim_excess_transparent_addresses(connection: &Connection, account: u32) 
         "DELETE FROM t_addresses WHERE account = ?1 AND addr_index > ?2",
         params![account, max_addr_index],
     )?;
-    connection.execute(
-        "INSERT INTO t_accounts 
-        SELECT account, addr_index, sk, address FROM t_addresses
-        WHERE account = ?1 AND addr_index = ?2
-        ON CONFLICT (account) DO UPDATE SET addr_index = excluded.addr_index,
-        sk = excluded.sk, address = excluded.address",
-        params![account, max_addr_index],
-    )?; // update the account transparent address
     Ok(())
 }
 

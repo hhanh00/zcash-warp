@@ -119,6 +119,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         timestamp INTEGER NOT NULL)",
         [],
     )?;
+
     connection.execute(
         "CREATE TABLE IF NOT EXISTS txs(
         id_tx INTEGER PRIMARY KEY,
@@ -133,6 +134,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         UNIQUE (account, txid))",
         [],
     )?;
+
     connection.execute(
         "CREATE TABLE IF NOT EXISTS notes(
         id_note INTEGER PRIMARY KEY,
@@ -153,6 +155,16 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         UNIQUE (account, nf))",
         [],
     )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS note_spends(
+        id_note INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        id_tx INTEGER NOT NULL)",
+        [],
+    )?;
+
     connection.execute(
         "CREATE TABLE IF NOT EXISTS witnesses(
         id_witness INTEGER PRIMARY KEY,
@@ -162,6 +174,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         witness BLOB NOT NULL)",
         [],
     )?;
+
     connection.execute(
         "CREATE TABLE IF NOT EXISTS utxos(
         id_utxo INTEGER PRIMARY KEY,
@@ -176,6 +189,16 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         UNIQUE (account, txid, vout))",
         [],
     )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS utxo_spends(
+        id_utxo INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        id_tx INTEGER NOT NULL)",
+        [],
+    )?;
+
     connection.execute(
         "CREATE TABLE IF NOT EXISTS txdetails(
         id_tx INTEGER PRIMARY KEY,
@@ -186,6 +209,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         UNIQUE (account, txid))",
         [],
     )?;
+
     connection.execute(
         "CREATE TABLE IF NOT EXISTS msgs(
         id_msg INTEGER PRIMARY KEY,
@@ -204,6 +228,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         UNIQUE (account, txid, nout))",
         [],
     )?;
+
     connection.execute(
         "CREATE TABLE IF NOT EXISTS contacts(
         id_contact INTEGER PRIMARY KEY,
@@ -214,6 +239,7 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         UNIQUE (account, name))",
         [],
     )?;
+
     connection.execute(
         "CREATE TABLE IF NOT EXISTS contact_receivers(
         id_contact_receiver INTEGER PRIMARY KEY,
@@ -222,6 +248,13 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
         pool INTEGER NOT NULL,
         address BLOB NOT NULL,
         UNIQUE (account, contact, pool))",
+        [],
+    )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS blck_times(
+        height INTEGER PRIMARY KEY,
+        timestamp INTEGER NOT NULL)",
         [],
     )?;
 

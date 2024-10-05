@@ -32,9 +32,9 @@ pub async fn fetch_tx_details(
         network,
         &connection,
         url.clone(),
+        account,
         height,
         timestamp,
-        account,
         tx,
     )?;
     let txb = serde_cbor::to_vec(&tx)?;

@@ -15,6 +15,7 @@ use crate::{
     pay::sweep::scan_transparent_addresses,
     types::PoolMask,
     utils::chain::reset_chain,
+    warp::sync::transparent_scan,
 };
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -284,6 +285,9 @@ pub enum Command {
     Sync {
         confirmations: Option<u32>,
         end_height: Option<u32>,
+    },
+    TransparentSync {
+        account: u32,
     },
     Address {
         account: u32,
@@ -686,6 +690,12 @@ async fn process_command(
             let connection = zec.connection()?;
             retrieve_tx_details(network, &connection, zec.config.lwd_url.clone().unwrap()).await?;
         },
+        Command::TransparentSync { account } => {
+            let mut connection = zec.connection()?;
+            let mut client = zec.connect_lwd().await?;
+            let bc_height = get_last_height(&mut client).await?;
+            transparent_scan(0, network, &mut connection, &mut client, account, bc_height).await?;
+        }
         Command::Address { account, mask } => {
             let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;
             let connection = zec.connection()?;
@@ -746,9 +756,9 @@ async fn process_command(
                 network,
                 &connection,
                 zec.config.lwd_url.clone().unwrap(),
+                account,
                 height,
                 timestamp,
-                account,
                 tx,
             )?;
             let txb = serde_cbor::to_vec(&tx)?;

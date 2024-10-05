@@ -214,6 +214,31 @@ pub fn list_account_tsk(connection: &Connection, account: u32) -> Result<Vec<Tra
 }
 
 #[c_export]
+pub fn update_account_primary_transparent_address(
+    connection: &Connection,
+    account: u32,
+    addr_index: u32,
+) -> Result<()> {
+    if let Some((sk, address)) = connection
+        .query_row(
+            "SELECT sk, address FROM t_addresses
+        WHERE account = ?1 AND addr_index = ?2",
+            params![account, addr_index],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        )
+        .optional()?
+    {
+        connection.execute(
+            "UPDATE t_accounts SET
+            addr_index = ?2, sk = ?3, address = ?4
+            WHERE account = ?1",
+            params![account, addr_index, sk, address],
+        )?;
+    }
+    Ok(())
+}
+
+#[c_export]
 pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result<BalanceT> {
     let height = if height == 0 { u32::MAX } else { height };
     let transparent = connection

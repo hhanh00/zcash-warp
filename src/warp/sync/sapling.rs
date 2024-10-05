@@ -4,6 +4,7 @@ use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
 use crate::db::notes::list_all_received_notes;
 use crate::network::Network;
+use crate::warp::sync::IdSpent;
 use crate::{
     db::account::{get_account_info, list_accounts},
     lwd::rpc::{Bridge, CompactBlock},
@@ -27,7 +28,7 @@ pub struct Synchronizer {
     pub account_infos: Vec<AccountInfo>,
     pub start: u32,
     pub notes: Vec<ReceivedNote>,
-    pub spends: Vec<TxValueUpdate<Hash>>,
+    pub spends: Vec<(TxValueUpdate, IdSpent<Hash>)>,
     pub position: u32,
     pub tree_state: Edge,
 }
@@ -310,16 +311,22 @@ impl Synchronizer {
                     let nf = &*sp.nf;
                     if let Some(n) = nfs.get_mut(nf) {
                         n.spent = Some(cb.height as u32);
-                        let tx = TxValueUpdate::<Hash> {
+                        let id_spent = IdSpent::<Hash> {
+                            id_note: n.id,
+                            account: n.account,
+                            height: cb.height as u32, // height at which the spent occurs
+                            txid: vtx.hash.clone().try_into().unwrap(),
+                            note_ref: sp.nf.clone().try_into().unwrap(),
+                        };
+                        let tx = TxValueUpdate {
                             account: n.account,
                             txid: vtx.hash.clone().try_into().unwrap(),
                             value: -(n.value as i64),
                             id_tx: 0,
                             height: cb.height as u32,
                             timestamp: cb.time,
-                            id_spent: Some(n.nf),
                         };
-                        self.spends.push(tx);
+                        self.spends.push((tx, id_spent));
                     }
                 }
             }

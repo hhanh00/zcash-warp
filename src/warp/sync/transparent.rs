@@ -1,23 +1,27 @@
 use anyhow::Result;
-use rusqlite::Connection;
+use rusqlite::{Connection, Transaction};
 use zcash_client_backend::encoding::AddressCodec;
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::legacy::TransparentAddress;
 
 use crate::{
-    db::{account::list_transparent_addresses, notes::list_all_utxos},
+    db::{
+        account::list_transparent_addresses,
+        notes::{list_all_utxos, mark_transparent_spent, store_utxo},
+        tx::add_tx_value,
+    },
     network::Network,
     warp::{OutPoint, TransparentTx, UTXO},
 };
 
-use super::{ReceivedTx, TxValueUpdate};
+use super::{IdSpent, ReceivedTx, TxValueUpdate};
 
 pub struct TransparentSync {
     pub network: Network,
     pub addresses: Vec<(u32, u32, TransparentAddress)>,
     pub utxos: Vec<UTXO>,
     pub txs: Vec<(ReceivedTx, OutPoint, u64)>,
-    pub tx_updates: Vec<TxValueUpdate<OutPoint>>,
+    pub tx_updates: Vec<(TxValueUpdate, IdSpent<OutPoint>)>,
 }
 
 impl TransparentSync {
@@ -44,26 +48,32 @@ impl TransparentSync {
         })
     }
 
-    pub fn process_txs(&mut self, txs: &[TransparentTx]) -> Result<()> {
+    pub fn process_txs(&mut self, address: &str, txs: &[TransparentTx]) -> Result<()> {
         for tx in txs {
             for vin in tx.vins.iter() {
                 let r = self.utxos.iter().find(|&utxo| {
-                    utxo.txid == vin.txid && utxo.vout == vin.vout && utxo.account == tx.account
+                    utxo.txid == vin.txid
+                        && utxo.vout == vin.vout
+                        && utxo.account == tx.account
+                        && &utxo.address == address
                 });
                 if let Some(utxo) = r {
-                    let tx_value = TxValueUpdate::<OutPoint> {
+                    let id_spent = IdSpent::<OutPoint> {
+                        id_note: 0,
+                        account: utxo.account,
+                        height: tx.height,
+                        txid: tx.txid.clone(),
+                        note_ref: vin.clone(),
+                    };
+                    let tx_value = TxValueUpdate {
                         id_tx: 0,
                         account: tx.account,
                         txid: tx.txid,
                         value: -(utxo.value as i64),
                         height: tx.height,
                         timestamp: tx.timestamp,
-                        id_spent: Some(OutPoint {
-                            txid: vin.txid,
-                            vout: vin.vout,
-                        }),
                     };
-                    self.tx_updates.push(tx_value);
+                    self.tx_updates.push((tx_value, id_spent));
                 }
             }
             for txout in tx.vouts.iter() {
@@ -86,7 +96,7 @@ impl TransparentSync {
                 ));
                 // outputs are filtered for our account
                 let address = tx.address.encode(&self.network);
-                self.utxos.push(UTXO {
+                let utxo = UTXO {
                     is_new: true,
                     id: 0,
                     account: tx.account,
@@ -97,10 +107,22 @@ impl TransparentSync {
                     vout: txout.vout,
                     address,
                     value: txout.value,
-                });
+                };
+                self.utxos.push(utxo);
             }
         }
 
+        Ok(())
+    }
+
+    pub fn flush(self, db_tx: &Transaction) -> Result<()> {
+        for utxo in self.utxos.iter() {
+            store_utxo(db_tx, utxo)?;
+        }
+        for (tx, spend) in self.tx_updates.iter() {
+            add_tx_value(db_tx, &tx)?;
+            mark_transparent_spent(db_tx, spend)?;
+        }
         Ok(())
     }
 }

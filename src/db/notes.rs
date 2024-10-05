@@ -2,7 +2,7 @@ use crate::{
     data::fb::{IdNoteT, InputTransparentT, ShieldedNoteT},
     types::CheckpointHeight,
     warp::{
-        sync::{PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
+        sync::{IdSpent, PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
         BlockHeader, OutPoint, Witness, UTXO,
     },
     Hash,
@@ -19,23 +19,29 @@ use warp_macros::c_export;
 
 use super::tx::{add_tx_value, store_tx};
 
-pub fn get_note_by_nf(connection: &Connection, nullifier: &Hash) -> Result<Option<PlainNote>> {
+pub fn get_note_by_nf(
+    connection: &Connection,
+    account: u32,
+    nullifier: &Hash,
+) -> Result<Option<PlainNote>> {
     let r = connection
         .query_row(
-            "SELECT address, value, rcm, rho FROM notes WHERE nf = ?1",
-            [nullifier],
+            "SELECT id_note, address, value, rcm, rho FROM notes WHERE nf = ?1 AND account = ?2",
+            params![nullifier, account],
             |r| {
                 Ok((
-                    r.get::<_, Vec<u8>>(0)?,
-                    r.get::<_, u64>(1)?,
-                    r.get::<_, Vec<u8>>(2)?,
-                    r.get::<_, Option<Vec<u8>>>(3)?,
+                    r.get::<_, u32>(0)?,
+                    r.get::<_, Vec<u8>>(1)?,
+                    r.get::<_, u64>(2)?,
+                    r.get::<_, Vec<u8>>(3)?,
+                    r.get::<_, Option<Vec<u8>>>(4)?,
                 ))
             },
         )
         .optional()?
-        .map(|(address, value, rcm, rho)| {
+        .map(|(id_note, address, value, rcm, rho)| {
             Ok::<_, Error>(PlainNote {
+                id: id_note,
                 address: address.try_into().unwrap(),
                 value,
                 rcm: rcm.try_into().unwrap(),
@@ -142,9 +148,53 @@ pub fn list_received_notes(
     Ok(notes)
 }
 
-pub fn mark_shielded_spent(connection: &Transaction, tx_value: &TxValueUpdate<Hash>) -> Result<()> {
-    let mut s = connection.prepare("UPDATE notes SET spent = ?2 WHERE nf = ?1")?;
-    s.execute(params![tx_value.id_spent.unwrap(), tx_value.height])?;
+pub fn mark_shielded_spent(connection: &Transaction, id_spent: &IdSpent<Hash>) -> Result<()> {
+    let mut s = connection.prepare_cached(
+        "INSERT INTO note_spends(id_note, account, height, id_tx)
+        SELECT n.id_note, ?1, ?2, t.id_tx FROM notes n
+        JOIN txs t
+        WHERE n.nf = ?3 AND n.account = ?1
+        AND t.txid = ?4 AND t.account = ?1
+        RETURNING id_note",
+    )?;
+    let id_note = s.query_row(
+        params![
+            id_spent.account,
+            id_spent.height,
+            &id_spent.note_ref,
+            &id_spent.txid
+        ],
+        |r| r.get::<_, u32>(0),
+    )?;
+    let mut s = connection.prepare_cached("UPDATE notes SET spent = ?2 WHERE id_note = ?1")?;
+    s.execute(params![id_note, id_spent.height])?;
+    Ok(())
+}
+
+pub fn mark_transparent_spent(
+    connection: &Transaction,
+    id_spent: &IdSpent<OutPoint>,
+) -> Result<()> {
+    let mut s = connection.prepare_cached(
+        "INSERT INTO utxo_spends(id_utxo, account, height, id_tx)
+        SELECT u.id_utxo, ?1, ?2, t.id_tx FROM utxos u
+        JOIN txs t
+        WHERE u.txid = ?3 AND u.vout = ?4 AND u.account = ?1
+        AND t.txid = ?5 AND t.account = ?1
+        RETURNING id_utxo",
+    )?;
+    let id_utxo = s.query_row(
+        params![
+            id_spent.account,
+            id_spent.height,
+            id_spent.note_ref.txid,
+            id_spent.note_ref.vout,
+            &id_spent.txid
+        ],
+        |r| r.get::<_, u32>(0),
+    )?;
+    let mut s = connection.prepare_cached("UPDATE utxos SET spent = ?2 WHERE id_utxo = ?1")?;
+    s.execute(params![id_utxo, id_spent.height])?;
     Ok(())
 }
 
@@ -166,16 +216,6 @@ pub fn mark_notes_unconfirmed_spent(connection: &Connection, id_notes: &[IdNoteT
     Ok(())
 }
 
-pub fn mark_transparent_spent(
-    connection: &Transaction,
-    tx_value: &TxValueUpdate<OutPoint>,
-) -> Result<()> {
-    let OutPoint { txid, vout } = tx_value.id_spent.as_ref().unwrap();
-    let mut s = connection.prepare("UPDATE utxos SET spent = ?3 WHERE txid = ?1 AND vout = ?2")?;
-    s.execute(params![txid, vout, tx_value.height])?;
-    Ok(())
-}
-
 pub fn store_received_note(
     connection: &Transaction,
     height: u32,
@@ -192,14 +232,13 @@ pub fn store_received_note(
             store_tx(connection, &n.tx)?;
             add_tx_value(
                 connection,
-                &TxValueUpdate::<()> {
+                &TxValueUpdate {
                     id_tx: 0,
                     account: n.account,
                     height: n.height,
                     txid: n.tx.txid,
                     timestamp: n.tx.timestamp,
                     value: n.tx.value,
-                    id_spent: None,
                 },
             )?;
             let id_tx = connection.query_row(
@@ -327,14 +366,13 @@ pub fn store_utxo(connection: &Transaction, utxo: &UTXO) -> Result<()> {
             utxo.value,
             None::<u32>
         ])?;
-        let tx_value = TxValueUpdate::<OutPoint> {
+        let tx_value = TxValueUpdate {
             id_tx: 0,
             account: utxo.account,
             txid: utxo.txid,
             value: utxo.value as i64,
             height: utxo.height,
             timestamp: utxo.timestamp,
-            id_spent: None,
         };
         add_tx_value(connection, &tx_value)?;
     }
@@ -356,11 +394,11 @@ pub fn update_tx_timestamp<'a, I: IntoIterator<Item = &'a Option<BlockHeader>>>(
 
 pub fn update_account_balances(connection: &Transaction, height: u32) -> Result<()> {
     connection.execute(
-        "UPDATE accounts SET balance = coins.balance FROM 
+        "UPDATE accounts SET balance = coins.balance FROM
         (WITH coins AS
-        (SELECT account, value, spent FROM notes UNION 
+        (SELECT account, value, spent FROM notes UNION
         SELECT account, value, spent FROM utxos)
-        SELECT account, SUM(value) AS balance FROM coins 
+        SELECT account, SUM(value) AS balance FROM coins
         WHERE spent IS NULL OR spent > ?1 GROUP BY account)
         AS coins WHERE coins.account = accounts.id_account",
         [height],

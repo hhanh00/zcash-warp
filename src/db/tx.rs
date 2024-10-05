@@ -149,10 +149,7 @@ pub fn store_tx(connection: &Transaction, tx: &ReceivedTx) -> Result<()> {
     Ok(())
 }
 
-pub fn add_tx_value<IDSpent: std::fmt::Debug>(
-    connection: &Transaction,
-    tx_value: &TxValueUpdate<IDSpent>,
-) -> Result<()> {
+pub fn add_tx_value(connection: &Transaction, tx_value: &TxValueUpdate) -> Result<()> {
     let mut s_tx = connection.prepare_cached(
         "INSERT INTO txs(account, txid, height, timestamp, value)
         VALUES (?1, ?2, ?3, ?4, 0) ON CONFLICT DO NOTHING",
@@ -202,6 +199,29 @@ pub fn store_tx_details(
     Ok(())
 }
 
+pub fn drop_transparent_data(connection: &Connection, account: u32) -> Result<()> {
+    connection.execute("DELETE FROM utxos WHERE account = ?1", [account])?;
+    connection.execute("DELETE FROM utxo_spends WHERE account = ?1", [account])?;
+    Ok(())
+}
+
+pub fn update_tx_values(connection: &Connection) -> Result<()> {
+    // Update tx values based on notes and spends
+    connection.execute("
+    WITH v AS (SELECT t.id_tx, t.txid, n.value FROM notes n JOIN txs t ON n.tx = t.id_tx UNION
+        SELECT s.id_tx, t.txid, -n.value from note_spends s JOIN notes n ON s.id_note = n.id_note JOIN txs t ON s.id_tx = t.id_tx UNION
+        SELECT t.id_tx, u.txid, u.value from utxos u JOIN txs t ON u.txid = t.txid UNION
+        SELECT s.id_tx, t.txid, -u.value FROM utxo_spends s JOIN txs t ON s.id_tx = t.id_tx JOIN utxos u ON s.id_utxo = u.id_utxo
+        )
+    INSERT INTO txs(id_tx, txid, value, account, height, timestamp)
+    SELECT v.id_tx, v.txid, SUM(v.value) AS value,
+    0 AS account, 0 AS height, 0 AS timestamp
+    FROM v GROUP BY id_tx
+    ON CONFLICT (id_tx) DO UPDATE SET
+    value = excluded.value", [])?;
+    Ok(())
+}
+
 pub fn get_txid(connection: &Connection, id: u32) -> Result<(Vec<u8>, u32)> {
     let (txid, timestamp) = connection.query_row(
         "SELECT txid, timestamp FROM txs WHERE id_tx = ?1",
@@ -209,4 +229,42 @@ pub fn get_txid(connection: &Connection, id: u32) -> Result<(Vec<u8>, u32)> {
         |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, u32>(1)?)),
     )?;
     Ok((txid, timestamp))
+}
+
+pub fn store_block_time(connection: &Connection, height: u32, timestamp: u32) -> Result<()> {
+    connection.execute(
+        "INSERT INTO blck_times(height, timestamp)
+    VALUES (?1, ?2) ON CONFLICT DO NOTHING",
+        params![height, timestamp],
+    )?;
+    Ok(())
+}
+
+pub fn copy_block_times_from_tx(connection: &Connection) -> Result<()> {
+    connection.execute(
+        "INSERT INTO blck_times(height, timestamp)
+    SELECT height, timestamp FROM txs
+    WHERE true ON CONFLICT DO NOTHING",
+        [],
+    )?;
+    Ok(())
+}
+
+pub fn update_tx_time(connection: &Connection) -> Result<()> {
+    connection.execute(
+        "INSERT INTO txs(id_tx, timestamp, account, txid, height, value) 
+        SELECT t.id_tx, b.timestamp, 0, x'', 0, 0 FROM txs t
+        JOIN blck_times b ON t.height = b.height WHERE t.timestamp = 0
+        ON CONFLICT (id_tx) DO UPDATE SET
+        timestamp = excluded.timestamp",
+        [],
+    )?;
+    Ok(())
+}
+
+pub fn list_unknown_height_timestamps(connection: &Connection) -> Result<Vec<u32>> {
+    let mut s = connection.prepare("SELECT height FROM txs WHERE timestamp = 0")?;
+    let rows = s.query_map([], |r| r.get::<_, u32>(0))?;
+    let heights = rows.collect::<Result<Vec<_>, _>>()?;
+    Ok(heights)
 }

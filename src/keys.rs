@@ -221,6 +221,27 @@ impl TransparentAccountInfo {
             .derive_address(addr_index)
             .unwrap()
     }
+
+    pub fn new_address(&self, addr_index: u32) -> Result<Self> {
+        let aindex = NonHardenedChildIndex::from_index(addr_index).unwrap();
+        let tsk = self
+            .xsk
+            .as_ref()
+            .map(|tvk| tvk.derive_external_secret_key(aindex).unwrap());
+        let taddr = self.vk.as_ref().map(|tvk| {
+            tvk.derive_external_ivk()
+                .unwrap()
+                .derive_address(aindex)
+                .unwrap()
+        });
+        Ok(Self {
+            index: Some(addr_index),
+            xsk: self.xsk.clone(),
+            sk: tsk,
+            vk: self.vk.clone(),
+            addr: taddr.ok_or(anyhow::anyhow!("No VK"))?,
+        })
+    }
 }
 
 pub fn to_extended_full_viewing_key(

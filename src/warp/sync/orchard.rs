@@ -11,7 +11,7 @@ use crate::{
     db::account::{get_account_info, list_accounts},
     lwd::rpc::{Bridge, CompactBlock},
     types::{AccountInfo, CheckpointHeight},
-    warp::{hasher::OrchardHasher, try_orchard_decrypt},
+    warp::{hasher::OrchardHasher, sync::IdSpent, try_orchard_decrypt},
     Hash,
 };
 use crate::{db::notes::list_all_received_notes, network::Network};
@@ -30,7 +30,7 @@ pub struct Synchronizer {
     pub account_infos: Vec<AccountInfo>,
     pub start: u32,
     pub notes: Vec<ReceivedNote>,
-    pub spends: Vec<TxValueUpdate<Hash>>,
+    pub spends: Vec<(TxValueUpdate, IdSpent<Hash>)>,
     pub position: u32,
     pub tree_state: Edge,
 }
@@ -57,7 +57,7 @@ impl Synchronizer {
             let ai = get_account_info(network, connection, a.id)?;
             account_infos.push(ai);
         }
-        let notes = list_all_received_notes(connection,start, true)?;
+        let notes = list_all_received_notes(connection, start, true)?;
 
         Ok(Self {
             hasher: OrchardHasher::default(),
@@ -312,16 +312,22 @@ impl Synchronizer {
                     let nf = &*ca.nullifier;
                     if let Some(n) = nfs.get_mut(nf) {
                         n.spent = Some(cb.height as u32);
-                        let tx = TxValueUpdate::<Hash> {
+                        let id_spent = IdSpent::<Hash> {
+                            id_note: n.id,
+                            account: n.account,
+                            height: cb.height as u32, // height at which the spent occurs
+                            txid: vtx.hash.clone().try_into().unwrap(),
+                            note_ref: ca.nullifier.clone().try_into().unwrap(),
+                        };
+                        let tx = TxValueUpdate {
                             account: n.account,
                             txid: vtx.hash.clone().try_into().unwrap(),
                             value: -(n.value as i64),
                             id_tx: 0,
                             height: cb.height as u32,
                             timestamp: cb.time,
-                            id_spent: Some(n.nf),
                         };
-                        self.spends.push(tx);
+                        self.spends.push((tx, id_spent));
                     }
                 }
             }

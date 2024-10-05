@@ -138,9 +138,9 @@ pub fn analyze_raw_transaction(
     network: &Network,
     connection: &Connection,
     url: String,
+    account: u32,
     height: u32,
     timestamp: u32,
-    account: u32,
     tx: ZTransaction,
 ) -> Result<TransactionDetails> {
     let ai = get_account_info(network, connection, account)?;
@@ -179,7 +179,7 @@ pub fn analyze_raw_transaction(
             let ivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(&si.vk.fvk().vk.ivk());
             let ovk = &si.vk.fvk().ovk;
             for sin in b.shielded_spends() {
-                let spend = get_note_by_nf(connection, &sin.nullifier().0)?;
+                let spend = get_note_by_nf(connection, account, &sin.nullifier().0)?;
                 sins.push(ShieldedInput {
                     note: spend,
                     nf: sin.nullifier().0.clone(),
@@ -201,6 +201,7 @@ pub fn analyze_raw_transaction(
                     })
                     .map(|(n, p, m, incoming)| FullPlainNote {
                         note: PlainNote {
+                            id: 0,
                             address: p.to_bytes(),
                             value: n.value().inner(),
                             rcm: n.rcm().to_bytes(),
@@ -223,7 +224,7 @@ pub fn analyze_raw_transaction(
                 orchard::keys::PreparedIncomingViewingKey::new(&orchard.vk.to_ivk(Scope::External));
             let ovk = &orchard.vk.to_ovk(Scope::External);
             for a in b.actions() {
-                let spend = get_note_by_nf(connection, &a.nullifier().to_bytes())?;
+                let spend = get_note_by_nf(connection, account, &a.nullifier().to_bytes())?;
                 oins.push(ShieldedInput {
                     note: spend,
                     nf: a.nullifier().to_bytes(),
@@ -244,6 +245,7 @@ pub fn analyze_raw_transaction(
                     })
                     .map(|(n, addr, m, incoming)| FullPlainNote {
                         note: PlainNote {
+                            id: 0,
                             address: addr.to_raw_address_bytes(),
                             value: n.value().inner(),
                             rcm: n.rseed().as_bytes().clone(),
@@ -301,9 +303,9 @@ pub async fn retrieve_tx_details(
             network,
             &connection.lock(),
             url.clone(),
+            account,
             height,
             timestamp,
-            account,
             tx,
         )?;
         let tx_bin = bincode::serialize(&txd)?;

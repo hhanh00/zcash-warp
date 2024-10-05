@@ -69,6 +69,10 @@ struct CResult______u8 c_list_accounts(uint8_t coin);
 
 struct CResult______u8 c_list_account_transparent_addresses(uint8_t coin, uint32_t account);
 
+struct CResult_u8 c_update_account_primary_transparent_address(uint8_t coin,
+                                                               uint32_t account,
+                                                               uint32_t addr_index);
+
 struct CResult______u8 c_get_balance(uint8_t coin, uint32_t account, uint32_t height);
 
 struct CResult______u8 c_get_account_signing_capabilities(uint8_t coin, uint32_t account);
@@ -154,10 +158,19 @@ void c_setup(void);
 
 struct CResult_u8 c_configure(uint8_t coin, struct CParam config);
 
-struct CResult______u8 c_derive_zip32_keys(uint8_t coin,
-                                           uint32_t account,
-                                           uint32_t acc_index,
-                                           uint32_t addr_index);
+struct CResult_u32 c_get_activation_date(uint8_t coin);
+
+struct CResult_u32 c_get_height_by_time(uint8_t coin, uint32_t time);
+
+struct CResult_u32 c_get_activation_height(uint8_t coin);
+
+struct CResult_u32 c_get_time_by_height(uint8_t coin, uint32_t height);
+
+struct CResult_u8 c_reset_chain(uint8_t coin, uint32_t height);
+
+struct CResult______u8 c_split(uint8_t coin, struct CParam data, uint32_t threshold);
+
+struct CResult______u8 c_merge(uint8_t coin, struct CParam parts);
 
 struct CResult_u8 c_check_db_password(char *path, char *password);
 
@@ -178,28 +191,10 @@ struct CResult_u8 c_create_db(uint8_t coin, char *path, char *password);
 
 struct CResult_u8 c_migrate_db(uint8_t coin, uint8_t major, char *src, char *dest, char *password);
 
-struct CResult______u8 c_decode_address(uint8_t coin, char *address);
-
-struct CResult_____c_char c_filter_address(uint8_t coin, char *address, uint8_t pool_mask);
-
-struct CResult_____c_char c_make_payment_uri(uint8_t coin, struct CParam payment);
-
-struct CResult______u8 c_parse_payment_uri(uint8_t coin,
-                                           char *uri,
-                                           uint32_t height,
-                                           uint32_t expiration);
-
-struct CResult_u8 c_is_valid_address_or_uri(uint8_t coin, char *s);
-
-struct CResult_u32 c_get_activation_date(uint8_t coin);
-
-struct CResult_u32 c_get_height_by_time(uint8_t coin, uint32_t time);
-
-struct CResult_u32 c_get_activation_height(uint8_t coin);
-
-struct CResult_u32 c_get_time_by_height(uint8_t coin, uint32_t height);
-
-struct CResult_u8 c_reset_chain(uint8_t coin, uint32_t height);
+struct CResult______u8 c_derive_zip32_keys(uint8_t coin,
+                                           uint32_t account,
+                                           uint32_t acc_index,
+                                           uint32_t addr_index);
 
 struct CResult______u8 c_prev_message(uint8_t coin, uint32_t account, uint32_t height);
 
@@ -214,19 +209,6 @@ struct CResult______u8 c_next_message_thread(uint8_t coin,
                                              uint32_t account,
                                              uint32_t height,
                                              char *subject);
-
-struct CResult_u8 c_encrypt_zip_database_files(uint8_t coin, struct CParam zip_db_config);
-
-struct CResult_u8 c_decrypt_zip_database_files(uint8_t coin,
-                                               char *file_path,
-                                               char *target_directory,
-                                               char *secret_key);
-
-struct CResult______u8 c_generate_zip_database_keys(uint8_t coin);
-
-struct CResult______u8 c_split(uint8_t coin, struct CParam data, uint32_t threshold);
-
-struct CResult______u8 c_merge(uint8_t coin, struct CParam parts);
 
 struct CResult______u8 c_prepare_payment(uint8_t coin,
                                          uint32_t account,
@@ -245,5 +227,27 @@ struct CResult______u8 c_save_contacts(uint8_t coin,
                                        char *redirect);
 
 struct CResult______u8 c_fetch_tx_details(uint8_t coin, uint32_t account, uint32_t id);
+
+struct CResult______u8 c_decode_address(uint8_t coin, char *address);
+
+struct CResult_____c_char c_filter_address(uint8_t coin, char *address, uint8_t pool_mask);
+
+struct CResult_____c_char c_make_payment_uri(uint8_t coin, struct CParam payment);
+
+struct CResult______u8 c_parse_payment_uri(uint8_t coin,
+                                           char *uri,
+                                           uint32_t height,
+                                           uint32_t expiration);
+
+struct CResult_u8 c_is_valid_address_or_uri(uint8_t coin, char *s);
+
+struct CResult_u8 c_encrypt_zip_database_files(uint8_t coin, struct CParam zip_db_config);
+
+struct CResult_u8 c_decrypt_zip_database_files(uint8_t coin,
+                                               char *file_path,
+                                               char *target_directory,
+                                               char *secret_key);
+
+struct CResult______u8 c_generate_zip_database_keys(uint8_t coin);
 
 struct CResult_u8 warp_synchronize(uint8_t coin, uint32_t end_height);

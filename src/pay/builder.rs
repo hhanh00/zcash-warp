@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use crate::{
     data::fb::{IdNoteT, TransactionBytesT},
     db::{
-        account::{get_account_info, list_account_tsk}, account_manager::get_account_by_name,
+        account::{get_account_info, list_account_tsk},
+        account_manager::get_account_by_name,
     },
     warp::{
         hasher::{empty_roots, OrchardHasher, SaplingHasher},
