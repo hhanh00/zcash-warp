@@ -185,6 +185,25 @@ pub fn export_sk_bip38(sk: &SecretKey) -> String {
     v.to_base58check(0x80)
 }
 
+pub fn decode_extended_private_key(key: &str) -> Result<AccountPrivKey> {
+    let (hrp, key) = bech32::decode(key)?;
+    if hrp.as_str() != "txprv" {
+        anyhow::bail!("Not an extended private key");
+    }
+    let key =
+        AccountPrivKey::from_bytes(&*key).ok_or(anyhow::anyhow!("Invalid extended private key"))?;
+    Ok(key)
+}
+
+pub fn decode_extended_public_key(key: &str) -> Result<AccountPubKey> {
+    let (hrp, key) = bech32::decode(key)?;
+    if hrp.as_str() != "txpub" {
+        anyhow::bail!("Not an extended public key");
+    }
+    let key = AccountPubKey::deserialize(&key.try_into().unwrap())?;
+    Ok(key)
+}
+
 pub fn import_sk_bip38(key: &str) -> Result<SecretKey> {
     let (_, sk) = key
         .from_base58check()

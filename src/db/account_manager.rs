@@ -11,12 +11,18 @@ use zcash_client_backend::{
 };
 use zcash_primitives::{
     consensus::NetworkConstants as _,
-    legacy::{keys::NonHardenedChildIndex, TransparentAddress},
+    legacy::{
+        keys::{IncomingViewingKey, NonHardenedChildIndex},
+        TransparentAddress,
+    },
 };
 
 use crate::{
     data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
-    keys::{export_sk_bip38, import_sk_bip38, to_extended_full_viewing_key, AccountKeys},
+    keys::{
+        decode_extended_private_key, decode_extended_public_key, export_sk_bip38, import_sk_bip38,
+        to_extended_full_viewing_key, AccountKeys,
+    },
     network::Network,
     types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
     utils::keys::find_address_index,
@@ -118,6 +124,40 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
             tsk: ti.sk.clone(),
             tvk: None,
             taddr: Some(ti.addr),
+            ssk: None,
+            svk: None,
+            osk: None,
+            ovk: None,
+        }
+    } else if let Ok(txsk) = decode_extended_private_key(key) {
+        let tvk = txsk.to_account_pubkey();
+        let sk = txsk.derive_external_secret_key(NonHardenedChildIndex::ZERO)?;
+        let ivk = tvk.derive_external_ivk()?;
+        let taddr = ivk.derive_address(NonHardenedChildIndex::ZERO)?;
+        AccountKeys {
+            seed: None,
+            aindex: 0,
+            dindex: None,
+            txsk: Some(txsk),
+            tsk: Some(sk),
+            tvk: Some(tvk),
+            taddr: Some(taddr),
+            ssk: None,
+            svk: None,
+            osk: None,
+            ovk: None,
+        }
+    } else if let Ok(tvk) = decode_extended_public_key(key) {
+        let ivk = tvk.derive_external_ivk()?;
+        let taddr = ivk.derive_address(NonHardenedChildIndex::ZERO)?;
+        AccountKeys {
+            seed: None,
+            aindex: 0,
+            dindex: None,
+            txsk: None,
+            tsk: None,
+            tvk: Some(tvk),
+            taddr: Some(taddr),
             ssk: None,
             svk: None,
             osk: None,
@@ -267,7 +307,10 @@ pub fn create_transparent_address(
 
     connection.execute(
         "INSERT INTO t_addresses(account, addr_index, sk, address)
-        VALUES (?1, ?2, ?3, ?4)",
+        VALUES (?1, ?2, ?3, ?4)
+        ON CONFLICT (account, addr_index)
+        DO UPDATE
+        SET sk = excluded.sk, address = excluded.address", // address already exists
         params![account, addr_index, sk, addr],
     )?;
     Ok(())
@@ -374,6 +417,14 @@ pub fn edit_account_birth(connection: &Connection, account: u32, birth: u32) -> 
 pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     connection.execute("DELETE FROM notes WHERE account = ?1", params![account])?;
     connection.execute("DELETE FROM utxos WHERE account = ?1", params![account])?;
+    connection.execute(
+        "DELETE FROM note_spends WHERE account = ?1",
+        params![account],
+    )?;
+    connection.execute(
+        "DELETE FROM utxo_spends WHERE account = ?1",
+        params![account],
+    )?;
     connection.execute("DELETE FROM witnesses WHERE account = ?1", params![account])?;
     connection.execute("DELETE FROM txs WHERE account = ?1", params![account])?;
     connection.execute("DELETE FROM txdetails WHERE account = ?1", params![account])?;
@@ -430,7 +481,7 @@ pub fn downgrade_account(
     }
     if capabilities.transparent == 1 {
         connection.execute(
-            "UPDATE t_accounts SET sk = NULL WHERE account = ?1",
+            "UPDATE t_accounts SET sk = NULL, xsk = NULL WHERE account = ?1",
             [account],
         )?;
         connection.execute(

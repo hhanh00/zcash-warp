@@ -251,3 +251,5 @@ struct CResult_u8 c_decrypt_zip_database_files(uint8_t coin,
 struct CResult______u8 c_generate_zip_database_keys(uint8_t coin);
 
 struct CResult_u8 warp_synchronize(uint8_t coin, uint32_t end_height);
+
+struct CResult_u8 c_transparent_scan(uint8_t coin, uint32_t account, uint32_t end_height);

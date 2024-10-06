@@ -179,8 +179,11 @@ pub mod fb {
         pub const VT_FVK: flatbuffers::VOffsetT = 12;
         pub const VT_UVK: flatbuffers::VOffsetT = 14;
         pub const VT_TSK: flatbuffers::VOffsetT = 16;
-        pub const VT_BIRTH: flatbuffers::VOffsetT = 18;
-        pub const VT_SAVED: flatbuffers::VOffsetT = 20;
+        pub const VT_TXSK: flatbuffers::VOffsetT = 18;
+        pub const VT_TVK: flatbuffers::VOffsetT = 20;
+        pub const VT_TADDR: flatbuffers::VOffsetT = 22;
+        pub const VT_BIRTH: flatbuffers::VOffsetT = 24;
+        pub const VT_SAVED: flatbuffers::VOffsetT = 26;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -198,6 +201,15 @@ pub mod fb {
         ) -> flatbuffers::WIPOffset<Backup<'bldr>> {
             let mut builder = BackupBuilder::new(_fbb);
             builder.add_birth(args.birth);
+            if let Some(x) = args.taddr {
+                builder.add_taddr(x);
+            }
+            if let Some(x) = args.tvk {
+                builder.add_tvk(x);
+            }
+            if let Some(x) = args.txsk {
+                builder.add_txsk(x);
+            }
             if let Some(x) = args.tsk {
                 builder.add_tsk(x);
             }
@@ -229,6 +241,9 @@ pub mod fb {
             let fvk = self.fvk().map(|x| x.to_string());
             let uvk = self.uvk().map(|x| x.to_string());
             let tsk = self.tsk().map(|x| x.to_string());
+            let txsk = self.txsk().map(|x| x.to_string());
+            let tvk = self.tvk().map(|x| x.to_string());
+            let taddr = self.taddr().map(|x| x.to_string());
             let birth = self.birth();
             let saved = self.saved();
             BackupT {
@@ -239,6 +254,9 @@ pub mod fb {
                 fvk,
                 uvk,
                 tsk,
+                txsk,
+                tvk,
+                taddr,
                 birth,
                 saved,
             }
@@ -312,6 +330,36 @@ pub mod fb {
             }
         }
         #[inline]
+        pub fn txsk(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_TXSK, None)
+            }
+        }
+        #[inline]
+        pub fn tvk(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_TVK, None)
+            }
+        }
+        #[inline]
+        pub fn taddr(&self) -> Option<&'a str> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(Backup::VT_TADDR, None)
+            }
+        }
+        #[inline]
         pub fn birth(&self) -> u32 {
             // Safety:
             // Created from valid Table for this object
@@ -346,6 +394,9 @@ pub mod fb {
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("fvk", Self::VT_FVK, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("uvk", Self::VT_UVK, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("tsk", Self::VT_TSK, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("txsk", Self::VT_TXSK, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("tvk", Self::VT_TVK, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<&str>>("taddr", Self::VT_TADDR, false)?
                 .visit_field::<u32>("birth", Self::VT_BIRTH, false)?
                 .visit_field::<bool>("saved", Self::VT_SAVED, false)?
                 .finish();
@@ -360,6 +411,9 @@ pub mod fb {
         pub fvk: Option<flatbuffers::WIPOffset<&'a str>>,
         pub uvk: Option<flatbuffers::WIPOffset<&'a str>>,
         pub tsk: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub txsk: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub tvk: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub taddr: Option<flatbuffers::WIPOffset<&'a str>>,
         pub birth: u32,
         pub saved: bool,
     }
@@ -374,6 +428,9 @@ pub mod fb {
                 fvk: None,
                 uvk: None,
                 tsk: None,
+                txsk: None,
+                tvk: None,
+                taddr: None,
                 birth: 0,
                 saved: false,
             }
@@ -420,6 +477,21 @@ pub mod fb {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_TSK, tsk);
         }
         #[inline]
+        pub fn add_txsk(&mut self, txsk: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_TXSK, txsk);
+        }
+        #[inline]
+        pub fn add_tvk(&mut self, tvk: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_TVK, tvk);
+        }
+        #[inline]
+        pub fn add_taddr(&mut self, taddr: flatbuffers::WIPOffset<&'b str>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Backup::VT_TADDR, taddr);
+        }
+        #[inline]
         pub fn add_birth(&mut self, birth: u32) {
             self.fbb_.push_slot::<u32>(Backup::VT_BIRTH, birth, 0);
         }
@@ -454,6 +526,9 @@ pub mod fb {
             ds.field("fvk", &self.fvk());
             ds.field("uvk", &self.uvk());
             ds.field("tsk", &self.tsk());
+            ds.field("txsk", &self.txsk());
+            ds.field("tvk", &self.tvk());
+            ds.field("taddr", &self.taddr());
             ds.field("birth", &self.birth());
             ds.field("saved", &self.saved());
             ds.finish()
@@ -469,6 +544,9 @@ pub mod fb {
         pub fvk: Option<String>,
         pub uvk: Option<String>,
         pub tsk: Option<String>,
+        pub txsk: Option<String>,
+        pub tvk: Option<String>,
+        pub taddr: Option<String>,
         pub birth: u32,
         pub saved: bool,
     }
@@ -482,6 +560,9 @@ pub mod fb {
                 fvk: None,
                 uvk: None,
                 tsk: None,
+                txsk: None,
+                tvk: None,
+                taddr: None,
                 birth: 0,
                 saved: false,
             }
@@ -499,6 +580,9 @@ pub mod fb {
             let fvk = self.fvk.as_ref().map(|x| _fbb.create_string(x));
             let uvk = self.uvk.as_ref().map(|x| _fbb.create_string(x));
             let tsk = self.tsk.as_ref().map(|x| _fbb.create_string(x));
+            let txsk = self.txsk.as_ref().map(|x| _fbb.create_string(x));
+            let tvk = self.tvk.as_ref().map(|x| _fbb.create_string(x));
+            let taddr = self.taddr.as_ref().map(|x| _fbb.create_string(x));
             let birth = self.birth;
             let saved = self.saved;
             Backup::create(
@@ -511,6 +595,9 @@ pub mod fb {
                     fvk,
                     uvk,
                     tsk,
+                    txsk,
+                    tvk,
+                    taddr,
                     birth,
                     saved,
                 },

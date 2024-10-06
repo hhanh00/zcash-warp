@@ -326,6 +326,9 @@ pub async fn transparent_scan(
     let mut trp_dec = TransparentSync::new(coin, network, connection)?;
     let addresses = list_account_transparent_addresses(connection, account)?;
     let start = get_activation_height(network)?;
+    if start >= end_height {
+        return Ok(());
+    }
     let db_tx = connection.transaction()?;
     for a in addresses {
         let taddr = a.address.as_deref().unwrap();

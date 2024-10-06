@@ -51,6 +51,7 @@ pub async fn scan_transparent_addresses(
                 store_utxo(&db_tx, utxo)?;
             }
             db_tx.commit()?;
+            gap = 0;
         }
         addr_index += 1;
     }

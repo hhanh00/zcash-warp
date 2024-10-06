@@ -1,4 +1,5 @@
 use anyhow::Result;
+use bech32::{Bech32m, Hrp};
 use orchard::{
     keys::{FullViewingKey, SpendingKey},
     Address,
@@ -207,6 +208,18 @@ impl AccountInfo {
             .as_ref()
             .and_then(|ti| ti.sk.map(|sk| export_sk_bip38(&sk)));
 
+        let txsk = self.transparent.as_ref().and_then(|ti| {
+            ti.xsk.as_ref().map(|xsk| {
+                bech32::encode::<Bech32m>(Hrp::parse("txprv").unwrap(), &*xsk.to_bytes()).unwrap()
+            })
+        });
+        let tvk = self.transparent.as_ref().and_then(|ti| {
+            ti.vk.as_ref().map(|vk| {
+                bech32::encode::<Bech32m>(Hrp::parse("txpub").unwrap(), &*vk.serialize()).unwrap()
+            })
+        });
+        let taddr = self.transparent.as_ref().map(|ti| ti.addr.encode(network));
+
         BackupT {
             name: Some(self.name.clone()),
             seed: self.seed.clone(),
@@ -216,6 +229,9 @@ impl AccountInfo {
             fvk,
             uvk,
             tsk,
+            txsk,
+            tvk,
+            taddr,
             saved: self.saved,
         }
     }
