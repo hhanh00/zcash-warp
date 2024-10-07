@@ -1,3 +1,5 @@
+use std::{fs::File, io::{BufWriter, Write}};
+
 use crate::{
     coin::{connect_lwd, CoinDef},
     db::{
@@ -25,6 +27,7 @@ use crate::{
 };
 use anyhow::Result;
 use header::BlockHeaderStore;
+use prost::Message;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -40,6 +43,8 @@ use crate::{
     coin::COINS,
     ffi::{map_result, CResult},
 };
+use std::ffi::{c_char, CStr};
+
 use warp_macros::c_export;
 
 pub mod builder;
@@ -137,6 +142,22 @@ pub struct ReceivedNote {
 
 pub use orchard::Synchronizer as OrchardSync;
 pub use sapling::Synchronizer as SaplingSync;
+
+#[c_export]
+pub async fn download_warp_blocks(network: &Network, warp_url: &str, end: u32, dest: &str) -> Result<()> {
+    let mut client = connect_lwd(warp_url).await?;
+    let dest = File::create(dest)?;
+    let mut dest = BufWriter::new(dest);
+    let start = get_activation_height(network)?;
+    let mut blocks = get_compact_block_range(&mut client, 
+        start, 
+        end - 1).await?;
+    while let Some(block) = blocks.message().await? {
+        let v = block.encode_length_delimited_to_vec();
+        dest.write_all(&*v)?;
+    }
+    Ok(())
+}
 
 pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Result<(), SyncError> {
     tracing::info!("{:?}-{}", start, end);
