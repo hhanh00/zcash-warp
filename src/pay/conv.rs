@@ -19,6 +19,7 @@ impl TxInput {
             note: InputNote::Transparent {
                 txid: utxo.txid,
                 vout: utxo.vout,
+                addr_index: utxo.addr_index,
                 address: utxo.address.clone(),
             },
         }

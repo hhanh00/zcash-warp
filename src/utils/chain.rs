@@ -90,7 +90,7 @@ pub async fn reset_chain(
         .unwrap()
         .into();
     let min_birth_height = get_min_birth(&connection)?.unwrap_or(activation);
-    let height = height.unwrap_or(min_birth_height).max(activation + 1);
+    let height = height.unwrap_or(min_birth_height).max(activation);
     let block = get_compact_block(client, height).await?;
     let mut transaction = connection.transaction()?;
     transaction.set_drop_behavior(DropBehavior::Commit);

@@ -15,7 +15,9 @@ use crate::{
     pay::sweep::scan_transparent_addresses,
     types::PoolMask,
     utils::chain::reset_chain,
-    warp::sync::transparent_scan,
+    warp::sync::{
+        download_warp_blocks, transparent_scan, warp_synchronize, warp_synchronize_from_file,
+    },
 };
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -72,7 +74,6 @@ use crate::{
             decrypt_zip_database_files, encrypt_zip_database_files, generate_zip_database_keys,
         },
     },
-    warp::sync::warp_sync,
     EXPIRATION_HEIGHT_DELTA,
 };
 
@@ -165,6 +166,8 @@ pub struct Chain {
 pub enum ChainCommand {
     GetActivationDate,
     GetHeightFromTime { time: u32 },
+    Download { filename: String },
+    SyncFromFile { filename: String },
 }
 
 #[derive(Parser, Clone, Debug)]
@@ -381,7 +384,7 @@ async fn process_command(
             let mut connection = zec.connection()?;
             match account_cmd.command {
                 AccountCommand::List => {
-                    let accounts = list_accounts(zec.coin, &connection)?;
+                    let accounts = list_accounts(&zec, &connection)?;
                     println!("{}", serde_json::to_string_pretty(&accounts)?);
                 }
                 AccountCommand::Create { key, name, birth } => {
@@ -498,6 +501,18 @@ async fn process_command(
                 ChainCommand::GetHeightFromTime { time } => {
                     let height = get_height_by_time(network, &mut client, time).await?;
                     println!("height: {height}");
+                }
+                ChainCommand::Download { filename } => {
+                    download_warp_blocks(
+                        network,
+                        zec.config.warp_url.as_deref().unwrap(),
+                        zec.config.warp_end_height,
+                        &filename,
+                    )
+                    .await?;
+                }
+                ChainCommand::SyncFromFile { filename } => {
+                    warp_synchronize_from_file(&zec, &filename).await?;
                 }
             }
         }
@@ -663,7 +678,7 @@ async fn process_command(
                 .unwrap()
                 .into();
             let min_birth_height = get_min_birth(&connection)?.unwrap_or(activation);
-            let height = height.unwrap_or(min_birth_height).max(activation + 1);
+            let height = height.unwrap_or(min_birth_height).max(activation);
             reset_chain(network, &mut connection, &mut client, height).await?;
         }
         Command::Sync {
@@ -686,7 +701,7 @@ async fn process_command(
                 break;
             }
             let end_height = (start_height + 100_000).min(end_height);
-            warp_sync(&zec, CheckpointHeight(start_height), end_height).await?;
+            warp_synchronize(&zec, end_height).await?;
             let connection = zec.connection()?;
             retrieve_tx_details(network, &connection, zec.config.lwd_url.clone().unwrap()).await?;
         },
@@ -694,7 +709,7 @@ async fn process_command(
             let mut connection = zec.connection()?;
             let mut client = zec.connect_lwd().await?;
             let bc_height = get_last_height(&mut client).await?;
-            transparent_scan(0, network, &mut connection, &mut client, account, bc_height).await?;
+            transparent_scan(network, &mut connection, &mut client, account, bc_height).await?;
         }
         Command::Address { account, mask } => {
             let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;

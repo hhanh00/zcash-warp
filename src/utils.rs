@@ -1,4 +1,5 @@
 use crate::{
+    coin::CoinDef,
     data::fb::{Config, ConfigT},
     Hash,
 };
@@ -71,9 +72,9 @@ pub fn to_txid_str(txid: &Hash) -> String {
 }
 
 #[c_export]
-pub fn configure(coin: u8, config: &ConfigT) -> Result<()> {
+pub fn configure(coin: &CoinDef, config: &ConfigT) -> Result<()> {
     tracing::info!("{:?}", config);
-    let mut coin_def = COINS[coin as usize].lock();
+    let mut coin_def = COINS[coin.coin as usize].lock();
     coin_def.set_config(config)?;
     Ok(())
 }

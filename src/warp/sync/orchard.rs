@@ -8,6 +8,7 @@ use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
 use crate::{
+    coin::CoinDef,
     db::account::{get_account_info, list_accounts},
     lwd::rpc::{Bridge, CompactBlock},
     types::{AccountInfo, CheckpointHeight},
@@ -44,14 +45,14 @@ struct BridgeExt<'a> {
 
 impl Synchronizer {
     pub fn new(
-        coin: u8,
+        coin: &CoinDef,
         network: &Network,
         connection: &Connection,
         start: CheckpointHeight,
         position: u32,
         tree_state: Edge,
     ) -> Result<Self> {
-        let accounts = list_accounts(coin, connection)?;
+        let accounts = list_accounts(&coin, connection)?;
         let mut account_infos = vec![];
         for a in accounts {
             let ai = get_account_info(network, connection, a.id)?;

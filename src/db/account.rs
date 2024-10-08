@@ -11,7 +11,7 @@ use zcash_primitives::legacy::keys::{AccountPrivKey, AccountPubKey};
 use zcash_primitives::legacy::TransparentAddress;
 
 use crate::account::contacts::recipient_contains;
-use crate::coin::COINS;
+use crate::coin::{CoinDef, COINS};
 use crate::data::fb::{
     AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendingT, TransparentAddressT,
 };
@@ -26,7 +26,7 @@ use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 #[c_export]
-pub fn list_accounts(coin: u8, connection: &Connection) -> Result<Vec<AccountNameT>> {
+pub fn list_accounts(coin: &CoinDef, connection: &Connection) -> Result<Vec<AccountNameT>> {
     let mut s = connection
         .prepare("SELECT id_account, name, birth, balance FROM accounts ORDER BY id_account")?;
     let rows = s.query_map([], |r| {
@@ -41,7 +41,7 @@ pub fn list_accounts(coin: u8, connection: &Connection) -> Result<Vec<AccountNam
     for r in rows {
         let (id, name, birth, balance) = r?;
         accounts.push(AccountNameT {
-            coin,
+            coin: coin.coin,
             id,
             name: Some(name),
             birth,

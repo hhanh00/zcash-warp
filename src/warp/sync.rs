@@ -1,4 +1,7 @@
-use std::{fs::File, io::{BufWriter, Write}};
+use std::{
+    fs::File,
+    io::{BufReader, BufWriter, Read, Write},
+};
 
 use crate::{
     coin::{connect_lwd, CoinDef},
@@ -14,7 +17,10 @@ use crate::{
         },
     },
     fb_unwrap,
-    lwd::{get_compact_block, get_compact_block_range, get_transparent, get_tree_state},
+    lwd::{
+        get_compact_block, get_compact_block_range, get_transparent, get_tree_state,
+        rpc::CompactBlock,
+    },
     network::Network,
     txdetails::CompressedMemo,
     types::CheckpointHeight,
@@ -27,15 +33,22 @@ use crate::{
 };
 use anyhow::Result;
 use header::BlockHeaderStore;
+use lazy_static::lazy_static;
 use prost::Message;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::{
+    mpsc::{channel, Sender},
+    Semaphore,
+};
 use tracing::info;
 use transparent::TransparentSync;
 use zcash_keys::encoding::AddressCodec;
 use zcash_primitives::legacy::TransparentAddress;
+use zip::unstable::{LittleEndianReadExt, LittleEndianWriteExt};
 
 use super::Witness;
 
@@ -144,30 +157,81 @@ pub use orchard::Synchronizer as OrchardSync;
 pub use sapling::Synchronizer as SaplingSync;
 
 #[c_export]
-pub async fn download_warp_blocks(network: &Network, warp_url: &str, end: u32, dest: &str) -> Result<()> {
+pub async fn download_warp_blocks(
+    network: &Network,
+    warp_url: &str,
+    end: u32,
+    dest: &str,
+) -> Result<()> {
+    tracing::info!("warp url {warp_url}");
     let mut client = connect_lwd(warp_url).await?;
     let dest = File::create(dest)?;
     let mut dest = BufWriter::new(dest);
     let start = get_activation_height(network)?;
-    let mut blocks = get_compact_block_range(&mut client, 
-        start, 
-        end - 1).await?;
+    let mut blocks = get_compact_block_range(&mut client, start + 1, end - 1).await?;
     while let Some(block) = blocks.message().await? {
-        let v = block.encode_length_delimited_to_vec();
+        let v = block.encode_to_vec();
+        dest.write_u32_le(v.len() as u32)?;
         dest.write_all(&*v)?;
     }
     Ok(())
 }
 
-pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Result<(), SyncError> {
+pub trait CompactBlockSource: Clone {
+    fn chunked(&self) -> bool;
+
+    fn run(self, start: u32, end: u32, sender: Sender<CompactBlock>) -> Result<()>;
+}
+
+#[derive(Clone)]
+pub struct LWDCompactBlockSource {
+    url: String,
+}
+
+impl LWDCompactBlockSource {
+    pub fn new(url: &str) -> Result<Self> {
+        Ok(Self {
+            url: url.to_string(),
+        })
+    }
+}
+
+impl CompactBlockSource for LWDCompactBlockSource {
+    fn chunked(&self) -> bool {
+        true
+    }
+
+    fn run(self, start: u32, end: u32, sender: Sender<CompactBlock>) -> Result<()> {
+        tokio::spawn(async move {
+            let mut client = connect_lwd(&self.url).await?;
+            let mut range = get_compact_block_range(&mut client, start + 1, end).await?;
+            while let Some(block) = range.message().await? {
+                sender.send(block).await?;
+            }
+            Ok::<_, anyhow::Error>(())
+        });
+        Ok(())
+    }
+}
+
+pub async fn warp_sync<BS: CompactBlockSource + 'static>(
+    coin: &CoinDef,
+    start: CheckpointHeight,
+    end: u32,
+    source: BS,
+) -> Result<(), SyncError> {
     tracing::info!("{:?}-{}", start, end);
+    let permit = SYNC_LOCK.acquire().await;
+    if !permit.is_ok() {
+        return Ok(());
+    }
     let mut connection = coin.connection()?;
     let mut client = coin.connect_lwd().await?;
     let (sapling_state, orchard_state) = get_tree_state(&mut client, start.into()).await?;
 
     let sap_hasher = SaplingHasher::default();
     let mut sap_dec = SaplingSync::new(
-        coin.coin,
+        coin,
         &coin.network,
         &connection,
         start,
@@ -177,7 +241,7 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
 
     let orch_hasher = OrchardHasher::default();
     let mut orch_dec = OrchardSync::new(
-        coin.coin,
+        coin,
         &coin.network,
         &connection,
         start,
@@ -185,7 +249,7 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
         orchard_state.to_edge(&orch_hasher),
     )?;
 
-    let mut trp_dec = TransparentSync::new(coin.coin, &coin.network, &connection)?;
+    let mut trp_dec = TransparentSync::new(&coin.network, &connection)?;
 
     let addresses = trp_dec.addresses.clone();
     for (account, addr_index, taddr) in addresses.into_iter() {
@@ -219,12 +283,15 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
         fb_unwrap!(coin.config.lwd_url)
     };
     tracing::info!("Using LWD block server {block_url}");
-    let mut block_client = connect_lwd(block_url).await?;
-    let mut blocks = get_compact_block_range(&mut block_client, u32::from(start) + 1, end).await?;
+    // let mut block_client = connect_lwd(block_url).await?;
+    // let mut blocks = get_compact_block_range(&mut block_client, u32::from(start) + 1, end).await?;
     let mut bs = vec![];
     let mut bh = BlockHeader::default();
     let mut c = 0;
-    while let Some(block) = blocks.message().await.map_err(anyhow::Error::new)? {
+    let chunked = source.chunked();
+    let (block_sender, mut block_recv) = channel::<CompactBlock>(20);
+    source.run(start.0, end, block_sender)?;
+    while let Some(block) = block_recv.recv().await {
         bh = BlockHeader {
             height: block.height as u32,
             hash: block.hash.clone().try_into().unwrap(),
@@ -253,11 +320,13 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
 
         if c >= 1000000 {
             info!("Height {}", height);
-            break;
-            // sap_dec.add(&bs)?;
-            // orch_dec.add(&bs)?;
-            // bs.clear();
-            // c = 0;
+            sap_dec.add(&bs)?;
+            orch_dec.add(&bs)?;
+            bs.clear();
+            c = 0;
+            if chunked {
+                break;
+            }
         }
     }
     sap_dec.add(&bs)?;
@@ -306,37 +375,83 @@ pub async fn warp_sync(coin: &CoinDef, start: CheckpointHeight, end: u32) -> Res
     Ok(())
 }
 
-#[no_mangle]
-#[tokio::main]
-pub async extern "C" fn warp_synchronize(coin: u8, end_height: u32) -> CResult<u8> {
-    let res = async {
-        let coin = COINS[coin as usize].lock().clone();
-        let mut connection = coin.connection()?;
-        let start_height = get_sync_height(&connection)?;
-        if start_height == 0 {
-            let activation_height = get_activation_height(&coin.network)?;
-            let mut client = coin.connect_lwd().await?;
-            reset_chain(
-                &coin.network,
-                &mut *connection,
-                &mut client,
-                activation_height,
-            )
-            .await?;
-            anyhow::bail!("no sync data. Have you run reset?");
-        }
-        if start_height < end_height {
-            let end_height = (start_height + 100_000).min(end_height);
-            warp_sync(&coin, CheckpointHeight(start_height), end_height).await?;
-        }
-        Ok(0)
+#[c_export]
+pub async fn warp_synchronize(coin: &CoinDef, end_height: u32) -> Result<()> {
+    let mut connection = coin.connection()?;
+    let start_height = get_sync_height(&connection)?;
+    if start_height == 0 {
+        let activation_height = get_activation_height(&coin.network)?;
+        let mut client = coin.connect_lwd().await?;
+        reset_chain(
+            &coin.network,
+            &mut *connection,
+            &mut client,
+            activation_height,
+        )
+        .await?;
+    }
+    if start_height < end_height {
+        let end_height = (start_height + 100_000).min(end_height);
+        let warp_url = if end_height < coin.config.warp_end_height {
+            coin.config.warp_url.as_deref().unwrap()
+        } else {
+            coin.config.lwd_url.as_deref().unwrap()
+        };
+        let bs = LWDCompactBlockSource::new(warp_url)?;
+        warp_sync(&coin, CheckpointHeight(start_height), end_height, bs).await?;
+    }
+    Ok(())
+}
+
+#[derive(Clone)]
+struct FileCompactBlockSource {
+    file: String,
+}
+
+impl CompactBlockSource for FileCompactBlockSource {
+    fn chunked(&self) -> bool {
+        false
+    }
+
+    fn run(self, _start: u32, _end: u32, sender: Sender<CompactBlock>) -> Result<()> {
+        tokio::spawn(async move {
+            let file = File::open(self.file)?;
+            let mut reader = BufReader::new(file);
+            while let Ok(size) = reader.read_u32_le() {
+                let mut buf = vec![0u8; size as usize];
+                reader.read_exact(&mut buf)?;
+                let block = CompactBlock::decode(&*buf)?;
+                sender.send(block).await?;
+            }
+            Ok::<_, anyhow::Error>(())
+        });
+        Ok(())
+    }
+}
+
+#[c_export]
+pub async fn warp_synchronize_from_file(coin: &CoinDef, file: &str) -> Result<()> {
+    let source = FileCompactBlockSource {
+        file: file.to_string(),
     };
-    map_result(res.await)
+    let activation = get_activation_height(&coin.network)?;
+    {
+        let mut connection = coin.connection()?;
+        let mut client = coin.connect_lwd().await?;
+        reset_chain(&coin.network, &mut connection, &mut client, activation).await?;
+    }
+    warp_sync(
+        &coin,
+        CheckpointHeight(activation),
+        coin.config.warp_end_height,
+        source,
+    )
+    .await?;
+    Ok(())
 }
 
 #[c_export]
 pub async fn transparent_scan(
-    coin: u8,
     network: &Network,
     connection: &mut Connection,
     client: &mut Client,
@@ -344,7 +459,7 @@ pub async fn transparent_scan(
     end_height: u32,
 ) -> Result<()> {
     drop_transparent_data(connection, account)?;
-    let mut trp_dec = TransparentSync::new(coin, network, connection)?;
+    let mut trp_dec = TransparentSync::new(network, connection)?;
     let addresses = list_account_transparent_addresses(connection, account)?;
     let start = get_activation_height(network)?;
     if start >= end_height {
@@ -384,4 +499,8 @@ pub async fn transparent_scan(
     db_tx.commit()?;
 
     Ok(())
+}
+
+lazy_static! {
+    static ref SYNC_LOCK: Arc<Semaphore> = Arc::new(Semaphore::new(1));
 }

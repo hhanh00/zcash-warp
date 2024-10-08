@@ -93,6 +93,7 @@ pub enum InputNote {
     Transparent {
         txid: Hash,
         vout: u32,
+        addr_index: u32,
         address: String,
     },
     Sapling {

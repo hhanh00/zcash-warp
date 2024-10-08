@@ -25,7 +25,7 @@ pub struct TransparentSync {
 }
 
 impl TransparentSync {
-    pub fn new(_coin: u8, network: &Network, connection: &Connection) -> Result<Self> {
+    pub fn new(network: &Network, connection: &Connection) -> Result<Self> {
         let addresses = list_transparent_addresses(connection)?
             .iter()
             .map(|(account, addr_index, address)| {

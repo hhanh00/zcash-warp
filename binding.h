@@ -252,6 +252,8 @@ struct CResult______u8 c_generate_zip_database_keys(uint8_t coin);
 
 struct CResult_u8 c_download_warp_blocks(uint8_t coin, char *warp_url, uint32_t end, char *dest);
 
-struct CResult_u8 warp_synchronize(uint8_t coin, uint32_t end_height);
+struct CResult_u8 c_warp_synchronize(uint8_t coin, uint32_t end_height);
+
+struct CResult_u8 c_warp_synchronize_from_file(uint8_t coin, char *file);
 
 struct CResult_u8 c_transparent_scan(uint8_t coin, uint32_t account, uint32_t end_height);

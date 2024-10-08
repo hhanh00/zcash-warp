@@ -2,6 +2,7 @@ use jubjub::Fr;
 use rusqlite::Connection;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
+use crate::coin::CoinDef;
 use crate::db::notes::list_all_received_notes;
 use crate::network::Network;
 use crate::warp::sync::IdSpent;
@@ -42,7 +43,7 @@ struct BridgeExt<'a> {
 
 impl Synchronizer {
     pub fn new(
-        coin: u8,
+        coin: &CoinDef,
         network: &Network,
         connection: &Connection,
         start: CheckpointHeight,

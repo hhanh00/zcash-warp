@@ -6,6 +6,8 @@ use crate::{
         account::{get_account_info, list_account_tsk},
         account_manager::get_account_by_name,
     },
+    keys::sk_to_address,
+    types::TransparentAccountInfo,
     warp::{
         hasher::{empty_roots, OrchardHasher, SaplingHasher},
         MERKLE_DEPTH,
@@ -64,7 +66,21 @@ impl UnsignedTransaction {
         let ai = get_account_info(network, connection, account)?;
 
         let mut tsk_store: HashMap<String, SecretKey> = HashMap::new();
-        if let Some(_ti) = ai.transparent.as_ref() {
+        if let Some(ti) = ai.transparent.as_ref() {
+            for txin in self.tx_notes.iter() {
+                match &txin.note {
+                    // derive the transparent keys
+                    InputNote::Transparent { addr_index, .. } => {
+                        ti.xsk.as_ref().map(|xsk| {
+                            let sk = TransparentAccountInfo::derive_sk(xsk, *addr_index);
+                            let address = sk_to_address(&sk).encode(network);
+                            tsk_store.insert(address, sk);
+                        });
+                    }
+                    _ => {}
+                }
+            }
+
             let tsks = list_account_tsk(connection, account)?;
             for tsk in tsks.iter() {
                 tsk_store.insert(tsk.address.clone(), tsk.sk.clone());
@@ -109,6 +125,7 @@ impl UnsignedTransaction {
                     txid,
                     vout,
                     address,
+                    ..
                 } => {
                     let Some(sk) = tsk_store.get(address) else {
                         anyhow::bail!("No Secret Key for address {}", address);

@@ -233,6 +233,11 @@ impl TransparentAccountInfo {
         }
     }
 
+    pub fn derive_sk(xsk: &AccountPrivKey, addr_index: u32) -> SecretKey {
+        let addr_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
+        xsk.derive_internal_secret_key(addr_index).unwrap()
+    }
+
     pub fn derive_address(tvk: &AccountPubKey, addr_index: u32) -> TransparentAddress {
         let addr_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
         tvk.derive_external_ivk()
@@ -274,4 +279,12 @@ pub fn to_extended_full_viewing_key(
     b.put(&dk.to_bytes()[..]);
     let efvk = ExtendedFullViewingKey::read(&*b)?;
     Ok(efvk)
+}
+
+pub fn sk_to_address(sk: &SecretKey) -> TransparentAddress {
+    let secp256k1 = Secp256k1::<All>::new();
+    let pubkey = sk.public_key(&secp256k1);
+    TransparentAddress::PublicKeyHash(
+        *ripemd::Ripemd160::digest(Sha256::digest(pubkey.serialize())).as_ref(),
+    )
 }
