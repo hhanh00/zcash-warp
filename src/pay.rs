@@ -1,4 +1,5 @@
 use fee::FeeManager;
+use fpdec::Decimal;
 use orchard::circuit::ProvingKey;
 use parking_lot::Mutex;
 use rusqlite::Connection;
@@ -29,7 +30,7 @@ pub mod sweep;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Not Enough Funds, {0} more needed")]
-    NotEnoughFunds(u64),
+    NotEnoughFunds(Decimal),
     #[error("Amount/Fee {0} too high to be paid by the recipient")]
     FeesTooHighForRecipient(u64),
     #[error("Transaction has no recipient")]
@@ -53,6 +54,7 @@ impl ExtendedRecipient {
     pub fn to_inner(self) -> RecipientT {
         self.recipient
     }
+
     fn to_extended(network: &Network, recipient: RecipientT) -> Result<Self> {
         let ua = RecipientAddress::decode(network, &fb_unwrap!(recipient.address))
             .ok_or(anyhow::anyhow!("Invalid Address"))?;

@@ -2,6 +2,7 @@ use super::{
     fee::FeeManager, AdjustableUnsignedTransaction, Error, ExtendedRecipient, OutputNote,
     PaymentBuilder, Result, TxInput, TxOutput, UnsignedTransaction,
 };
+use fpdec::{Dec, Decimal};
 use rusqlite::Connection;
 use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::memo::MemoBytes;
@@ -369,7 +370,9 @@ impl PaymentBuilder {
         tracing::debug!("{:?}", utx.tx_notes);
         let change = utx.change;
         if change < 0 {
-            return Err(Error::NotEnoughFunds(-change as u64));
+            let missing = Decimal::try_from(-change).unwrap();
+            let missing = missing / Dec!(100000000.0);
+            return Err(Error::NotEnoughFunds(missing));
         }
         if self.use_change {
             let change_output = utx.tx_outputs.last_mut().unwrap();
