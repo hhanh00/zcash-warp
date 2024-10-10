@@ -194,7 +194,8 @@ struct CResult_u8 c_migrate_db(uint8_t coin, uint8_t major, char *src, char *des
 struct CResult______u8 c_derive_zip32_keys(uint8_t coin,
                                            uint32_t account,
                                            uint32_t acc_index,
-                                           uint32_t addr_index);
+                                           uint32_t addr_index,
+                                           bool use_default);
 
 struct CResult______u8 c_prev_message(uint8_t coin, uint32_t account, uint32_t height);
 

@@ -29,6 +29,7 @@ pub fn derive_zip32_keys(
     account: u32,
     acc_index: u32,
     addr_index: u32,
+    use_default: bool,
 ) -> Result<ZIP32KeysT> {
     let ai = get_account_info(network, connection, account)?;
     let Some(phrase) = ai.seed else {
@@ -45,15 +46,25 @@ pub fn derive_zip32_keys(
         .as_ref()
         .map(|tvk| TransparentAccountInfo::derive_address(tvk, addr_index).encode(network));
     let zip32 = ZIP32KeysT {
+        aindex: acc_index,
+        addr_index,
         tsk,
         taddress,
         zsk: ak.ssk.as_ref().map(|sk| {
             encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)
         }),
         zaddress: ak.svk.as_ref().and_then(|vk| {
-            let di = DiversifierIndex::try_from(addr_index).unwrap();
-            vk.address(di)
-                .map(|pa| encode_payment_address(network.hrp_sapling_payment_address(), &pa))
+            if use_default {
+                let pa = vk.default_address().1;
+                Some(encode_payment_address(
+                    network.hrp_sapling_payment_address(),
+                    &pa,
+                ))
+            } else {
+                let di = DiversifierIndex::try_from(addr_index).unwrap();
+                vk.address(di)
+                    .map(|pa| encode_payment_address(network.hrp_sapling_payment_address(), &pa))
+            }
         }),
     };
     Ok(zip32)

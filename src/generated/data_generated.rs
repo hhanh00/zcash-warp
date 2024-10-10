@@ -7037,10 +7037,12 @@ pub mod fb {
     }
 
     impl<'a> ZIP32Keys<'a> {
-        pub const VT_TSK: flatbuffers::VOffsetT = 4;
-        pub const VT_TADDRESS: flatbuffers::VOffsetT = 6;
-        pub const VT_ZSK: flatbuffers::VOffsetT = 8;
-        pub const VT_ZADDRESS: flatbuffers::VOffsetT = 10;
+        pub const VT_AINDEX: flatbuffers::VOffsetT = 4;
+        pub const VT_ADDR_INDEX: flatbuffers::VOffsetT = 6;
+        pub const VT_TSK: flatbuffers::VOffsetT = 8;
+        pub const VT_TADDRESS: flatbuffers::VOffsetT = 10;
+        pub const VT_ZSK: flatbuffers::VOffsetT = 12;
+        pub const VT_ZADDRESS: flatbuffers::VOffsetT = 14;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -7069,15 +7071,21 @@ pub mod fb {
             if let Some(x) = args.tsk {
                 builder.add_tsk(x);
             }
+            builder.add_addr_index(args.addr_index);
+            builder.add_aindex(args.aindex);
             builder.finish()
         }
 
         pub fn unpack(&self) -> ZIP32KeysT {
+            let aindex = self.aindex();
+            let addr_index = self.addr_index();
             let tsk = self.tsk().map(|x| x.to_string());
             let taddress = self.taddress().map(|x| x.to_string());
             let zsk = self.zsk().map(|x| x.to_string());
             let zaddress = self.zaddress().map(|x| x.to_string());
             ZIP32KeysT {
+                aindex,
+                addr_index,
                 tsk,
                 taddress,
                 zsk,
@@ -7085,6 +7093,24 @@ pub mod fb {
             }
         }
 
+        #[inline]
+        pub fn aindex(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(ZIP32Keys::VT_AINDEX, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn addr_index(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u32>(ZIP32Keys::VT_ADDR_INDEX, Some(0))
+                    .unwrap()
+            }
+        }
         #[inline]
         pub fn tsk(&self) -> Option<&'a str> {
             // Safety:
@@ -7135,6 +7161,8 @@ pub mod fb {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
+                .visit_field::<u32>("aindex", Self::VT_AINDEX, false)?
+                .visit_field::<u32>("addr_index", Self::VT_ADDR_INDEX, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("tsk", Self::VT_TSK, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
                     "taddress",
@@ -7152,6 +7180,8 @@ pub mod fb {
         }
     }
     pub struct ZIP32KeysArgs<'a> {
+        pub aindex: u32,
+        pub addr_index: u32,
         pub tsk: Option<flatbuffers::WIPOffset<&'a str>>,
         pub taddress: Option<flatbuffers::WIPOffset<&'a str>>,
         pub zsk: Option<flatbuffers::WIPOffset<&'a str>>,
@@ -7161,6 +7191,8 @@ pub mod fb {
         #[inline]
         fn default() -> Self {
             ZIP32KeysArgs {
+                aindex: 0,
+                addr_index: 0,
                 tsk: None,
                 taddress: None,
                 zsk: None,
@@ -7174,6 +7206,15 @@ pub mod fb {
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> ZIP32KeysBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_aindex(&mut self, aindex: u32) {
+            self.fbb_.push_slot::<u32>(ZIP32Keys::VT_AINDEX, aindex, 0);
+        }
+        #[inline]
+        pub fn add_addr_index(&mut self, addr_index: u32) {
+            self.fbb_
+                .push_slot::<u32>(ZIP32Keys::VT_ADDR_INDEX, addr_index, 0);
+        }
         #[inline]
         pub fn add_tsk(&mut self, tsk: flatbuffers::WIPOffset<&'b str>) {
             self.fbb_
@@ -7214,6 +7255,8 @@ pub mod fb {
     impl core::fmt::Debug for ZIP32Keys<'_> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("ZIP32Keys");
+            ds.field("aindex", &self.aindex());
+            ds.field("addr_index", &self.addr_index());
             ds.field("tsk", &self.tsk());
             ds.field("taddress", &self.taddress());
             ds.field("zsk", &self.zsk());
@@ -7224,6 +7267,8 @@ pub mod fb {
     #[non_exhaustive]
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct ZIP32KeysT {
+        pub aindex: u32,
+        pub addr_index: u32,
         pub tsk: Option<String>,
         pub taddress: Option<String>,
         pub zsk: Option<String>,
@@ -7232,6 +7277,8 @@ pub mod fb {
     impl Default for ZIP32KeysT {
         fn default() -> Self {
             Self {
+                aindex: 0,
+                addr_index: 0,
                 tsk: None,
                 taddress: None,
                 zsk: None,
@@ -7244,6 +7291,8 @@ pub mod fb {
             &self,
             _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
         ) -> flatbuffers::WIPOffset<ZIP32Keys<'b>> {
+            let aindex = self.aindex;
+            let addr_index = self.addr_index;
             let tsk = self.tsk.as_ref().map(|x| _fbb.create_string(x));
             let taddress = self.taddress.as_ref().map(|x| _fbb.create_string(x));
             let zsk = self.zsk.as_ref().map(|x| _fbb.create_string(x));
@@ -7251,6 +7300,8 @@ pub mod fb {
             ZIP32Keys::create(
                 _fbb,
                 &ZIP32KeysArgs {
+                    aindex,
+                    addr_index,
                     tsk,
                     taddress,
                     zsk,

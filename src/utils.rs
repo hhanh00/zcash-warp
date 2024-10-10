@@ -60,16 +60,13 @@ where
 }
 
 pub fn init_tracing() {
-    let mut layers = vec![];
-    layers.push(default_layer());
-    layers.push(env_layer());
-    if let Some(layer) = android_layer() {
-        layers.push(layer);
-    }
+    let _ = Registry::default()
+        .with(default_layer())
+        .with(env_layer())
+        .with(android_layer())
+        .try_init();
 
-    let _ = Registry::default().with(layers).try_init();
-
-    // tracing::info!("Tracing initialized");
+    tracing::info!("Tracing initialized");
 }
 
 #[no_mangle]

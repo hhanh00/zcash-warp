@@ -113,7 +113,7 @@ impl UserMemoT {
         };
         let sender = sender.unwrap_or_default();
         let memo_text = match &self.subject {
-            Some(subject) if !subject.is_empty() => {
+            Some(subject) if !subject.is_empty() || self.reply_to => {
                 format!(
                     "\u{1F6E1}MSG\n{}\n{}\n{}",
                     sender,

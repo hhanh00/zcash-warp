@@ -204,6 +204,8 @@ table UserMemo {
 }
 
 table ZIP32Keys {
+  aindex: uint32;
+  addr_index: uint32;
   tsk: string;
   taddress: string;
   zsk: string;
