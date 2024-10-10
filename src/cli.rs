@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     account::address::get_diversified_address,
-    data::fb::{TransactionBytesT, ZipDbConfigT},
+    data::fb::{Packet, TransactionBytesT, ZipDbConfigT},
     db::{
         account::{get_account_info, list_account_transparent_addresses},
         notes::list_utxos,
@@ -31,7 +31,6 @@ use figment::{
     providers::{Env, Format as _, Toml},
     Figment,
 };
-use hex::FromHexError;
 use rand::rngs::OsRng;
 use rusqlite::Connection;
 use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
@@ -42,7 +41,7 @@ use crate::{
         txs::get_txs,
     },
     coin::CoinDef,
-    data::fb::{ConfigT, PacketT, PacketsT, PaymentRequestT, RecipientT, TransactionSummaryT},
+    data::fb::{ConfigT, PacketsT, PaymentRequestT, RecipientT, TransactionSummaryT},
     db::{
         account::{get_account_property, get_balance, list_accounts, set_account_property},
         account_manager::{
@@ -260,7 +259,7 @@ pub struct QRData {
 #[derive(Subcommand, Clone, Debug)]
 pub enum QRDataCommand {
     Split { data: String, threshold: u32 },
-    Merge { parts: String, data_len: usize },
+    Merge { parts: String },
 }
 
 /// The enum of sub-commands supported by the CLI
@@ -626,17 +625,19 @@ async fn process_command(
                     println!("{} {}", data.len(), hex::encode(fb_unwrap!(p.data)));
                 }
             }
-            QRDataCommand::Merge { parts, data_len } => {
-                let parts = parts
-                    .split(" ")
-                    .map(|p| hex::decode(&p).map(|d| PacketT { data: Some(d) }))
-                    .collect::<Result<Vec<_>, FromHexError>>()?;
+            QRDataCommand::Merge { parts } => {
+                let mut packets = vec![];
+                for p in parts.split(" ") {
+                    let h = hex::decode(&p)?;
+                    let packet = flatbuffers::root::<Packet>(&*h)?;
+                    packets.push(packet.unpack());
+                }
+
                 let packets = PacketsT {
-                    packets: Some(parts),
-                    len: data_len as u32,
+                    packets: Some(packets),
                 };
                 let data = merge(&packets)?;
-                println!("{:?}", data.data.map(|d| hex::encode(&d)));
+                println!("{:?}", hex::encode(&data));
             }
         },
         Command::Checkpoint(checkpoint_command) => match checkpoint_command.command {

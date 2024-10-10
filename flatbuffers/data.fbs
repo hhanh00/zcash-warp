@@ -125,6 +125,10 @@ table AccountName {
   balance: uint64;
 }
 
+table AccountNameList {
+  items: [AccountName];
+}
+
 table ContactCard {
   id: uint32;
   account: uint32;
@@ -165,12 +169,12 @@ table Balance {
 }
 
 table Packet {
+  len: uint32;
   data: [uint8];
 }
 
 table Packets {
   packets: [Packet];
-  len: uint32;
 }
 
 table Checkpoint {
@@ -249,3 +253,15 @@ table TransactionBytes {
   data: [uint8];
   redirect: string;
 }
+
+/* Lists
+Spendings
+TransparentAddresses
+Contacts
+Checkpoints
+Messages
+Notes
+UTXO
+Packet
+Transaction
+*/

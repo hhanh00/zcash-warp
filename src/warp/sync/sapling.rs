@@ -50,7 +50,7 @@ impl Synchronizer {
         position: u32,
         tree_state: Edge,
     ) -> Result<Self> {
-        let accounts = list_accounts(coin, connection)?;
+        let accounts = list_accounts(coin, connection)?.items.unwrap();
         let mut account_infos = vec![];
         for a in accounts {
             let ai = get_account_info(network, connection, a.id)?;

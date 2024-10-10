@@ -4361,6 +4361,158 @@ pub mod fb {
             )
         }
     }
+    pub enum AccountNameListOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct AccountNameList<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for AccountNameList<'a> {
+        type Inner = AccountNameList<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> AccountNameList<'a> {
+        pub const VT_ITEMS: flatbuffers::VOffsetT = 4;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            AccountNameList { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args AccountNameListArgs<'args>,
+        ) -> flatbuffers::WIPOffset<AccountNameList<'bldr>> {
+            let mut builder = AccountNameListBuilder::new(_fbb);
+            if let Some(x) = args.items {
+                builder.add_items(x);
+            }
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> AccountNameListT {
+            let items = self.items().map(|x| x.iter().map(|t| t.unpack()).collect());
+            AccountNameListT { items }
+        }
+
+        #[inline]
+        pub fn items(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AccountName<'a>>>>
+        {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AccountName>>,
+                >>(AccountNameList::VT_ITEMS, None)
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for AccountNameList<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<AccountName>>,
+                >>("items", Self::VT_ITEMS, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct AccountNameListArgs<'a> {
+        pub items: Option<
+            flatbuffers::WIPOffset<
+                flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<AccountName<'a>>>,
+            >,
+        >,
+    }
+    impl<'a> Default for AccountNameListArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            AccountNameListArgs { items: None }
+        }
+    }
+
+    pub struct AccountNameListBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> AccountNameListBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_items(
+            &mut self,
+            items: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<AccountName<'b>>>,
+            >,
+        ) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(AccountNameList::VT_ITEMS, items);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> AccountNameListBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            AccountNameListBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<AccountNameList<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for AccountNameList<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("AccountNameList");
+            ds.field("items", &self.items());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    pub struct AccountNameListT {
+        pub items: Option<Vec<AccountNameT>>,
+    }
+    impl Default for AccountNameListT {
+        fn default() -> Self {
+            Self { items: None }
+        }
+    }
+    impl AccountNameListT {
+        pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> flatbuffers::WIPOffset<AccountNameList<'b>> {
+            let items = self.items.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
+                _fbb.create_vector(&w)
+            });
+            AccountNameList::create(_fbb, &AccountNameListArgs { items })
+        }
+    }
     pub enum ContactCardOffset {}
     #[derive(Copy, Clone, PartialEq)]
 
@@ -5707,7 +5859,8 @@ pub mod fb {
     }
 
     impl<'a> Packet<'a> {
-        pub const VT_DATA: flatbuffers::VOffsetT = 4;
+        pub const VT_LEN: flatbuffers::VOffsetT = 4;
+        pub const VT_DATA: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -5727,14 +5880,23 @@ pub mod fb {
             if let Some(x) = args.data {
                 builder.add_data(x);
             }
+            builder.add_len(args.len);
             builder.finish()
         }
 
         pub fn unpack(&self) -> PacketT {
+            let len = self.len();
             let data = self.data().map(|x| x.into_iter().collect());
-            PacketT { data }
+            PacketT { len, data }
         }
 
+        #[inline]
+        pub fn len(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u32>(Packet::VT_LEN, Some(0)).unwrap() }
+        }
         #[inline]
         pub fn data(&self) -> Option<flatbuffers::Vector<'a, u8>> {
             // Safety:
@@ -5758,6 +5920,7 @@ pub mod fb {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
+                .visit_field::<u32>("len", Self::VT_LEN, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
                     "data",
                     Self::VT_DATA,
@@ -5768,12 +5931,13 @@ pub mod fb {
         }
     }
     pub struct PacketArgs<'a> {
+        pub len: u32,
         pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
     }
     impl<'a> Default for PacketArgs<'a> {
         #[inline]
         fn default() -> Self {
-            PacketArgs { data: None }
+            PacketArgs { len: 0, data: None }
         }
     }
 
@@ -5782,6 +5946,10 @@ pub mod fb {
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> PacketBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_len(&mut self, len: u32) {
+            self.fbb_.push_slot::<u32>(Packet::VT_LEN, len, 0);
+        }
         #[inline]
         pub fn add_data(&mut self, data: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
             self.fbb_
@@ -5807,6 +5975,7 @@ pub mod fb {
     impl core::fmt::Debug for Packet<'_> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("Packet");
+            ds.field("len", &self.len());
             ds.field("data", &self.data());
             ds.finish()
         }
@@ -5814,11 +5983,12 @@ pub mod fb {
     #[non_exhaustive]
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct PacketT {
+        pub len: u32,
         pub data: Option<Vec<u8>>,
     }
     impl Default for PacketT {
         fn default() -> Self {
-            Self { data: None }
+            Self { len: 0, data: None }
         }
     }
     impl PacketT {
@@ -5826,8 +5996,9 @@ pub mod fb {
             &self,
             _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
         ) -> flatbuffers::WIPOffset<Packet<'b>> {
+            let len = self.len;
             let data = self.data.as_ref().map(|x| _fbb.create_vector(x));
-            Packet::create(_fbb, &PacketArgs { data })
+            Packet::create(_fbb, &PacketArgs { len, data })
         }
     }
     pub enum PacketsOffset {}
@@ -5849,7 +6020,6 @@ pub mod fb {
 
     impl<'a> Packets<'a> {
         pub const VT_PACKETS: flatbuffers::VOffsetT = 4;
-        pub const VT_LEN: flatbuffers::VOffsetT = 6;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -5866,7 +6036,6 @@ pub mod fb {
             args: &'args PacketsArgs<'args>,
         ) -> flatbuffers::WIPOffset<Packets<'bldr>> {
             let mut builder = PacketsBuilder::new(_fbb);
-            builder.add_len(args.len);
             if let Some(x) = args.packets {
                 builder.add_packets(x);
             }
@@ -5877,8 +6046,7 @@ pub mod fb {
             let packets = self
                 .packets()
                 .map(|x| x.iter().map(|t| t.unpack()).collect());
-            let len = self.len();
-            PacketsT { packets, len }
+            PacketsT { packets }
         }
 
         #[inline]
@@ -5894,13 +6062,6 @@ pub mod fb {
                 >>(Packets::VT_PACKETS, None)
             }
         }
-        #[inline]
-        pub fn len(&self) -> u32 {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe { self._tab.get::<u32>(Packets::VT_LEN, Some(0)).unwrap() }
-        }
     }
 
     impl flatbuffers::Verifiable for Packets<'_> {
@@ -5914,7 +6075,6 @@ pub mod fb {
                 .visit_field::<flatbuffers::ForwardsUOffset<
                     flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Packet>>,
                 >>("packets", Self::VT_PACKETS, false)?
-                .visit_field::<u32>("len", Self::VT_LEN, false)?
                 .finish();
             Ok(())
         }
@@ -5925,15 +6085,11 @@ pub mod fb {
                 flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Packet<'a>>>,
             >,
         >,
-        pub len: u32,
     }
     impl<'a> Default for PacketsArgs<'a> {
         #[inline]
         fn default() -> Self {
-            PacketsArgs {
-                packets: None,
-                len: 0,
-            }
+            PacketsArgs { packets: None }
         }
     }
 
@@ -5951,10 +6107,6 @@ pub mod fb {
         ) {
             self.fbb_
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Packets::VT_PACKETS, packets);
-        }
-        #[inline]
-        pub fn add_len(&mut self, len: u32) {
-            self.fbb_.push_slot::<u32>(Packets::VT_LEN, len, 0);
         }
         #[inline]
         pub fn new(
@@ -5977,7 +6129,6 @@ pub mod fb {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("Packets");
             ds.field("packets", &self.packets());
-            ds.field("len", &self.len());
             ds.finish()
         }
     }
@@ -5985,14 +6136,10 @@ pub mod fb {
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct PacketsT {
         pub packets: Option<Vec<PacketT>>,
-        pub len: u32,
     }
     impl Default for PacketsT {
         fn default() -> Self {
-            Self {
-                packets: None,
-                len: 0,
-            }
+            Self { packets: None }
         }
     }
     impl PacketsT {
@@ -6004,8 +6151,7 @@ pub mod fb {
                 let w: Vec<_> = x.iter().map(|t| t.pack(_fbb)).collect();
                 _fbb.create_vector(&w)
             });
-            let len = self.len;
-            Packets::create(_fbb, &PacketsArgs { packets, len })
+            Packets::create(_fbb, &PacketsArgs { packets })
         }
     }
     pub enum CheckpointOffset {}

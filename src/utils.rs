@@ -4,7 +4,9 @@ use crate::{
     Hash,
 };
 use anyhow::Result;
-use tracing_subscriber::{fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter};
+use tracing_subscriber::{
+    fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter, Layer, Registry,
+};
 
 use crate::{
     coin::COINS,
@@ -23,13 +25,51 @@ pub mod ua;
 pub mod uri;
 pub mod zip_db;
 
+type BoxedLayer<S> = Box<dyn Layer<S> + Send + Sync + 'static>;
+
+fn default_layer<S>() -> BoxedLayer<S>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    fmt::layer().with_ansi(false).compact().boxed()
+}
+
+fn env_layer<S>() -> BoxedLayer<S>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    EnvFilter::from_default_env().boxed()
+}
+
+#[cfg(target_os = "android")]
+fn android_layer<S>() -> Option<BoxedLayer<S>>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    let android_layer = paranoid_android::layer(env!("CARGO_PKG_NAME"))
+        .with_filter(tracing_subscriber::filter::LevelFilter::INFO);
+    Some(android_layer.boxed())
+}
+
+#[cfg(not(target_os = "android"))]
+fn android_layer<S>() -> Option<BoxedLayer<S>>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    None
+}
+
 pub fn init_tracing() {
-    let s = tracing_subscriber::registry();
-    let _ = s
-        .with(fmt::layer().with_ansi(false).compact())
-        .with(EnvFilter::from_default_env())
-        .try_init();
-    tracing::info!("Tracing initialized");
+    let mut layers = vec![];
+    layers.push(default_layer());
+    layers.push(env_layer());
+    if let Some(layer) = android_layer() {
+        layers.push(layer);
+    }
+
+    let _ = Registry::default().with(layers).try_init();
+
+    // tracing::info!("Tracing initialized");
 }
 
 #[no_mangle]

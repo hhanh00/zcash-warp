@@ -76,6 +76,9 @@ zcash_address.workspace = true
 zcash_encoding.workspace = true
 zcash_note_encryption.workspace = true
 
+[target.'cfg(target_os = "android")'.dependencies]
+paranoid-android = "0.2"
+
 [features]
 #sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 regtest = []
