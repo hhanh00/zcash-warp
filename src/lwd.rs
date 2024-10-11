@@ -15,7 +15,7 @@ use zcash_primitives::{
 };
 
 use crate::{
-    coin::connect_lwd,
+    coin::{connect_lwd, CoinDef},
     data::fb::TransactionBytesT,
     network::Network,
     types::CheckpointHeight,
@@ -219,10 +219,10 @@ pub async fn broadcast(client: &mut Client, height: u32, tx: &TransactionBytesT)
     Ok(res.error_message)
 }
 
-pub fn get_txin_coins(network: Network, url: String, ops: Vec<OutPoint>) -> Result<Vec<TxOut2>> {
+pub fn get_txin_coins(coin: &CoinDef, network: Network, ops: Vec<OutPoint>) -> Result<Vec<TxOut2>> {
     tokio::task::block_in_place(move || {
         Handle::current().block_on(async move {
-            let mut client = connect_lwd(&url).await?;
+            let mut client = coin.connect_lwd()?;
             let mut txouts = vec![];
             for op in ops {
                 let tx = client

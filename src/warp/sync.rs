@@ -44,6 +44,7 @@ use tokio::sync::{
     mpsc::{channel, Sender},
     Semaphore,
 };
+use tonic::transport::Channel;
 use tracing::info;
 use transparent::TransparentSync;
 use zcash_keys::encoding::AddressCodec;
@@ -185,14 +186,12 @@ pub trait CompactBlockSource: Clone {
 
 #[derive(Clone)]
 pub struct LWDCompactBlockSource {
-    url: String,
+    channel: Channel,
 }
 
 impl LWDCompactBlockSource {
-    pub fn new(url: &str) -> Result<Self> {
-        Ok(Self {
-            url: url.to_string(),
-        })
+    pub fn new(channel: Channel) -> Result<Self> {
+        Ok(Self { channel })
     }
 }
 
@@ -203,7 +202,7 @@ impl CompactBlockSource for LWDCompactBlockSource {
 
     fn run(self, start: u32, end: u32, sender: Sender<CompactBlock>) -> Result<()> {
         tokio::spawn(async move {
-            let mut client = connect_lwd(&self.url).await?;
+            let mut client = Client::new(self.channel.clone());
             let mut range = get_compact_block_range(&mut client, start + 1, end).await?;
             while let Some(block) = range.message().await? {
                 sender.send(block).await?;
@@ -226,7 +225,7 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
         return Ok(());
     }
     let mut connection = coin.connection()?;
-    let mut client = coin.connect_lwd().await?;
+    let mut client = coin.connect_lwd()?;
     let (sapling_state, orchard_state) = get_tree_state(&mut client, start.into()).await?;
 
     let sap_hasher = SaplingHasher::default();
@@ -277,14 +276,6 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
     let bh = get_block_header(&connection, start.into())?;
     let mut prev_hash = bh.hash;
 
-    let block_url = if end < coin.config.warp_end_height {
-        fb_unwrap!(coin.config.warp_url)
-    } else {
-        fb_unwrap!(coin.config.lwd_url)
-    };
-    tracing::info!("Using LWD block server {block_url}");
-    // let mut block_client = connect_lwd(block_url).await?;
-    // let mut blocks = get_compact_block_range(&mut block_client, u32::from(start) + 1, end).await?;
     let mut bs = vec![];
     let mut bh = BlockHeader::default();
     let mut c = 0;
@@ -381,7 +372,7 @@ pub async fn warp_synchronize(coin: &CoinDef, end_height: u32) -> Result<()> {
     let start_height = get_sync_height(&connection)?;
     if start_height == 0 {
         let activation_height = get_activation_height(&coin.network)?;
-        let mut client = coin.connect_lwd().await?;
+        let mut client = coin.connect_lwd()?;
         reset_chain(
             &coin.network,
             &mut *connection,
@@ -392,12 +383,14 @@ pub async fn warp_synchronize(coin: &CoinDef, end_height: u32) -> Result<()> {
     }
     if start_height < end_height {
         let end_height = (start_height + 100_000).min(end_height);
-        let warp_url = if end_height < coin.config.warp_end_height {
-            coin.config.warp_url.as_deref().unwrap()
+        let channel = if end_height < coin.config.warp_end_height {
+            let url = fb_unwrap!(coin.config.warp_url);
+            let ep = Channel::from_shared(url.clone()).unwrap();
+            ep.connect().await?
         } else {
-            coin.config.lwd_url.as_deref().unwrap()
+            fb_unwrap!(coin.channel).clone()
         };
-        let bs = LWDCompactBlockSource::new(warp_url)?;
+        let bs = LWDCompactBlockSource::new(channel)?;
         warp_sync(&coin, CheckpointHeight(start_height), end_height, bs).await?;
     }
     Ok(())
@@ -437,7 +430,7 @@ pub async fn warp_synchronize_from_file(coin: &CoinDef, file: &str) -> Result<()
     let activation = get_activation_height(&coin.network)?;
     {
         let mut connection = coin.connection()?;
-        let mut client = coin.connect_lwd().await?;
+        let mut client = coin.connect_lwd()?;
         reset_chain(&coin.network, &mut connection, &mut client, activation).await?;
     }
     warp_sync(

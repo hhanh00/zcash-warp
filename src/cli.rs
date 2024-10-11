@@ -33,6 +33,7 @@ use figment::{
 };
 use rand::rngs::OsRng;
 use rusqlite::Connection;
+use tokio::runtime::Handle;
 use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 use crate::{
@@ -367,7 +368,6 @@ fn display_tx(
     Ok(txb)
 }
 
-#[tokio::main]
 async fn process_command(
     command: Command,
     zec: &mut CoinDef,
@@ -391,7 +391,7 @@ async fn process_command(
                         Some(b) => b,
                         None => {
                             // Avoid using LWD if the user gave us the wallet birth height
-                            let mut client = zec.connect_lwd().await?;
+                            let mut client = zec.connect_lwd()?;
                             let bc_height = get_last_height(&mut client).await?;
                             bc_height
                         }
@@ -407,7 +407,7 @@ async fn process_command(
                     println!("{:?}", t_addresses);
                 }
                 AccountCommand::Scan { account, gap_limit } => {
-                    let mut client = zec.connect_lwd().await?;
+                    let mut client = zec.connect_lwd()?;
                     scan_transparent_addresses(
                         &network,
                         &mut connection,
@@ -468,7 +468,7 @@ async fn process_command(
                     delete_contact(&connection, id)?;
                 }
                 ContactCommand::Save { account } => {
-                    let mut client = zec.connect_lwd().await?;
+                    let mut client = zec.connect_lwd()?;
                     let bc_height = get_last_height(&mut client).await?;
                     let cp_height =
                         snap_to_checkpoint(&connection, bc_height - zec.config.confirmations + 1)?;
@@ -489,7 +489,7 @@ async fn process_command(
             }
         }
         Command::Chain(chain_command) => {
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             match chain_command.command {
                 ChainCommand::GetActivationDate => {
                     let timestamp = get_activation_date(network, &mut client).await?;
@@ -648,7 +648,7 @@ async fn process_command(
             }
             CheckpointCommand::Rewind { height } => {
                 let mut connection = zec.connection()?;
-                let mut client = zec.connect_lwd().await?;
+                let mut client = zec.connect_lwd()?;
                 rewind(&network, &mut connection, &mut client, height).await?;
             }
         },
@@ -662,7 +662,7 @@ async fn process_command(
             println!("{}", serde_json::to_string_pretty(&backup).unwrap());
         }
         Command::LastHeight => {
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let bc_height = get_last_height(&mut client).await?;
             println!("{bc_height}");
         }
@@ -673,7 +673,7 @@ async fn process_command(
         }
         Command::Reset { height } => {
             let mut connection = zec.connection()?;
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let activation: u32 = network
                 .activation_height(NetworkUpgrade::Sapling)
                 .unwrap()
@@ -686,7 +686,7 @@ async fn process_command(
             confirmations,
             end_height,
         } => loop {
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let bc_height = get_last_height(&mut client).await?;
             let confirmations = confirmations.unwrap_or(1);
             if confirmations == 0 {
@@ -704,11 +704,11 @@ async fn process_command(
             let end_height = (start_height + 100_000).min(end_height);
             warp_synchronize(&zec, end_height).await?;
             let connection = zec.connection()?;
-            retrieve_tx_details(network, &connection, zec.config.lwd_url.clone().unwrap()).await?;
+            retrieve_tx_details(&zec, network, &connection).await?;
         },
         Command::TransparentSync { account } => {
             let mut connection = zec.connection()?;
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let bc_height = get_last_height(&mut client).await?;
             transparent_scan(network, &mut connection, &mut client, account, bc_height).await?;
         }
@@ -733,7 +733,7 @@ async fn process_command(
             fee_paid_by_sender,
             use_change,
         } => {
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let bc_height = get_last_height(&mut client).await?;
             let connection = zec.connection()?;
             let recipient = RecipientT {
@@ -757,7 +757,7 @@ async fn process_command(
             *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::MultiPay { account, payment } => {
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let connection = zec.connection()?;
             let summary =
                 prepare_payment(network, &connection, &mut client, account, &payment, "").await?;
@@ -766,12 +766,12 @@ async fn process_command(
         Command::GetTx { account, id } => {
             let connection = zec.connection()?;
             let (txid, timestamp) = get_txid(&connection, id)?;
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let (height, tx) = get_transaction(network, &mut client, &txid).await?;
             let tx = analyze_raw_transaction(
+                &zec,
                 network,
                 &connection,
-                zec.config.lwd_url.clone().unwrap(),
                 account,
                 height,
                 timestamp,
@@ -793,7 +793,7 @@ async fn process_command(
             println!("{:?}", receivers);
         }
         Command::ListTxs { account } => {
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let bc_height = get_last_height(&mut client).await?;
             let connection = zec.connection()?;
             let txs = get_txs(&connection, account, bc_height)?;
@@ -808,7 +808,7 @@ async fn process_command(
             println!("{}", payment_uri);
         }
         Command::PayPaymentUri { account, uri } => {
-            let mut client = zec.connect_lwd().await?;
+            let mut client = zec.connect_lwd()?;
             let connection = zec.connection()?;
             let bc_height = get_last_height(&mut client).await?;
             let cp_height =
@@ -823,7 +823,7 @@ async fn process_command(
             if clear != 0 {
                 if let Some(tx_bytes) = txbytes.data.as_ref() {
                     tracing::info!("{}", hex::encode(tx_bytes));
-                    let mut client = zec.connect_lwd().await?;
+                    let mut client = zec.connect_lwd()?;
                     let bc_height = get_last_height(&mut client).await?;
                     let r = broadcast(&mut client, bc_height, txbytes).await?;
                     println!("{}", r);
@@ -861,10 +861,16 @@ pub fn cli_main(config: &ConfigT) -> Result<()> {
 
     let mut txbytes = TransactionBytesT::default();
     rl.repl(|command| {
-        if let Err(e) = process_command(command, &mut zec, &mut txbytes) {
+        let e = tokio::task::block_in_place(|| {
+            Handle::current()
+                .block_on(async { process_command(command, &mut zec, &mut txbytes).await })
+        });
+        if let Err(e) = e {
             println!("{} {}", style("Error:").red().bold(), e);
         }
     });
+
+    tracing::info!("Bye.");
 
     Ok(())
 }

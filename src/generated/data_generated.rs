@@ -7329,7 +7329,7 @@ pub mod fb {
 
     impl<'a> Config<'a> {
         pub const VT_DB_PATH: flatbuffers::VOffsetT = 4;
-        pub const VT_LWD_URL: flatbuffers::VOffsetT = 6;
+        pub const VT_SERVERS: flatbuffers::VOffsetT = 6;
         pub const VT_WARP_URL: flatbuffers::VOffsetT = 8;
         pub const VT_WARP_END_HEIGHT: flatbuffers::VOffsetT = 10;
         pub const VT_CONFIRMATIONS: flatbuffers::VOffsetT = 12;
@@ -7355,8 +7355,8 @@ pub mod fb {
             if let Some(x) = args.warp_url {
                 builder.add_warp_url(x);
             }
-            if let Some(x) = args.lwd_url {
-                builder.add_lwd_url(x);
+            if let Some(x) = args.servers {
+                builder.add_servers(x);
             }
             if let Some(x) = args.db_path {
                 builder.add_db_path(x);
@@ -7367,14 +7367,16 @@ pub mod fb {
 
         pub fn unpack(&self) -> ConfigT {
             let db_path = self.db_path().map(|x| x.to_string());
-            let lwd_url = self.lwd_url().map(|x| x.to_string());
+            let servers = self
+                .servers()
+                .map(|x| x.iter().map(|s| s.to_string()).collect());
             let warp_url = self.warp_url().map(|x| x.to_string());
             let warp_end_height = self.warp_end_height();
             let confirmations = self.confirmations();
             let regtest = self.regtest();
             ConfigT {
                 db_path,
-                lwd_url,
+                servers,
                 warp_url,
                 warp_end_height,
                 confirmations,
@@ -7393,13 +7395,16 @@ pub mod fb {
             }
         }
         #[inline]
-        pub fn lwd_url(&self) -> Option<&'a str> {
+        pub fn servers(
+            &self,
+        ) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<&str>>(Config::VT_LWD_URL, None)
+                self._tab.get::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>,
+                >>(Config::VT_SERVERS, None)
             }
         }
         #[inline]
@@ -7460,11 +7465,9 @@ pub mod fb {
                     Self::VT_DB_PATH,
                     false,
                 )?
-                .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
-                    "lwd_url",
-                    Self::VT_LWD_URL,
-                    false,
-                )?
+                .visit_field::<flatbuffers::ForwardsUOffset<
+                    flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<&'_ str>>,
+                >>("servers", Self::VT_SERVERS, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
                     "warp_url",
                     Self::VT_WARP_URL,
@@ -7479,7 +7482,9 @@ pub mod fb {
     }
     pub struct ConfigArgs<'a> {
         pub db_path: Option<flatbuffers::WIPOffset<&'a str>>,
-        pub lwd_url: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub servers: Option<
+            flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>>,
+        >,
         pub warp_url: Option<flatbuffers::WIPOffset<&'a str>>,
         pub warp_end_height: u32,
         pub confirmations: u32,
@@ -7490,7 +7495,7 @@ pub mod fb {
         fn default() -> Self {
             ConfigArgs {
                 db_path: None,
-                lwd_url: None,
+                servers: None,
                 warp_url: None,
                 warp_end_height: 0,
                 confirmations: 0,
@@ -7510,9 +7515,14 @@ pub mod fb {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(Config::VT_DB_PATH, db_path);
         }
         #[inline]
-        pub fn add_lwd_url(&mut self, lwd_url: flatbuffers::WIPOffset<&'b str>) {
+        pub fn add_servers(
+            &mut self,
+            servers: flatbuffers::WIPOffset<
+                flatbuffers::Vector<'b, flatbuffers::ForwardsUOffset<&'b str>>,
+            >,
+        ) {
             self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<_>>(Config::VT_LWD_URL, lwd_url);
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(Config::VT_SERVERS, servers);
         }
         #[inline]
         pub fn add_warp_url(&mut self, warp_url: flatbuffers::WIPOffset<&'b str>) {
@@ -7555,7 +7565,7 @@ pub mod fb {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("Config");
             ds.field("db_path", &self.db_path());
-            ds.field("lwd_url", &self.lwd_url());
+            ds.field("servers", &self.servers());
             ds.field("warp_url", &self.warp_url());
             ds.field("warp_end_height", &self.warp_end_height());
             ds.field("confirmations", &self.confirmations());
@@ -7567,7 +7577,7 @@ pub mod fb {
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct ConfigT {
         pub db_path: Option<String>,
-        pub lwd_url: Option<String>,
+        pub servers: Option<Vec<String>>,
         pub warp_url: Option<String>,
         pub warp_end_height: u32,
         pub confirmations: u32,
@@ -7577,7 +7587,7 @@ pub mod fb {
         fn default() -> Self {
             Self {
                 db_path: None,
-                lwd_url: None,
+                servers: None,
                 warp_url: None,
                 warp_end_height: 0,
                 confirmations: 0,
@@ -7591,7 +7601,10 @@ pub mod fb {
             _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
         ) -> flatbuffers::WIPOffset<Config<'b>> {
             let db_path = self.db_path.as_ref().map(|x| _fbb.create_string(x));
-            let lwd_url = self.lwd_url.as_ref().map(|x| _fbb.create_string(x));
+            let servers = self.servers.as_ref().map(|x| {
+                let w: Vec<_> = x.iter().map(|s| _fbb.create_string(s)).collect();
+                _fbb.create_vector(&w)
+            });
             let warp_url = self.warp_url.as_ref().map(|x| _fbb.create_string(x));
             let warp_end_height = self.warp_end_height;
             let confirmations = self.confirmations;
@@ -7600,7 +7613,7 @@ pub mod fb {
                 _fbb,
                 &ConfigArgs {
                     db_path,
-                    lwd_url,
+                    servers,
                     warp_url,
                     warp_end_height,
                     confirmations,

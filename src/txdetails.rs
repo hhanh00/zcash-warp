@@ -16,7 +16,7 @@ use zcash_primitives::{
 
 use crate::{
     account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
-    coin::connect_lwd,
+    coin::CoinDef,
     data::fb::{
         InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT, ShieldedMessageT,
         TransactionInfoExtendedT, UserMemoT,
@@ -135,9 +135,9 @@ pub struct TransactionDetails {
 }
 
 pub fn analyze_raw_transaction(
+    coin: &CoinDef,
     network: &Network,
     connection: &Connection,
-    url: String,
     account: u32,
     height: u32,
     timestamp: u32,
@@ -266,7 +266,7 @@ pub fn analyze_raw_transaction(
         .iter()
         .map(|tin| tin.out_point.clone())
         .collect::<Vec<_>>();
-    let txouts = get_txin_coins(*network, url.clone(), ops)?;
+    let txouts = get_txin_coins(coin, *network, ops)?;
     for (tin, txout) in tins.iter_mut().zip(txouts.into_iter()) {
         tin.coin = txout;
     }
@@ -287,22 +287,22 @@ pub fn analyze_raw_transaction(
 
 #[c_export]
 pub async fn retrieve_tx_details(
+    coin: &CoinDef,
     network: &Network,
     connection: &Connection,
-    url: String,
 ) -> Result<()> {
     let connection = Mutex::new(connection);
     let txids = list_new_txids(&connection.lock())?;
-    let mut client = connect_lwd(&url).await?;
+    let mut client = coin.connect_lwd()?;
     for (id_tx, account, timestamp, txid) in txids {
         let ai = get_account_info(network, &connection.lock(), account)?;
         let account_addrs = ai.to_addresses(network);
         let rtx = get_tx(&connection.lock(), id_tx)?;
         let (height, tx) = get_transaction(network, &mut client, &txid).await?;
         let txd = analyze_raw_transaction(
+            coin,
             network,
             &connection.lock(),
-            url.clone(),
             account,
             height,
             timestamp,

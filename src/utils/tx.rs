@@ -1,9 +1,8 @@
-use crate::network::Network;
+use crate::{coin::CoinDef, network::Network};
 use anyhow::Result;
 use rusqlite::Connection;
 
 use crate::{
-    coin::connect_lwd,
     data::fb::TransactionInfoExtendedT,
     db::tx::{get_txid, store_tx_details},
     lwd::get_transaction,
@@ -19,24 +18,16 @@ use warp_macros::c_export;
 
 #[c_export]
 pub async fn fetch_tx_details(
+    coin: &CoinDef,
     network: &Network,
     connection: &Connection,
-    url: String,
     account: u32,
     id: u32,
 ) -> Result<TransactionInfoExtendedT> {
-    let mut client = connect_lwd(&url).await?;
+    let mut client = coin.connect_lwd()?;
     let (txid, timestamp) = get_txid(&connection, id)?;
     let (height, tx) = get_transaction(network, &mut client, &txid).await?;
-    let tx = analyze_raw_transaction(
-        network,
-        &connection,
-        url.clone(),
-        account,
-        height,
-        timestamp,
-        tx,
-    )?;
+    let tx = analyze_raw_transaction(coin, network, &connection, account, height, timestamp, tx)?;
     let txb = serde_cbor::to_vec(&tx)?;
     store_tx_details(&connection, id, account, height, &tx.txid, &txb)?;
     let etx = tx.to_transaction_info_ext(network);

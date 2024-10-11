@@ -109,7 +109,7 @@ pub fn to_txid_str(txid: &Hash) -> String {
 }
 
 #[c_export]
-pub fn configure(coin: &CoinDef, config: &ConfigT) -> Result<()> {
+pub async fn configure(coin: &CoinDef, config: &ConfigT) -> Result<()> {
     tracing::info!("{:?}", config);
     let mut coin_def = COINS[coin.coin as usize].lock();
     coin_def.set_config(config)?;
@@ -118,8 +118,8 @@ pub fn configure(coin: &CoinDef, config: &ConfigT) -> Result<()> {
 
 impl ConfigT {
     pub fn merge(&mut self, other: &ConfigT) {
-        if other.lwd_url.is_some() {
-            self.lwd_url = other.lwd_url.clone();
+        if other.servers.is_some() {
+            self.servers = other.servers.clone();
         }
         if other.warp_url.is_some() {
             self.warp_url = other.warp_url.clone();

@@ -4,8 +4,13 @@ use parking_lot::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OptionalExtension;
+use std::future::Future;
+use std::str::FromStr;
+use std::sync::Arc;
 use std::time::Duration;
-use tonic::transport::{Certificate, ClientTlsConfig};
+use tokio::runtime::Runtime;
+use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint};
+use tower::discover::Change;
 
 use crate::network::Network;
 
@@ -21,8 +26,23 @@ pub struct CoinDef {
     pub network: Network,
     pub pool: Option<Pool<SqliteConnectionManager>>,
     pub db_password: Option<String>,
+    pub channel: Option<Channel>,
     pub config: ConfigT,
+    pub runtime: TokioRuntime, // this runtime needs to live for the whole duration of the app
 }
+
+impl Drop for CoinDef {
+    fn drop(&mut self) {
+        if let Some(runtime) = self.runtime.0.take() {
+            if let Ok(runtime) = Arc::try_unwrap(runtime) {
+                runtime.shutdown_background();
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TokioRuntime(Option<Arc<Runtime>>);
 
 impl CoinDef {
     pub fn from_network(coin: u8, network: Network) -> Self {
@@ -31,12 +51,33 @@ impl CoinDef {
             network,
             pool: None,
             db_password: None,
+            channel: None,
             config: ConfigT::default(),
+            runtime: TokioRuntime(Some(Arc::new(Runtime::new().unwrap()))),
         }
     }
 
     pub fn set_config(&mut self, config: &ConfigT) -> Result<()> {
         self.config.merge(config);
+        if let Some(servers) = self.config.servers.as_ref() {
+            let pem = include_bytes!("ca.pem");
+            let ca = Certificate::from_pem(pem);
+            let tls = ClientTlsConfig::new().ca_certificate(ca);
+            let endpoints = servers
+                .iter()
+                .map(|s| {
+                    let ep = Endpoint::from_str(&s).unwrap();
+                    ep.tls_config(tls.clone()).unwrap()
+                })
+                .collect::<Vec<_>>();
+            tracing::info!("servers {:?}", endpoints);
+            let (channel, tx) = Channel::balance_channel_with_executor(16, self.runtime.clone());
+            endpoints.into_iter().for_each(|endpoint| {
+                tx.try_send(Change::Insert(endpoint.uri().clone(), endpoint))
+                    .unwrap();
+            });
+            self.channel = Some(channel);
+        }
         Ok(())
     }
 
@@ -69,8 +110,23 @@ impl CoinDef {
         Ok(connection)
     }
 
-    pub async fn connect_lwd(&self) -> Result<Client> {
-        connect_lwd(self.config.lwd_url.as_ref().unwrap()).await
+    pub fn connect_lwd(&self) -> Result<Client> {
+        let channel = self
+            .channel
+            .as_ref()
+            .ok_or(anyhow::anyhow!("No connection channel"))?;
+        let client = CompactTxStreamerClient::new(channel.clone());
+        Ok(client)
+    }
+}
+
+impl<F> hyper::rt::Executor<F> for TokioRuntime
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    fn execute(&self, future: F) {
+        self.0.as_ref().unwrap().spawn(future);
     }
 }
 
