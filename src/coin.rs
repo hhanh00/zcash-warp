@@ -70,7 +70,6 @@ impl CoinDef {
                     ep.tls_config(tls.clone()).unwrap()
                 })
                 .collect::<Vec<_>>();
-            tracing::info!("servers {:?}", endpoints);
             let (channel, tx) = Channel::balance_channel_with_executor(16, self.runtime.clone());
             endpoints.into_iter().for_each(|endpoint| {
                 tx.try_send(Change::Insert(endpoint.uri().clone(), endpoint))
