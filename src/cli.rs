@@ -90,6 +90,7 @@ pub enum AccountCommand {
         key: String,
         name: Option<String>,
         birth: Option<u32>,
+        transparent_only: u8,
     },
     EditName {
         account: u32,
@@ -376,8 +377,8 @@ async fn process_command(
     let network = &zec.network;
     match command {
         Command::CreateDatabase => {
-            let connection = zec.connection().unwrap();
-            reset_tables(network, &connection, false)?;
+            let mut connection = zec.connection().unwrap();
+            reset_tables(network, &mut connection, false)?;
         }
         Command::Account(account_cmd) => {
             let mut connection = zec.connection()?;
@@ -386,7 +387,12 @@ async fn process_command(
                     let accounts = list_accounts(&zec, &connection)?;
                     println!("{}", serde_json::to_string_pretty(&accounts)?);
                 }
-                AccountCommand::Create { key, name, birth } => {
+                AccountCommand::Create {
+                    key,
+                    name,
+                    birth,
+                    transparent_only,
+                } => {
                     let birth = match birth {
                         Some(b) => b,
                         None => {
@@ -397,7 +403,15 @@ async fn process_command(
                         }
                     };
                     let name = name.unwrap_or("<unnamed>".to_string());
-                    create_new_account(network, &connection, &name, &key, 0, birth)?;
+                    create_new_account(
+                        network,
+                        &mut connection,
+                        &name,
+                        &key,
+                        0,
+                        birth,
+                        transparent_only != 0,
+                    )?;
                 }
                 AccountCommand::NewTransparentAddress { account } => {
                     new_transparent_address(network, &connection, account)?;

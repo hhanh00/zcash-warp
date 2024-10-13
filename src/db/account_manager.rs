@@ -192,35 +192,36 @@ pub fn is_valid_key(network: &Network, key: &str) -> Result<bool> {
 #[c_export]
 pub fn create_new_account(
     network: &Network,
-    connection: &Connection,
+    connection: &mut Connection,
     name: &str,
     key: &str,
     acc_index: u32,
     birth: u32,
+    transparent_only: bool,
 ) -> Result<u32> {
     let ak = detect_key(network, &key, acc_index)?;
     let dindex = ak.dindex.unwrap_or_default();
-    let account = create_account(
-        connection,
-        name,
-        ak.seed.as_deref(),
-        acc_index,
-        dindex,
-        birth,
-    )?;
+    let db_tx = connection.transaction()?;
+    let account = create_account(&db_tx, name, ak.seed.as_deref(), acc_index, dindex, birth)?;
     if let Some(ti) = ak.to_transparent() {
-        create_transparent_account(network, connection, account, &ti)?;
-        create_transparent_address(network, connection, account, dindex, &ti)?;
+        create_transparent_account(network, &db_tx, account, &ti)?;
+        create_transparent_address(network, &db_tx, account, dindex, &ti)?;
         if dindex != 0 {
-            create_transparent_address(network, connection, account, 0, &ti)?;
+            create_transparent_address(network, &db_tx, account, 0, &ti)?;
+        }
+    } else if transparent_only {
+        anyhow::bail!("Must have a transparent key");
+    }
+
+    if !transparent_only {
+        if let Some(si) = ak.to_sapling() {
+            create_sapling_account(network, &db_tx, account, &si)?;
+        }
+        if let Some(oi) = ak.to_orchard() {
+            create_orchard_account(network, &db_tx, account, &oi)?;
         }
     }
-    if let Some(si) = ak.to_sapling() {
-        create_sapling_account(network, connection, account, &si)?;
-    }
-    if let Some(oi) = ak.to_orchard() {
-        create_orchard_account(network, connection, account, &oi)?;
-    }
+    db_tx.commit()?;
     Ok(account)
 }
 

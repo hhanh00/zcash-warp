@@ -96,8 +96,8 @@ pub extern "C" fn c_schema_version() -> u32 {
 
 #[c_export]
 pub fn create_db(network: &Network, path: &str, password: &str) -> Result<()> {
-    let connection = open_with_password(path, password)?;
-    reset_tables(network, &connection, false)?;
+    let mut connection = open_with_password(path, password)?;
+    reset_tables(network, &mut connection, false)?;
     Ok(())
 }
 
@@ -109,7 +109,7 @@ pub fn migrate_db(
     dest: &str,
     password: &str,
 ) -> Result<()> {
-    let dest = open_with_password(dest, password)?;
+    let mut dest = open_with_password(dest, password)?;
 
     dest.execute(
         "ATTACH DATABASE ?1 AS src_db KEY ?2",
@@ -117,13 +117,13 @@ pub fn migrate_db(
     )?;
 
     match major {
-        1 => migrate_v1(network, &dest)?,
+        1 => migrate_v1(network, &mut dest)?,
         _ => anyhow::bail!("Unsupported upgrade"),
     }
     Ok(())
 }
 
-pub fn migrate_v1(network: &Network, db: &Connection) -> Result<()> {
+pub fn migrate_v1(network: &Network, db: &mut Connection) -> Result<()> {
     reset_tables(network, db, true)?;
     Ok(())
 }

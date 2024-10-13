@@ -286,20 +286,33 @@ pub fn get_account_signing_capabilities(
 ) -> Result<AccountSigningCapabilitiesT> {
     let ai = get_account_info(network, connection, account)?;
     let seed = ai.seed.is_some();
+    // bit 0: has vk/addr
+    // bit 1: has sk
+    // bit 2: has diversifier/extended key
     let transparent: u8 = ai
         .transparent
         .as_ref()
-        .map(|ti| if ti.sk.is_some() { 3 } else { 1 })
+        .map(|ti| {
+            let mut tcaps = 1;
+            if ti.sk.is_some() {
+                tcaps |= 2;
+            }
+            if ti.vk.is_some() {
+                tcaps |= 4;
+            } // can derive
+            tcaps
+        })
         .unwrap_or_default();
     let sapling: u8 = ai
         .sapling
         .as_ref()
-        .map(|si| if si.sk.is_some() { 3 } else { 1 })
+        // if there is a key, it is at least diversifiable + viewable
+        .map(|si| if si.sk.is_some() { 7 } else { 5 })
         .unwrap_or_default();
     let orchard: u8 = ai
         .orchard
         .as_ref()
-        .map(|oi| if oi.sk.is_some() { 3 } else { 1 })
+        .map(|oi| if oi.sk.is_some() { 7 } else { 5 })
         .unwrap_or_default();
     let account_caps = AccountSigningCapabilitiesT {
         seed,

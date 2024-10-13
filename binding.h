@@ -92,7 +92,8 @@ struct CResult_u32 c_create_new_account(uint8_t coin,
                                         char *name,
                                         char *key,
                                         uint32_t acc_index,
-                                        uint32_t birth);
+                                        uint32_t birth,
+                                        bool transparent_only);
 
 struct CResult_u8 c_new_transparent_address(uint8_t coin, uint32_t account);
 

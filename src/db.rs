@@ -2,12 +2,12 @@ use crate::{
     coin::COINS,
     ffi::{map_result, CResult},
     network::Network,
+    utils::chain::get_activation_height,
 };
 use account_manager::create_new_account;
 use anyhow::Result;
 use rusqlite::Connection;
 use warp_macros::c_export;
-use zcash_protocol::consensus::{NetworkUpgrade, Parameters};
 
 pub mod account;
 pub mod account_manager;
@@ -19,7 +19,7 @@ pub mod tx;
 pub mod witnesses;
 
 #[c_export]
-pub fn reset_tables(network: &Network, connection: &Connection, upgrade: bool) -> Result<bool> {
+pub fn reset_tables(network: &Network, connection: &mut Connection, upgrade: bool) -> Result<bool> {
     tracing::info!("Reset Tables");
 
     connection.execute(
@@ -49,7 +49,7 @@ pub fn reset_tables(network: &Network, connection: &Connection, upgrade: bool) -
     Ok(res)
 }
 
-fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Result<()> {
+fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> Result<()> {
     connection.execute(
         "CREATE TABLE IF NOT EXISTS props(
         id_prop INTEGER PRIMARY KEY,
@@ -259,25 +259,29 @@ fn migrate_v1(network: &Network, connection: &Connection, upgrade: bool) -> Resu
     )?;
 
     if upgrade {
-        let mut s = connection
-            .prepare("SELECT a.name, a.seed, a.aindex, a.sk, a.ivk FROM src_db.accounts a")?;
-        let rows = s.query_map([], |r| {
-            Ok((
-                r.get::<_, String>(0)?,
-                r.get::<_, Option<String>>(1)?,
-                r.get::<_, u32>(2)?,
-                r.get::<_, Option<String>>(3)?,
-                r.get::<_, String>(4)?,
-            ))
-        })?;
-        let birth: u32 = network
-            .activation_height(NetworkUpgrade::Sapling)
-            .unwrap()
-            .into();
-        for r in rows {
-            let (name, seed, aindex, sk, ivk) = r?;
-            let key = seed.clone().or(sk.clone()).unwrap_or(ivk.clone());
-            create_new_account(network, connection, &name, &key, aindex, birth)?;
+        let mut accounts = vec![];
+        {
+            let mut s = connection
+                .prepare("SELECT a.name, a.seed, a.aindex, a.sk, a.ivk FROM src_db.accounts a")?;
+            let rows = s.query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, u32>(2)?,
+                    r.get::<_, Option<String>>(3)?,
+                    r.get::<_, String>(4)?,
+                ))
+            })?;
+            for r in rows {
+                let (name, seed, aindex, sk, ivk) = r?;
+                let key = seed.clone().or(sk.clone()).unwrap_or(ivk.clone());
+                accounts.push((name, key, aindex));
+            }
+        }
+        let birth: u32 = get_activation_height(network)?;
+        for a in accounts {
+            let (name, key, aindex) = a;
+            create_new_account(network, connection, &name, &key, aindex, birth, false)?;
         }
     }
 
