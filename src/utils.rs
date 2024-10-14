@@ -59,11 +59,29 @@ where
     None
 }
 
+#[cfg(target_os = "ios")]
+fn ios_layer<S>() -> Option<BoxedLayer<S>>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    let layer = tracing_oslog::OsLogger::new("moe.absolucy.test", "default");
+    Some(layer.boxed())
+}
+
+#[cfg(not(target_os = "ios"))]
+fn ios_layer<S>() -> Option<BoxedLayer<S>>
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+{
+    None
+}
+
 pub fn init_tracing() {
     let _ = Registry::default()
         .with(default_layer())
         .with(env_layer())
         .with(android_layer())
+        .with(ios_layer())
         .try_init();
 
     tracing::info!("Tracing initialized");

@@ -81,6 +81,9 @@ zcash_note_encryption.workspace = true
 [target.'cfg(target_os = "android")'.dependencies]
 paranoid-android = "0.2"
 
+[target.'cfg(target_os = "ios")'.dependencies]
+tracing-oslog = "0.2.0"
+
 [features]
 #sqlcipher = ["rusqlite/bundled-sqlcipher-vendored-openssl"]
 regtest = []
