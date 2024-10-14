@@ -15,8 +15,11 @@ use crate::{
     pay::sweep::scan_transparent_addresses,
     types::PoolMask,
     utils::chain::reset_chain,
-    warp::sync::{
-        download_warp_blocks, transparent_scan, warp_synchronize, warp_synchronize_from_file,
+    warp::{
+        mempool::MempoolMsg,
+        sync::{
+            download_warp_blocks, transparent_scan, warp_synchronize, warp_synchronize_from_file,
+        },
     },
 };
 use anyhow::Result;
@@ -291,6 +294,9 @@ pub enum Command {
         end_height: Option<u32>,
     },
     TransparentSync {
+        account: u32,
+    },
+    Mempool {
         account: u32,
     },
     Address {
@@ -726,6 +732,11 @@ async fn process_command(
             let bc_height = get_last_height(&mut client).await?;
             transparent_scan(network, &mut connection, &mut client, account, bc_height).await?;
         }
+        Command::Mempool { account } => {
+            if let Some(tx) = zec.mempool_tx.as_ref() {
+                let _ = tx.send(MempoolMsg::Account(account)).await;
+            };
+        }
         Command::Address { account, mask } => {
             let time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as u32;
             let connection = zec.connection()?;
@@ -859,6 +870,7 @@ pub fn cli_main(config: &ConfigT) -> Result<()> {
     );
     zec.set_config(config)?;
     zec.set_path_password(config.db_path.as_deref().unwrap(), "")?;
+    zec.run_mempool()?;
 
     let prompt = DefaultPrompt {
         left_prompt: DefaultPromptSegment::Basic("zcash-warp".to_owned()),

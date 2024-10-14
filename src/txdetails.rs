@@ -22,17 +22,18 @@ use crate::{
         TransactionInfoExtendedT, UserMemoT,
     },
     db::{
-        account::get_account_info,
+        account::{get_account_info, list_account_transparent_addresses},
         messages::store_message,
-        notes::get_note_by_nf,
+        notes::{get_note_by_nf, list_utxos},
         tx::{get_tx, list_new_txids, store_tx_details, update_tx_primary_address_memo},
     },
+    fb_unwrap,
     lwd::{get_transaction, get_txin_coins},
     network::Network,
-    types::{Addresses, PoolMask},
+    types::{Addresses, CheckpointHeight, PoolMask},
     utils::ua::ua_of_orchard,
     warp::{
-        sync::{FullPlainNote, PlainNote, ReceivedTx},
+        sync::{FullPlainNote, PlainNote, ReceivedTx, TransparentNote},
         OutPoint, TxOut2,
     },
     Hash,
@@ -48,11 +49,13 @@ use warp_macros::c_export;
 pub struct TransparentInput {
     pub out_point: OutPoint,
     pub coin: TxOut2,
+    pub note: Option<TransparentNote>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TransparentOutput {
     pub coin: TxOut2,
+    pub note: Option<TransparentNote>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -126,6 +129,7 @@ pub struct TransactionDetails {
     pub timestamp: u32,
     #[serde(with = "serde_bytes")]
     pub txid: Hash,
+    pub value: i64,
     pub tins: Vec<TransparentInput>,
     pub touts: Vec<TransparentOutput>,
     pub sins: Vec<ShieldedInput>,
@@ -147,27 +151,53 @@ pub fn analyze_raw_transaction(
     let txid: Hash = tx.txid().as_ref().clone();
     let data = tx.into_data();
     let zip212_enforcement = zip212_enforcement(network, height.into());
+    let utxos = list_utxos(connection, account, CheckpointHeight(height))?;
+    let account_addresses = list_account_transparent_addresses(connection, account)?;
+
     let mut tins = vec![];
     let mut touts = vec![];
     if let Some(b) = data.transparent_bundle() {
         for vin in b.vin.iter() {
+            let prev_utxo = utxos
+                .iter()
+                .find(|&utxo| &utxo.txid == vin.prevout.hash() && utxo.vout == vin.prevout.n());
+            let note = prev_utxo.map(|n| TransparentNote {
+                id: 0,
+                address: n.address.clone(),
+                value: n.value,
+            });
             let tin = TransparentInput {
                 out_point: OutPoint {
                     txid: vin.prevout.hash().clone(),
                     vout: vin.prevout.n(),
                 },
                 coin: TxOut2::default(),
+                note,
             };
             tins.push(tin);
         }
 
         for (n, vout) in b.vout.iter().enumerate() {
+            let address = vout.recipient_address().map(|a| a.encode(network));
+            let note = address.as_ref().and_then(|a| {
+                let note = account_addresses
+                    .iter()
+                    .find(|&ta| fb_unwrap!(ta.address) == a);
+                note
+            });
+            let value = vout.value.into();
+            let note = note.map(|n| TransparentNote {
+                id: 0,
+                address: n.address.clone().unwrap(),
+                value,
+            });
             let tout = TransparentOutput {
                 coin: TxOut2 {
-                    address: vout.recipient_address().map(|a| a.encode(network)),
-                    value: vout.value.into(),
+                    address,
+                    value,
                     vout: n as u32,
                 },
+                note,
             };
             touts.push(tout);
         }
@@ -271,6 +301,62 @@ pub fn analyze_raw_transaction(
         tin.coin = txout;
     }
 
+    let tin_value = tins
+        .iter()
+        .map(|tin| {
+            tin.note
+                .as_ref()
+                .map(|n| n.value as i64)
+                .unwrap_or_default()
+        })
+        .sum::<i64>();
+    let tout_value = touts
+        .iter()
+        .map(|tout| {
+            tout.note
+                .as_ref()
+                .map(|n| n.value as i64)
+                .unwrap_or_default()
+        })
+        .sum::<i64>();
+    let sin_value = sins
+        .iter()
+        .map(|sin| {
+            sin.note
+                .as_ref()
+                .map(|n| n.value as i64)
+                .unwrap_or_default()
+        })
+        .sum::<i64>();
+    let sout_value = souts
+        .iter()
+        .map(|sout| {
+            sout.note
+                .as_ref()
+                .map(|n| n.note.value as i64)
+                .unwrap_or_default()
+        })
+        .sum::<i64>();
+    let oin_value = oins
+        .iter()
+        .map(|sin| {
+            sin.note
+                .as_ref()
+                .map(|n| n.value as i64)
+                .unwrap_or_default()
+        })
+        .sum::<i64>();
+    let oout_value = oouts
+        .iter()
+        .map(|sout| {
+            sout.note
+                .as_ref()
+                .map(|n| n.note.value as i64)
+                .unwrap_or_default()
+        })
+        .sum::<i64>();
+    let value = (tout_value + sout_value + oout_value) - (tin_value + sin_value + oin_value);
+
     let tx = TransactionDetails {
         height,
         timestamp,
@@ -281,6 +367,7 @@ pub fn analyze_raw_transaction(
         souts,
         oins,
         oouts,
+        value,
     };
     Ok(tx)
 }

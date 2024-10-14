@@ -117,6 +117,14 @@ pub struct IdSpent<NoteRef> {
 
 #[serde_as]
 #[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct TransparentNote {
+    pub id: u32,
+    pub address: String,
+    pub value: u64,
+}
+
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct PlainNote {
     pub id: u32,
     #[serde(with = "serde_bytes")]
@@ -385,6 +393,7 @@ pub async fn warp_synchronize(coin: &CoinDef, end_height: u32) -> Result<()> {
         let end_height = (start_height + 100_000).min(end_height);
         let channel = if end_height < coin.config.warp_end_height {
             let url = fb_unwrap!(coin.config.warp_url);
+            tracing::info!("Using Warp block server @ {}", url);
             let ep = Channel::from_shared(url.clone()).unwrap();
             ep.connect().await?
         } else {

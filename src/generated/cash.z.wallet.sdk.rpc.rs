@@ -564,6 +564,32 @@ pub mod compact_tx_streamer_client {
             ));
             self.inner.server_streaming(req, path, codec).await
         }
+        /// Return a stream of current Mempool transactions. This will keep the output stream open while
+        /// there are mempool transactions. It will close the returned stream when a new block is mined.
+        pub async fn get_mempool_stream(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> std::result::Result<
+            tonic::Response<tonic::codec::Streaming<super::RawTransaction>>,
+            tonic::Status,
+        > {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::new(
+                    tonic::Code::Unknown,
+                    format!("Service was not ready: {}", e.into()),
+                )
+            })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolStream",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut().insert(GrpcMethod::new(
+                "cash.z.wallet.sdk.rpc.CompactTxStreamer",
+                "GetMempoolStream",
+            ));
+            self.inner.server_streaming(req, path, codec).await
+        }
         /// GetTreeState returns the note commitment tree state corresponding to the given block.
         /// See section 3.7 of the Zcash protocol specification. It returns several other useful
         /// values also (even though they can be obtained using GetBlock).
@@ -713,6 +739,17 @@ pub mod compact_tx_streamer_server {
             &self,
             request: tonic::Request<super::TransparentAddressBlockFilter>,
         ) -> std::result::Result<tonic::Response<Self::GetTaddressTxidsStream>, tonic::Status>;
+        /// Server streaming response type for the GetMempoolStream method.
+        type GetMempoolStreamStream: tonic::codegen::tokio_stream::Stream<
+                Item = std::result::Result<super::RawTransaction, tonic::Status>,
+            > + std::marker::Send
+            + 'static;
+        /// Return a stream of current Mempool transactions. This will keep the output stream open while
+        /// there are mempool transactions. It will close the returned stream when a new block is mined.
+        async fn get_mempool_stream(
+            &self,
+            request: tonic::Request<super::Empty>,
+        ) -> std::result::Result<tonic::Response<Self::GetMempoolStreamStream>, tonic::Status>;
         /// GetTreeState returns the note commitment tree state corresponding to the given block.
         /// See section 3.7 of the Zcash protocol specification. It returns several other useful
         /// values also (even though they can be obtained using GetBlock).
@@ -1052,6 +1089,46 @@ pub mod compact_tx_streamer_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetTaddressTxidsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.server_streaming(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/cash.z.wallet.sdk.rpc.CompactTxStreamer/GetMempoolStream" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetMempoolStreamSvc<T: CompactTxStreamer>(pub Arc<T>);
+                    impl<T: CompactTxStreamer> tonic::server::ServerStreamingService<super::Empty>
+                        for GetMempoolStreamSvc<T>
+                    {
+                        type Response = super::RawTransaction;
+                        type ResponseStream = T::GetMempoolStreamStream;
+                        type Future =
+                            BoxFuture<tonic::Response<Self::ResponseStream>, tonic::Status>;
+                        fn call(&mut self, request: tonic::Request<super::Empty>) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as CompactTxStreamer>::get_mempool_stream(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetMempoolStreamSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

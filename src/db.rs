@@ -136,6 +136,16 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
     )?;
 
     connection.execute(
+        "CREATE TABLE IF NOT EXISTS unconfirmed_txs(
+        id_utx INTEGER PRIMARY KEY,
+        account INTEGER NOT NULL,
+        txid BLOB NOT NULL,
+        value INTEGER NOT NULL,
+        UNIQUE (account, txid))",
+        [],
+    )?;
+
+    connection.execute(
         "CREATE TABLE IF NOT EXISTS notes(
         id_note INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,

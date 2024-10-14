@@ -9,11 +9,13 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::runtime::Runtime;
+use tokio::sync::mpsc::Sender;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint};
 use tower::discover::Change;
 
 use crate::network::Network;
 
+use crate::warp::mempool::{Mempool, MempoolMsg};
 use crate::{
     data::fb::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client,
 };
@@ -28,6 +30,7 @@ pub struct CoinDef {
     pub db_password: Option<String>,
     pub channel: Option<Channel>,
     pub config: ConfigT,
+    pub mempool_tx: Option<Sender<MempoolMsg>>,
     pub runtime: TokioRuntime, // this runtime needs to live for the whole duration of the app
 }
 
@@ -53,6 +56,7 @@ impl CoinDef {
             db_password: None,
             channel: None,
             config: ConfigT::default(),
+            mempool_tx: None,
             runtime: TokioRuntime(Some(Arc::new(Runtime::new().unwrap()))),
         }
     }
@@ -117,6 +121,13 @@ impl CoinDef {
         let client = CompactTxStreamerClient::new(channel.clone());
         Ok(client)
     }
+
+    pub fn run_mempool(&mut self) -> Result<()> {
+        let runtime = self.runtime.0.as_ref().unwrap();
+        let tx = Mempool::run(self.clone(), runtime.clone())?;
+        self.mempool_tx = Some(tx);
+        Ok(())
+    }
 }
 
 impl<F> hyper::rt::Executor<F> for TokioRuntime
@@ -140,12 +151,6 @@ pub async fn connect_lwd(url: &str) -> Result<Client> {
     tracing::info!("{url}");
     let client = CompactTxStreamerClient::connect(channel).await?;
     Ok(client)
-}
-
-pub fn cli_init_coin(config: &ConfigT) -> Result<()> {
-    let mut zec = COINS[0].lock();
-    zec.set_config(config)?;
-    Ok(())
 }
 
 lazy_static! {
