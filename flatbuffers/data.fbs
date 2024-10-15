@@ -256,6 +256,12 @@ table TransactionBytes {
   redirect: string;
 }
 
+table UnconfirmedTx {
+  account: uint32;
+  txid: [uint8];
+  amount: int64;
+}
+
 /* Lists
 Spendings
 TransparentAddresses

@@ -13,6 +13,7 @@ pub mod account;
 pub mod account_manager;
 pub mod chain;
 pub mod contacts;
+pub mod mempool;
 pub mod messages;
 pub mod notes;
 pub mod tx;

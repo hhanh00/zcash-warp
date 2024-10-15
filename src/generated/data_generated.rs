@@ -8682,4 +8682,212 @@ pub mod fb {
             )
         }
     }
+    pub enum UnconfirmedTxOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct UnconfirmedTx<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for UnconfirmedTx<'a> {
+        type Inner = UnconfirmedTx<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> UnconfirmedTx<'a> {
+        pub const VT_ACCOUNT: flatbuffers::VOffsetT = 4;
+        pub const VT_TXID: flatbuffers::VOffsetT = 6;
+        pub const VT_AMOUNT: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            UnconfirmedTx { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args UnconfirmedTxArgs<'args>,
+        ) -> flatbuffers::WIPOffset<UnconfirmedTx<'bldr>> {
+            let mut builder = UnconfirmedTxBuilder::new(_fbb);
+            builder.add_amount(args.amount);
+            if let Some(x) = args.txid {
+                builder.add_txid(x);
+            }
+            builder.add_account(args.account);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> UnconfirmedTxT {
+            let account = self.account();
+            let txid = self.txid().map(|x| x.into_iter().collect());
+            let amount = self.amount();
+            UnconfirmedTxT {
+                account,
+                txid,
+                amount,
+            }
+        }
+
+        #[inline]
+        pub fn account(&self) -> u32 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u32>(UnconfirmedTx::VT_ACCOUNT, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn txid(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                        UnconfirmedTx::VT_TXID,
+                        None,
+                    )
+            }
+        }
+        #[inline]
+        pub fn amount(&self) -> i64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<i64>(UnconfirmedTx::VT_AMOUNT, Some(0))
+                    .unwrap()
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for UnconfirmedTx<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<u32>("account", Self::VT_ACCOUNT, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    "txid",
+                    Self::VT_TXID,
+                    false,
+                )?
+                .visit_field::<i64>("amount", Self::VT_AMOUNT, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct UnconfirmedTxArgs<'a> {
+        pub account: u32,
+        pub txid: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+        pub amount: i64,
+    }
+    impl<'a> Default for UnconfirmedTxArgs<'a> {
+        #[inline]
+        fn default() -> Self {
+            UnconfirmedTxArgs {
+                account: 0,
+                txid: None,
+                amount: 0,
+            }
+        }
+    }
+
+    pub struct UnconfirmedTxBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> UnconfirmedTxBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_account(&mut self, account: u32) {
+            self.fbb_
+                .push_slot::<u32>(UnconfirmedTx::VT_ACCOUNT, account, 0);
+        }
+        #[inline]
+        pub fn add_txid(&mut self, txid: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(UnconfirmedTx::VT_TXID, txid);
+        }
+        #[inline]
+        pub fn add_amount(&mut self, amount: i64) {
+            self.fbb_
+                .push_slot::<i64>(UnconfirmedTx::VT_AMOUNT, amount, 0);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> UnconfirmedTxBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            UnconfirmedTxBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<UnconfirmedTx<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for UnconfirmedTx<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("UnconfirmedTx");
+            ds.field("account", &self.account());
+            ds.field("txid", &self.txid());
+            ds.field("amount", &self.amount());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    pub struct UnconfirmedTxT {
+        pub account: u32,
+        pub txid: Option<Vec<u8>>,
+        pub amount: i64,
+    }
+    impl Default for UnconfirmedTxT {
+        fn default() -> Self {
+            Self {
+                account: 0,
+                txid: None,
+                amount: 0,
+            }
+        }
+    }
+    impl UnconfirmedTxT {
+        pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> flatbuffers::WIPOffset<UnconfirmedTx<'b>> {
+            let account = self.account;
+            let txid = self.txid.as_ref().map(|x| _fbb.create_vector(x));
+            let amount = self.amount;
+            UnconfirmedTx::create(
+                _fbb,
+                &UnconfirmedTxArgs {
+                    account,
+                    txid,
+                    amount,
+                },
+            )
+        }
+    }
 } // pub mod fb

@@ -43,6 +43,12 @@ typedef struct CResult_u32 {
   uint32_t len;
 } CResult_u32;
 
+typedef struct CResult_i64 {
+  int64_t value;
+  char *error;
+  uint32_t len;
+} CResult_i64;
+
 typedef struct CResult_____c_char {
   char *value;
   char *error;
@@ -142,6 +148,8 @@ struct CResult_u8 c_exclude_note(uint8_t coin, uint32_t id, bool reverse);
 struct CResult_u8 c_reverse_note_exclusion(uint8_t coin, uint32_t account);
 
 struct CResult______u8 c_get_tx_details(uint8_t coin, struct CParam txid);
+
+struct CResult_i64 c_get_unconfirmed_balance(uint8_t coin, uint32_t account);
 
 struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(uint8_t coin);
 
@@ -251,6 +259,10 @@ struct CResult_u8 c_decrypt_zip_database_files(uint8_t coin,
                                                char *secret_key);
 
 struct CResult______u8 c_generate_zip_database_keys(uint8_t coin);
+
+struct CResult_u8 c_mempool_run(uint8_t coin);
+
+struct CResult_u8 c_mempool_set_account(uint8_t coin, uint32_t account);
 
 struct CResult_u8 c_download_warp_blocks(uint8_t coin, char *warp_url, uint32_t end, char *dest);
 

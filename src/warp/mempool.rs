@@ -12,6 +12,9 @@ use zcash_protocol::consensus::{BlockHeight, BranchId};
 
 use crate::{
     coin::CoinDef,
+    data::fb::UnconfirmedTxT,
+    db::mempool::{clear_unconfirmed_tx, store_unconfirmed_tx},
+    fb_unwrap,
     lwd::rpc::{Empty, RawTransaction},
     network::Network,
     txdetails::analyze_raw_transaction,
@@ -39,7 +42,7 @@ impl Mempool {
             let mut client = coin.connect_lwd()?;
             let connection = coin.connection()?;
             'outer: loop {
-                // clear db of previous unconfirmed_tx
+                clear_unconfirmed_tx(&connection)?;
                 let mut mempool = client
                     .get_mempool_stream(Request::new(Empty {}))
                     .await?
@@ -67,8 +70,11 @@ impl Mempool {
                         tx = mempool.message() => {
                             if account == 0 { continue }
                             if let Some(tx) = tx? {
-                                let value = compute_tx_value(&coin, &coin.network, &connection, account, &tx).unwrap();
-                                tracing::info!("{value}");
+                                let txv = compute_tx_value(&coin, &coin.network, &connection, account, &tx).unwrap();
+                                tracing::info!("{:?}", txv);
+                                let txid = fb_unwrap!(txv.txid).clone();
+                                store_unconfirmed_tx(&connection, account,
+                                    &txid.try_into().unwrap(), txv.amount)?;
                             }
                             else {
                                 break;
@@ -91,13 +97,17 @@ fn compute_tx_value(
     connection: &Connection,
     account: u32,
     raw_tx: &RawTransaction,
-) -> Result<i64> {
+) -> Result<UnconfirmedTxT> {
     let height = raw_tx.height as u32;
     let raw_tx = &*raw_tx.data;
     let branch_id = BranchId::for_height(network, BlockHeight::from_u32(height));
     let tx = Transaction::read(raw_tx, branch_id)?;
     let txd = analyze_raw_transaction(coin, network, connection, account, height, 0, tx)?;
-    Ok(txd.value)
+    Ok(UnconfirmedTxT {
+        account,
+        txid: Some(txd.txid.to_vec()),
+        amount: txd.value,
+    })
 }
 
 #[c_export]
