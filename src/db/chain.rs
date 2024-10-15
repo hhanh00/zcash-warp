@@ -92,13 +92,19 @@ pub fn reset_scan(
 
     let db_tx = connection.transaction()?;
     db_tx.execute("DELETE FROM blcks WHERE height >= ?1", [height])?;
+    db_tx.execute("DELETE FROM blck_times WHERE height >= ?1", [height])?;
     db_tx.execute("DELETE FROM txs WHERE height >= ?1", [height])?;
-    db_tx.execute("DELETE FROM notes WHERE height >= ?1", [height])?;
-    db_tx.execute("DELETE FROM witnesses WHERE height >= ?1", [height])?;
     db_tx.execute("DELETE FROM txdetails", [])?;
+    db_tx.execute("DELETE FROM notes WHERE height >= ?1", [height])?;
+    db_tx.execute("DELETE FROM note_spends WHERE height >= ?1", [height])?;
+    db_tx.execute("DELETE FROM witnesses WHERE height >= ?1", [height])?;
+    db_tx.execute("DELETE FROM utxos WHERE height >= ?1", [height])?;
+    db_tx.execute("DELETE FROM utxo_spends WHERE height >= ?1", [height])?;
     db_tx.execute("DELETE FROM msgs", [])?;
     db_tx.execute("UPDATE notes SET spent = NULL WHERE spent >= ?1", [height])?;
     db_tx.execute("UPDATE notes SET spent = NULL WHERE spent = 0", [])?;
+    db_tx.execute("UPDATE utxos SET spent = NULL WHERE spent >= ?1", [height])?;
+    db_tx.execute("UPDATE utxos SET spent = NULL WHERE spent = 0", [])?;
     update_account_balances(&db_tx, height)?;
     db_tx.commit()?;
 
