@@ -43,6 +43,7 @@ impl Mempool {
             let connection = coin.connection()?;
             'outer: loop {
                 clear_unconfirmed_tx(&connection)?;
+                tracing::info!("mempool open");
                 let mut mempool = client
                     .get_mempool_stream(Request::new(Empty {}))
                     .await?
@@ -68,8 +69,10 @@ impl Mempool {
                         }
 
                         tx = mempool.message() => {
-                            if account == 0 { continue }
-                            if let Some(tx) = tx? {
+                            let tx = tx?;
+                            if let Some(tx) = tx {
+                                tracing::info!("{}", tx.height);
+                                if account == 0 { continue }
                                 let txv = compute_tx_value(&coin, &coin.network, &connection, account, &tx).unwrap();
                                 tracing::info!("{:?}", txv);
                                 let txid = fb_unwrap!(txv.txid).clone();
@@ -82,7 +85,9 @@ impl Mempool {
                         }
                     }
                 }
+                tracing::info!("mempool close");
                 tracing::info!("Sleeping before new block");
+                clear_unconfirmed_tx(&connection)?;
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
             Ok::<_, anyhow::Error>(())
