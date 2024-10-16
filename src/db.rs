@@ -292,7 +292,9 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
         let birth: u32 = get_activation_height(network)?;
         for a in accounts {
             let (name, key, aindex) = a;
-            create_new_account(network, connection, &name, &key, aindex, birth, false)?;
+            create_new_account(
+                network, connection, &name, &key, aindex, birth, false, false,
+            )?;
         }
     }
 

@@ -99,7 +99,8 @@ struct CResult_u32 c_create_new_account(uint8_t coin,
                                         char *key,
                                         uint32_t acc_index,
                                         uint32_t birth,
-                                        bool transparent_only);
+                                        bool transparent_only,
+                                        bool is_new);
 
 struct CResult_u8 c_new_transparent_address(uint8_t coin, uint32_t account);
 
@@ -133,6 +134,8 @@ struct CResult_u8 c_delete_contact(uint8_t coin, uint32_t id);
 
 struct CResult_u8 c_on_contacts_saved(uint8_t coin, uint32_t account);
 
+struct CResult_i64 c_get_unconfirmed_balance(uint8_t coin, uint32_t account);
+
 struct CResult______u8 c_list_messages(uint8_t coin, uint32_t account);
 
 struct CResult_u8 c_mark_all_read(uint8_t coin, uint32_t account, bool reverse);
@@ -148,8 +151,6 @@ struct CResult_u8 c_exclude_note(uint8_t coin, uint32_t id, bool reverse);
 struct CResult_u8 c_reverse_note_exclusion(uint8_t coin, uint32_t account);
 
 struct CResult______u8 c_get_tx_details(uint8_t coin, struct CParam txid);
-
-struct CResult_i64 c_get_unconfirmed_balance(uint8_t coin, uint32_t account);
 
 struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(uint8_t coin);
 

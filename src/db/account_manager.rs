@@ -198,11 +198,20 @@ pub fn create_new_account(
     acc_index: u32,
     birth: u32,
     transparent_only: bool,
+    is_new: bool,
 ) -> Result<u32> {
     let ak = detect_key(network, &key, acc_index)?;
     let dindex = ak.dindex.unwrap_or_default();
     let db_tx = connection.transaction()?;
-    let account = create_account(&db_tx, name, ak.seed.as_deref(), acc_index, dindex, birth)?;
+    let account = create_account(
+        &db_tx,
+        name,
+        ak.seed.as_deref(),
+        acc_index,
+        dindex,
+        birth,
+        is_new,
+    )?;
     if let Some(ti) = ak.to_transparent() {
         create_transparent_account(network, &db_tx, account, &ti)?;
         create_transparent_address(network, &db_tx, account, dindex, &ti)?;
@@ -232,11 +241,12 @@ pub fn create_account(
     acc_index: u32,
     addr_index: u32,
     birth: u32,
+    is_new: bool,
 ) -> Result<u32> {
     connection.execute(
         "INSERT INTO accounts(name, seed, aindex, dindex, birth, balance, saved)
-        VALUES (?1, ?2, ?3, ?4, ?5, 0, FALSE)",
-        params![name, seed, acc_index, addr_index, birth],
+        VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)",
+        params![name, seed, acc_index, addr_index, birth, !is_new],
     )?;
     let account = connection.last_insert_rowid();
     Ok(account as u32)

@@ -417,6 +417,7 @@ async fn process_command(
                         0,
                         birth,
                         transparent_only != 0,
+                        false,
                     )?;
                 }
                 AccountCommand::NewTransparentAddress { account } => {

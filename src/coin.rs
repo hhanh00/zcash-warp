@@ -45,7 +45,7 @@ impl Drop for CoinDef {
 }
 
 #[derive(Clone, Debug)]
-pub struct TokioRuntime(Option<Arc<Runtime>>);
+pub struct TokioRuntime(pub Option<Arc<Runtime>>);
 
 impl CoinDef {
     pub fn from_network(coin: u8, network: Network) -> Self {
