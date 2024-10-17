@@ -241,6 +241,8 @@ table ZipDbConfig {
 }
 
 table TransparentAddress {
+  account: uint32;
+  external: uint32;
   addr_index: uint32;
   address: string;
 }

@@ -102,6 +102,7 @@ impl PaymentBuilder {
             available: [0; 3],
             used: [false; 3],
             use_change: true,
+            use_unique_change: true,
             s_edge: s_tree.to_edge(&SaplingHasher::default()),
             o_edge: o_tree.to_edge(&OrchardHasher::default()),
         })
@@ -286,22 +287,22 @@ impl PaymentBuilder {
                 .find(|&i| self.used[i])
                 .ok_or(anyhow::anyhow!("No Funds"))? as u8;
             tracing::info!("Change pool {change_pool}");
-            let change_pool = 1 << change_pool;
             let change_address = self
                 .ai
-                .to_address(&self.network, PoolMask(change_pool))
+                .to_change_address(&self.network, change_pool, self.use_unique_change)
                 .unwrap();
+            tracing::info!("Change {change_address}");
             let mut change = ExtendedRecipient {
                 recipient: RecipientT {
                     address: Some(change_address),
                     amount: 0,
-                    pools: change_pool,
+                    pools: 1 << change_pool,
                     memo: None,
                     memo_bytes: None,
                 },
                 amount: 0,
                 remaining: 0,
-                pool_mask: PoolMask(change_pool),
+                pool_mask: PoolMask(1 << change_pool),
                 is_change: true,
             };
             self.fill_outputs(std::slice::from_mut(&mut &mut change))?;
@@ -328,8 +329,8 @@ impl PaymentBuilder {
                 amount,
                 ..
             } = pi;
-            let address =
-                single_receiver_address(&self.network, fb_unwrap!(address), n.pool_mask)?.unwrap();
+            tracing::info!("{:?}", address);
+            let address = single_receiver_address(&self.network, fb_unwrap!(address), n.pool_mask)?;
             let memo = memo_bytes.map(|memo| MemoBytes::from_bytes(&memo).unwrap());
             let memo = memo.unwrap_or(MemoBytes::empty());
             let note = OutputNote::from_address(&self.network, &address, memo)?;

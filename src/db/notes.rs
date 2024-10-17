@@ -284,22 +284,24 @@ pub fn store_witness(
 }
 
 fn select_utxo(r: &Row) -> Result<UTXO, rusqlite::Error> {
-    let (id_utxo, account, addr_index, height, timestamp, txid, vout, address, value) = (
+    let (id_utxo, account, external, addr_index, height, timestamp, txid, vout, address, value) = (
         r.get(0)?,
         r.get(1)?,
         r.get(2)?,
         r.get(3)?,
         r.get(4)?,
-        r.get::<_, Vec<u8>>(5)?,
-        r.get(6)?,
+        r.get(5)?,
+        r.get::<_, Vec<u8>>(6)?,
         r.get(7)?,
         r.get(8)?,
+        r.get(9)?,
     );
 
     let utxo = UTXO {
         is_new: false,
         id: id_utxo,
         account,
+        external,
         addr_index,
         height,
         timestamp,
@@ -314,10 +316,12 @@ fn select_utxo(r: &Row) -> Result<UTXO, rusqlite::Error> {
 pub fn list_all_utxos(connection: &Connection) -> Result<Vec<UTXO>> {
     // include the unconfirmed spents
     let mut s = connection.prepare(
-        "SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
+        "SELECT u.id_utxo, u.account, u.external, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
         u.value FROM utxos u
         JOIN t_accounts t ON u.account = t.account
-        JOIN t_addresses s ON s.account = t.account AND s.addr_index = u.addr_index
+        JOIN t_addresses s ON s.account = t.account
+            AND s.external = u.external
+            AND s.addr_index = u.addr_index
         WHERE u.spent IS NULL OR u.spent = 0
         ORDER BY u.height DESC"
     )?;
@@ -335,10 +339,12 @@ pub fn list_utxos(
     let height: u32 = height.into();
     // exclude unconfirmed spents
     let mut s = connection.prepare(
-        &("SELECT u.id_utxo, u.account, u.addr_index, u.height, u.timestamp, u.txid, u.vout, s.address,
+        &("SELECT u.id_utxo, u.account, u.external, u.addr_index, u.height, u.external, u.txid, u.vout, s.address,
         u.value FROM utxos u
         JOIN t_accounts t ON u.account = t.account
-        JOIN t_addresses s ON s.account = t.account AND s.addr_index = u.addr_index
+        JOIN t_addresses s ON s.account = t.account
+            AND s.external = u.external
+            AND s.addr_index = u.addr_index
         WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
         AND u.account = ?2 ORDER BY u.height DESC"),
     )?;
@@ -352,8 +358,8 @@ pub fn store_utxo(connection: &Transaction, utxo: &UTXO) -> Result<()> {
     if utxo.is_new {
         let mut s = connection.prepare_cached(
             "INSERT INTO utxos
-            (account, height, timestamp, txid, vout, addr_index, value, spent)
-            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            (account, height, timestamp, txid, vout, external, addr_index, value, spent)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
             ON CONFLICT DO NOTHING",
         )?;
         s.execute(params![
@@ -362,6 +368,7 @@ pub fn store_utxo(connection: &Transaction, utxo: &UTXO) -> Result<()> {
             utxo.timestamp,
             utxo.txid,
             utxo.vout,
+            utxo.external,
             utxo.addr_index,
             utxo.value,
             None::<u32>

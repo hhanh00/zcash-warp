@@ -61,15 +61,22 @@ pub fn list_account_transparent_addresses(
     account: u32,
 ) -> Result<Vec<TransparentAddressT>> {
     let mut s = connection.prepare(
-        "SELECT addr_index, address FROM t_addresses WHERE account = ?1 ORDER BY addr_index",
+        "SELECT external, addr_index, address FROM t_addresses WHERE account = ?1
+        ORDER BY addr_index",
     )?;
     let rows = s.query_map([account], |r| {
-        Ok((r.get::<_, u32>(0)?, r.get::<_, String>(1)?))
+        Ok((
+            r.get::<_, u32>(0)?,
+            r.get::<_, u32>(1)?,
+            r.get::<_, String>(2)?,
+        ))
     })?;
     let mut addresses = vec![];
     for r in rows {
-        let (addr_index, address) = r?;
+        let (external, addr_index, address) = r?;
         addresses.push(TransparentAddressT {
+            account,
+            external,
             addr_index,
             address: Some(address),
         });
@@ -77,19 +84,36 @@ pub fn list_account_transparent_addresses(
     Ok(addresses)
 }
 
-pub fn list_transparent_addresses(connection: &Connection) -> Result<Vec<(u32, u32, String)>> {
-    let mut s = connection
-        .prepare("SELECT account, addr_index, address FROM t_addresses ORDER BY addr_index")?;
+#[derive(Clone, Debug)]
+pub struct TransparentDerPath {
+    pub account: u32,
+    pub external: u32,
+    pub addr_index: u32,
+}
+
+pub fn list_transparent_addresses(
+    connection: &Connection,
+) -> Result<Vec<(TransparentDerPath, String)>> {
+    let mut s = connection.prepare(
+        "SELECT account, external, addr_index, address FROM t_addresses ORDER BY addr_index",
+    )?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, u32>(1)?,
-            r.get::<_, String>(2)?,
+            r.get::<_, u32>(2)?,
+            r.get::<_, String>(3)?,
         ))
     })?;
     let mut res = vec![];
     for r in rows {
-        res.push(r?);
+        let (account, external, addr_index, address) = r?;
+        let path = TransparentDerPath {
+            account,
+            external,
+            addr_index,
+        };
+        res.push((path, address));
     }
     Ok(res)
 }
@@ -99,6 +123,13 @@ pub fn get_account_info(
     connection: &Connection,
     account: u32,
 ) -> Result<AccountInfo> {
+    let cindex = connection.query_row(
+        "SELECT MAX(addr_index) FROM t_addresses WHERE account = ?1
+        AND external = 1",
+        [account],
+        |r| r.get::<_, Option<u32>>(0),
+    )?;
+
     let ai = connection.query_row(
         "SELECT a.name, a.seed, a.aindex, a.dindex, a.birth,
         t.addr_index as tidx, t.xsk as txsk, t.sk as tsk, t.vk as tvk, t.address as taddr,
@@ -134,6 +165,7 @@ pub fn get_account_info(
                     let addr = TransparentAddress::decode(network, &taddr).unwrap();
                     let ti = TransparentAccountInfo {
                         index,
+                        change_index: cindex,
                         xsk,
                         sk,
                         vk,
@@ -202,7 +234,11 @@ pub fn get_account_info(
     Ok(ai)
 }
 
-pub fn list_account_tsk(connection: &Connection, account: u32) -> Result<Vec<TransparentSK>> {
+pub fn list_account_tsk(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+) -> Result<Vec<TransparentSK>> {
     let mut s = connection.prepare("SELECT address, sk FROM t_addresses WHERE account = ?1")?;
     let rows = s.query_map([account], |r| {
         Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
@@ -211,6 +247,8 @@ pub fn list_account_tsk(connection: &Connection, account: u32) -> Result<Vec<Tra
     for r in rows {
         let (address, sk) = r?;
         let sk = import_sk_bip38(&sk)?;
+        let ti = TransparentAccountInfo::from_secret_key(&sk, true);
+        assert_eq!(ti.addr.encode(network), address);
         tsks.push(TransparentSK { address, sk });
     }
     Ok(tsks)

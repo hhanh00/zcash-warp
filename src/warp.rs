@@ -81,6 +81,7 @@ pub struct TxOut2 {
 #[derive(Debug)]
 pub struct TransparentTx {
     pub account: u32,
+    pub external: u32,
     pub addr_index: u32,
     pub address: TransparentAddress,
     pub height: u32,
@@ -95,6 +96,7 @@ pub struct UTXO {
     pub is_new: bool,
     pub id: u32,
     pub account: u32,
+    pub external: u32,
     pub addr_index: u32,
     pub height: u32,
     pub timestamp: u32,

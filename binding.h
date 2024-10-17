@@ -102,7 +102,7 @@ struct CResult_u32 c_create_new_account(uint8_t coin,
                                         bool transparent_only,
                                         bool is_new);
 
-struct CResult_u8 c_new_transparent_address(uint8_t coin, uint32_t account);
+struct CResult_u8 c_new_transparent_address(uint8_t coin, uint32_t account, uint32_t external);
 
 struct CResult_u8 c_edit_account_name(uint8_t coin, uint32_t account, char *name);
 
@@ -160,7 +160,10 @@ struct CResult_u64 c_ping(uint8_t coin, char *lwd_url);
 
 struct CResult_u8 c_init_sapling_prover(uint8_t coin, struct CParam spend, struct CParam output);
 
-struct CResult_u8 c_scan_transparent_addresses(uint8_t coin, uint32_t account, uint32_t gap_limit);
+struct CResult_u8 c_scan_transparent_addresses(uint8_t coin,
+                                               uint32_t account,
+                                               uint32_t external,
+                                               uint32_t gap_limit);
 
 struct CResult_u8 c_retrieve_tx_details(uint8_t coin);
 

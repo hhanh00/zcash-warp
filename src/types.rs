@@ -27,6 +27,7 @@ use crate::{
     data::fb::{BackupT, ContactCardT},
     keys::{export_sk_bip38, to_extended_full_viewing_key, AccountKeys},
     network::Network,
+    utils::ua::ua_of_orchard,
 };
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -85,6 +86,7 @@ pub struct TransparentAccountInfo {
     pub sk: Option<SecretKey>,
     pub vk: Option<AccountPubKey>,
     pub addr: TransparentAddress,
+    pub change_index: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -155,6 +157,7 @@ impl AccountInfo {
             seed: self.seed.clone(),
             aindex: self.aindex,
             dindex: self.dindex.clone(),
+            cindex: None,
             txsk: None,
             tsk: None,
             tvk: None,
@@ -170,6 +173,7 @@ impl AccountInfo {
             ak.tsk = ti.sk.clone();
             ak.tvk = ti.vk.clone();
             ak.taddr = Some(ti.addr.clone());
+            ak.cindex = ti.change_index;
         }
         if let Some(si) = self.sapling.as_ref() {
             ak.ssk = si.sk.clone();
@@ -286,6 +290,41 @@ impl AccountInfo {
         };
 
         addr
+    }
+
+    pub fn to_change_address(
+        &self,
+        network: &Network,
+        pool: u8,
+        use_unique_change: bool,
+    ) -> Option<String> {
+        match pool {
+            0 if use_unique_change => self
+                .transparent
+                .as_ref()
+                .map(|ti| {
+                    ti.vk
+                        .as_ref()
+                        .map(|vk| {
+                            TransparentAccountInfo::derive_change_address(
+                                vk,
+                                ti.change_index.unwrap(),
+                            )
+                        })
+                        .unwrap_or(ti.addr)
+                })
+                .map(|a| a.encode(network)),
+            0 if !use_unique_change => self.transparent.as_ref().map(|ti| ti.addr.encode(network)),
+
+            1 => self.sapling.as_ref().map(|si| si.addr.encode(network)),
+
+            2 => self
+                .orchard
+                .as_ref()
+                .map(|oi| ua_of_orchard(&oi.addr).encode(network)),
+
+            _ => unreachable!(),
+        }
     }
 
     pub fn to_addresses(&self, network: &Network) -> Addresses {

@@ -139,6 +139,7 @@ pub async fn get_transparent(
     network: &Network,
     client: &mut Client,
     account: u32,
+    external: u32,
     addr_index: u32,
     taddr: TransparentAddress,
     start: u32,
@@ -194,6 +195,7 @@ pub async fn get_transparent(
         let ttx = TransparentTx {
             account,
             height,
+            external,
             addr_index,
             address: taddr.clone(),
             timestamp: 0, // TODO: Resolve timestamp from block header
@@ -276,6 +278,7 @@ pub async fn get_transaction(
 pub async fn get_utxos(
     client: &mut Client,
     account: u32,
+    external: u32,
     addr_index: u32,
     address: &str,
 ) -> Result<Vec<UTXO>> {
@@ -293,6 +296,7 @@ pub async fn get_utxos(
             is_new: true,
             id: 0,
             account,
+            external,
             addr_index,
             height: utxo.height as u32,
             timestamp: 0, // no need to retrieve block timestamp for a sweep

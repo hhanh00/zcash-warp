@@ -12,7 +12,7 @@ use zcash_client_backend::{
 use zcash_primitives::{
     consensus::NetworkConstants as _,
     legacy::{
-        keys::{IncomingViewingKey, NonHardenedChildIndex},
+        keys::{IncomingViewingKey, NonHardenedChildIndex, TransparentKeyScope},
         TransparentAddress,
     },
 };
@@ -66,6 +66,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
             seed: None,
             aindex: 0,
             dindex: Some(di),
+            cindex: None,
             txsk: None,
             tsk: None,
             tvk: None,
@@ -84,6 +85,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
             seed: None,
             aindex: 0,
             dindex: Some(di),
+            cindex: None,
             txsk: None,
             tsk: None,
             tvk: None,
@@ -104,6 +106,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
             seed: None,
             aindex: 0,
             dindex: di,
+            cindex: None,
             txsk: None,
             tsk: None,
             tvk: tvk.cloned(),
@@ -120,6 +123,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
             seed: None,
             aindex: 0,
             dindex: None,
+            cindex: None,
             txsk: None,
             tsk: ti.sk.clone(),
             tvk: None,
@@ -138,6 +142,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
             seed: None,
             aindex: 0,
             dindex: None,
+            cindex: None,
             txsk: Some(txsk),
             tsk: Some(sk),
             tvk: Some(tvk),
@@ -154,6 +159,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
             seed: None,
             aindex: 0,
             dindex: None,
+            cindex: None,
             txsk: None,
             tsk: None,
             tvk: Some(tvk),
@@ -168,6 +174,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
             seed: None,
             aindex: 0,
             dindex: None,
+            cindex: None,
             txsk: None,
             tsk: None,
             tvk: None,
@@ -214,9 +221,12 @@ pub fn create_new_account(
     )?;
     if let Some(ti) = ak.to_transparent() {
         create_transparent_account(network, &db_tx, account, &ti)?;
-        create_transparent_address(network, &db_tx, account, dindex, &ti)?;
-        if dindex != 0 {
-            create_transparent_address(network, &db_tx, account, 0, &ti)?;
+        create_transparent_address(network, &db_tx, account, 0, dindex, &ti)?;
+        if ti.vk.is_some() {
+            if dindex != 0 {
+                create_transparent_address(network, &db_tx, account, 0, 0, &ti)?;
+            }
+            create_transparent_address(network, &db_tx, account, 1, 0, &ti)?; // change
         }
     } else if transparent_only {
         anyhow::bail!("Must have a transparent key");
@@ -299,30 +309,41 @@ pub fn create_transparent_address(
     network: &Network,
     connection: &Connection,
     account: u32,
+    external: u32,
     addr_index: u32,
     ti: &TransparentAccountInfo,
 ) -> Result<()> {
     let address_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
     let sk_from_xsk = ti.xsk.as_ref().map(|sk| {
-        let sk = sk.derive_external_secret_key(address_index).unwrap();
+        let sk = match external {
+            0 => sk.derive_external_secret_key(address_index).unwrap(),
+            1 => sk.derive_internal_secret_key(address_index).unwrap(),
+            _ => sk
+                .derive_secret_key(
+                    TransparentKeyScope::custom(external).unwrap(),
+                    address_index,
+                )
+                .unwrap(),
+        };
         export_sk_bip38(&sk)
     });
     let sk_from_sk = ti.sk.as_ref().map(|sk| export_sk_bip38(sk));
     let sk = sk_from_xsk.or(sk_from_sk);
-    let addr_from_vk = ti
-        .vk
-        .as_ref()
-        .map(|tvk| TransparentAccountInfo::derive_address(tvk, addr_index).encode(network));
+    let addr_from_vk = ti.vk.as_ref().map(|tvk| match external {
+        0 => TransparentAccountInfo::derive_address(tvk, addr_index).encode(network),
+        1 => TransparentAccountInfo::derive_change_address(tvk, addr_index).encode(network),
+        _ => unreachable!(),
+    });
     let addr_from_addr = ti.addr.encode(network);
     let addr = addr_from_vk.or(Some(addr_from_addr));
 
     connection.execute(
-        "INSERT INTO t_addresses(account, addr_index, sk, address)
-        VALUES (?1, ?2, ?3, ?4)
-        ON CONFLICT (account, addr_index)
+        "INSERT INTO t_addresses(account, external, addr_index, sk, address)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT (account, external, addr_index)
         DO UPDATE
         SET sk = excluded.sk, address = excluded.address", // address already exists
-        params![account, addr_index, sk, addr],
+        params![account, external, addr_index, sk, addr],
     )?;
     Ok(())
 }
@@ -371,6 +392,7 @@ pub fn new_transparent_address(
     network: &Network,
     connection: &Connection,
     account: u32,
+    external: u32,
 ) -> Result<()> {
     let ai = get_account_info(network, connection, account)?;
     ai.transparent
@@ -380,29 +402,63 @@ pub fn new_transparent_address(
                 anyhow::bail!("Cannot derive additional addresses without an extended public key");
             }
             let addr_index = connection.query_row(
-                "SELECT MAX(addr_index) FROM t_addresses WHERE account = ?1",
-                [account],
+                "SELECT MAX(addr_index) FROM t_addresses WHERE account = ?1
+                AND external = ?2",
+                [account, external],
                 |r| r.get::<_, u32>(0),
             )? + 1;
-            create_transparent_address(network, connection, account, addr_index, &ti)?;
+            create_transparent_address(network, connection, account, external, addr_index, &ti)?;
             Ok::<_, anyhow::Error>(())
         })
         .transpose()?;
     Ok(())
 }
 
-pub fn trim_excess_transparent_addresses(connection: &Connection, account: u32) -> Result<()> {
+pub fn trim_excess_transparent_addresses(
+    connection: &Connection,
+    account: u32,
+    external: u32,
+) -> Result<()> {
     let max_addr_index = connection
         .query_row(
-            "SELECT MAX(addr_index) FROM utxos WHERE account = ?1",
-            [account],
+            "SELECT MAX(addr_index) FROM utxos WHERE account = ?1 AND external = ?2",
+            [account, external],
             |r| r.get::<_, Option<u32>>(0),
         )?
         .unwrap_or_default();
     connection.execute(
-        "DELETE FROM t_addresses WHERE account = ?1 AND addr_index > ?2",
-        params![account, max_addr_index],
+        "DELETE FROM t_addresses WHERE account = ?1 AND external = ?2 AND addr_index > ?3",
+        params![account, external, max_addr_index],
     )?;
+    Ok(())
+}
+
+pub fn extend_transparent_change_addresses(
+    network: &Network,
+    connection: &Connection,
+    account: u32,
+) -> Result<()> {
+    tracing::info!("extend_transparent_change_addresses");
+    let ai = get_account_info(network, connection, account)?;
+    if let Some(ti) = ai.transparent.as_ref() {
+        let cindex = connection
+            .query_row(
+                "SELECT addr_index FROM utxos
+        WHERE account = ?1 AND external = 1 AND
+        addr_index = (SELECT MAX(addr_index) FROM t_addresses
+        WHERE account = ?1 AND external = 1)",
+                [account],
+                |r| r.get::<_, u32>(0),
+            )
+            .optional()?;
+        // if change address was used, allocate a new one
+        tracing::info!("{account} {cindex:?}");
+        if let Some(cindex) = cindex {
+            if ti.vk.is_some() {
+                create_transparent_address(network, connection, account, 1, cindex + 1, &ti)?;
+            }
+        }
+    }
     Ok(())
 }
 

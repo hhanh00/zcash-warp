@@ -70,20 +70,19 @@ impl UnsignedTransaction {
             for txin in self.tx_notes.iter() {
                 match &txin.note {
                     // derive the transparent keys
-                    InputNote::Transparent { addr_index, .. } => {
+                    InputNote::Transparent {
+                        external,
+                        addr_index,
+                        ..
+                    } => {
                         ti.xsk.as_ref().map(|xsk| {
-                            let sk = TransparentAccountInfo::derive_sk(xsk, *addr_index);
+                            let sk = TransparentAccountInfo::derive_sk(xsk, *external, *addr_index);
                             let address = sk_to_address(&sk).encode(network);
                             tsk_store.insert(address, sk);
                         });
                     }
                     _ => {}
                 }
-            }
-
-            let tsks = list_account_tsk(connection, account)?;
-            for tsk in tsks.iter() {
-                tsk_store.insert(tsk.address.clone(), tsk.sk.clone());
             }
         }
 

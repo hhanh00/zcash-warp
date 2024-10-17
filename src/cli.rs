@@ -108,12 +108,14 @@ pub enum AccountCommand {
     },
     NewTransparentAddress {
         account: u32,
+        external: u32,
     },
     ListTransparentAddresses {
         account: u32,
     },
     Scan {
         account: u32,
+        external: u32,
         gap_limit: u32,
     },
     SetProperty {
@@ -420,20 +422,25 @@ async fn process_command(
                         false,
                     )?;
                 }
-                AccountCommand::NewTransparentAddress { account } => {
-                    new_transparent_address(network, &connection, account)?;
+                AccountCommand::NewTransparentAddress { account, external } => {
+                    new_transparent_address(network, &connection, account, external)?;
                 }
                 AccountCommand::ListTransparentAddresses { account } => {
                     let t_addresses = list_account_transparent_addresses(&connection, account)?;
                     println!("{:?}", t_addresses);
                 }
-                AccountCommand::Scan { account, gap_limit } => {
+                AccountCommand::Scan {
+                    account,
+                    external,
+                    gap_limit,
+                } => {
                     let mut client = zec.connect_lwd()?;
                     scan_transparent_addresses(
                         &network,
                         &mut connection,
                         &mut client,
                         account,
+                        external,
                         gap_limit,
                     )
                     .await?;

@@ -34,6 +34,7 @@ pub struct AccountKeys {
     pub seed: Option<String>,
     pub aindex: u32,
     pub dindex: Option<u32>,
+    pub cindex: Option<u32>,
     pub txsk: Option<AccountPrivKey>,
     pub tsk: Option<SecretKey>,
     pub tvk: Option<AccountPubKey>,
@@ -70,6 +71,7 @@ impl AccountKeys {
             seed: Some(phrase.to_string()),
             aindex: acc_index,
             dindex: Some(di),
+            cindex: None,
             txsk: Some(txsk),
             tsk: Some(tsk),
             tvk,
@@ -85,6 +87,7 @@ impl AccountKeys {
         if let Some(taddr) = self.taddr.as_ref() {
             Some(TransparentAccountInfo {
                 index: self.dindex,
+                change_index: self.cindex,
                 xsk: self.txsk.clone(),
                 sk: self.tsk.clone(),
                 vk: self.tvk.clone(),
@@ -226,6 +229,7 @@ impl TransparentAccountInfo {
         let addr = TransparentAddress::PublicKeyHash(pub_key.into());
         TransparentAccountInfo {
             index: None,
+            change_index: None,
             xsk: None,
             sk: Some(sk.clone()),
             vk: None,
@@ -233,9 +237,13 @@ impl TransparentAccountInfo {
         }
     }
 
-    pub fn derive_sk(xsk: &AccountPrivKey, addr_index: u32) -> SecretKey {
+    pub fn derive_sk(xsk: &AccountPrivKey, external: u32, addr_index: u32) -> SecretKey {
         let addr_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
-        xsk.derive_internal_secret_key(addr_index).unwrap()
+        match external {
+            0 => xsk.derive_external_secret_key(addr_index).unwrap(),
+            1 => xsk.derive_internal_secret_key(addr_index).unwrap(),
+            _ => unreachable!(),
+        }
     }
 
     pub fn derive_address(tvk: &AccountPubKey, addr_index: u32) -> TransparentAddress {
@@ -246,12 +254,20 @@ impl TransparentAccountInfo {
             .unwrap()
     }
 
-    pub fn new_address(&self, addr_index: u32) -> Result<Self> {
+    pub fn derive_change_address(tvk: &AccountPubKey, addr_index: u32) -> TransparentAddress {
+        let addr_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
+        tvk.derive_internal_ivk()
+            .unwrap()
+            .derive_address(addr_index)
+            .unwrap()
+    }
+
+    pub fn new_address(&self, external: u32, addr_index: u32) -> Result<Self> {
         let aindex = NonHardenedChildIndex::from_index(addr_index).unwrap();
-        let tsk = self
-            .xsk
-            .as_ref()
-            .map(|tvk| tvk.derive_external_secret_key(aindex).unwrap());
+        let tsk = self.xsk.as_ref().map(|tvk| {
+            tvk.derive_secret_key(TransparentKeyScope::custom(external).unwrap(), aindex)
+                .unwrap()
+        });
         let taddr = self.vk.as_ref().map(|tvk| {
             tvk.derive_external_ivk()
                 .unwrap()
@@ -260,6 +276,7 @@ impl TransparentAccountInfo {
         });
         Ok(Self {
             index: Some(addr_index),
+            change_index: self.change_index,
             xsk: self.xsk.clone(),
             sk: tsk,
             vk: self.vk.clone(),

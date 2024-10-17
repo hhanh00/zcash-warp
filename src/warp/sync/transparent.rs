@@ -6,7 +6,7 @@ use zcash_primitives::legacy::TransparentAddress;
 
 use crate::{
     db::{
-        account::list_transparent_addresses,
+        account::{list_transparent_addresses, TransparentDerPath},
         notes::{list_all_utxos, mark_transparent_spent, store_utxo},
         tx::add_tx_value,
     },
@@ -18,7 +18,7 @@ use super::{IdSpent, ReceivedTx, TxValueUpdate};
 
 pub struct TransparentSync {
     pub network: Network,
-    pub addresses: Vec<(u32, u32, TransparentAddress)>,
+    pub addresses: Vec<(TransparentDerPath, TransparentAddress)>,
     pub utxos: Vec<UTXO>,
     pub txs: Vec<(ReceivedTx, OutPoint, u64)>,
     pub tx_updates: Vec<(TxValueUpdate, IdSpent<OutPoint>)>,
@@ -27,14 +27,14 @@ pub struct TransparentSync {
 impl TransparentSync {
     pub fn new(network: &Network, connection: &Connection) -> Result<Self> {
         let addresses = list_transparent_addresses(connection)?
-            .iter()
-            .map(|(account, addr_index, address)| {
+            .into_iter()
+            .map(|(path, address)| {
                 let RecipientAddress::Transparent(ta) =
                     RecipientAddress::decode(network, &address).unwrap()
                 else {
                     unreachable!()
                 };
-                (*account, *addr_index, ta)
+                (path, ta)
             })
             .collect::<Vec<_>>();
         let utxos = list_all_utxos(connection)?;
@@ -100,6 +100,7 @@ impl TransparentSync {
                     is_new: true,
                     id: 0,
                     account: tx.account,
+                    external: tx.external,
                     addr_index: tx.addr_index,
                     height: tx.height,
                     timestamp: tx.timestamp,

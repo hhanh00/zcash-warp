@@ -89,9 +89,10 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
         id_address INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,
         sk TEXT,
+        external INTEGER NOT NULL,
         addr_index INTEGER NOT NULL,
         address TEXT NOT NULL,
-        UNIQUE (account, addr_index))",
+        UNIQUE (account, external, addr_index))",
         [],
     )?;
 
@@ -190,6 +191,7 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
         "CREATE TABLE IF NOT EXISTS utxos(
         id_utxo INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,
+        external INTEGER NOT NULL,
         addr_index INTEGER NOT NULL,
         height INTEGER NOT NULL,
         timestamp INTEGER NOT NULL,

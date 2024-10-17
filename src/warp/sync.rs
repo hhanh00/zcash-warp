@@ -6,7 +6,8 @@ use std::{
 use crate::{
     coin::{connect_lwd, CoinDef},
     db::{
-        account::list_account_transparent_addresses,
+        account::{list_account_transparent_addresses, list_accounts},
+        account_manager::extend_transparent_change_addresses,
         chain::{get_block_header, get_sync_height, rewind_checkpoint, store_block},
         notes::{
             mark_shielded_spent, store_received_note, update_account_balances, update_tx_timestamp,
@@ -259,12 +260,13 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
     let mut trp_dec = TransparentSync::new(&coin.network, &connection)?;
 
     let addresses = trp_dec.addresses.clone();
-    for (account, addr_index, taddr) in addresses.into_iter() {
+    for (path, taddr) in addresses.into_iter() {
         let txs = get_transparent(
             &coin.network,
             &mut client,
-            account,
-            addr_index,
+            path.account,
+            path.external,
+            path.addr_index,
             taddr,
             start.0 + 1,
             end,
@@ -367,6 +369,11 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
         // Save block times
         header_dec.save(&db_tx)?;
         copy_block_times_from_tx(&db_tx)?;
+
+        let accounts = list_accounts(coin, &db_tx)?;
+        for a in accounts.items.unwrap() {
+            extend_transparent_change_addresses(&coin.network, &db_tx, a.id)?;
+        }
 
         db_tx.commit().map_err(anyhow::Error::new)?;
     }
@@ -474,7 +481,8 @@ pub async fn transparent_scan(
         let txs = get_transparent(
             network,
             client,
-            account,
+            a.account,
+            a.external,
             a.addr_index,
             address,
             start,
@@ -498,6 +506,8 @@ pub async fn transparent_scan(
     }
     // try again
     update_tx_time(&db_tx)?;
+
+    extend_transparent_change_addresses(network, &db_tx, account)?;
     db_tx.commit()?;
 
     Ok(())

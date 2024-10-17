@@ -25,6 +25,7 @@ pub async fn scan_transparent_addresses(
     connection: &mut Connection,
     client: &mut Client,
     account: u32,
+    external: u32,
     gap_limit: u32,
 ) -> Result<()> {
     let ai = get_account_info(network, connection, account)?;
@@ -40,9 +41,9 @@ pub async fn scan_transparent_addresses(
         let taddr = TransparentAccountInfo::derive_address(tvk, addr_index);
         let address = taddr.encode(network);
         tracing::info!("Checking {address}");
-        let ti = ti.new_address(addr_index)?;
-        create_transparent_address(network, connection, account, addr_index, &ti)?;
-        let utxos = get_utxos(client, account, addr_index, &address).await?;
+        let ti = ti.new_address(external, addr_index)?;
+        create_transparent_address(network, connection, account, external, addr_index, &ti)?;
+        let utxos = get_utxos(client, account, external, addr_index, &address).await?;
         if utxos.is_empty() {
             gap += 1;
         } else {
@@ -55,6 +56,6 @@ pub async fn scan_transparent_addresses(
         }
         addr_index += 1;
     }
-    trim_excess_transparent_addresses(connection, account)?;
+    trim_excess_transparent_addresses(connection, account, external)?;
     Ok(())
 }

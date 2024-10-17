@@ -82,7 +82,7 @@ pub fn single_receiver_address(
     network: &Network,
     address: &str,
     pools: PoolMask,
-) -> Result<Option<String>> {
+) -> Result<String> {
     if !pools.single_pool() {
         anyhow::bail!("Not a single receiver in {pools:?}");
     }
@@ -101,7 +101,11 @@ pub fn single_receiver_address(
             _ => unreachable!(),
         },
         _ => None,
-    };
+    }
+    .ok_or(anyhow::anyhow!(
+        "Address has no matching receiver: {address} {pools:?}"
+    ))?;
+
     Ok(address)
 }
 

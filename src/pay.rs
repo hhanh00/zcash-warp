@@ -95,6 +95,7 @@ pub enum InputNote {
     Transparent {
         txid: Hash,
         vout: u32,
+        external: u32,
         addr_index: u32,
         address: String,
     },
@@ -158,6 +159,7 @@ pub struct PaymentBuilder {
     pub available: [u64; 3],
     pub used: [bool; 3],
     pub use_change: bool,
+    pub use_unique_change: bool,
 
     pub s_edge: Edge,
     pub o_edge: Edge,
