@@ -44,7 +44,7 @@ pub fn derive_zip32_keys(
     let taddress = ak
         .tvk
         .as_ref()
-        .map(|tvk| TransparentAccountInfo::derive_address(tvk, addr_index).encode(network));
+        .map(|tvk| TransparentAccountInfo::derive_address(tvk, 0, addr_index).encode(network));
     let zip32 = ZIP32KeysT {
         aindex: acc_index,
         addr_index,

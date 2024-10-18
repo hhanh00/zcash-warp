@@ -1,7 +1,7 @@
 use anyhow::Result;
 use bech32::{Bech32m, Hrp};
 use orchard::{
-    keys::{FullViewingKey, SpendingKey},
+    keys::{FullViewingKey, Scope, SpendingKey},
     Address,
 };
 use sapling_crypto::{
@@ -81,7 +81,7 @@ impl From<Option<u8>> for PoolMask {
 
 #[derive(Debug)]
 pub struct TransparentAccountInfo {
-    pub index: Option<u32>,
+    pub index: u32,
     pub xsk: Option<AccountPrivKey>,
     pub sk: Option<SecretKey>,
     pub vk: Option<AccountPubKey>,
@@ -109,7 +109,7 @@ pub struct AccountInfo {
     pub name: String,
     pub seed: Option<String>,
     pub aindex: u32,
-    pub dindex: Option<u32>,
+    pub dindex: u32,
     pub birth: u32,
     pub saved: bool,
     pub transparent: Option<TransparentAccountInfo>,
@@ -145,6 +145,65 @@ impl OrchardAccountInfo {
 }
 
 impl AccountInfo {
+    pub fn clone_with_addr_index(&self, network: &Network, dindex: u32) -> Result<Self> {
+        let ti = self
+            .transparent
+            .as_ref()
+            .map(|ti| {
+                let sk = ti
+                    .xsk
+                    .as_ref()
+                    .map(|xsk| TransparentAccountInfo::derive_sk(xsk, 0, dindex));
+                let vk = ti.vk.as_ref().ok_or(anyhow::anyhow!("No XPubKey"))?;
+                let address = TransparentAccountInfo::derive_address(vk, 0, dindex);
+                tracing::info!("++ {}", address.encode(network));
+                Ok::<_, anyhow::Error>(TransparentAccountInfo {
+                    index: dindex,
+                    xsk: ti.xsk.clone(),
+                    sk,
+                    vk: ti.vk.clone(),
+                    addr: address,
+                    change_index: ti.change_index.clone(),
+                })
+            })
+            .transpose()?;
+        let dindex64 = dindex as u64;
+        let si = self
+            .sapling
+            .as_ref()
+            .map(|si| {
+                let addr = si
+                    .vk
+                    .address(dindex64.into())
+                    .ok_or(anyhow::anyhow!("Invalid index"))?;
+                Ok::<_, anyhow::Error>(SaplingAccountInfo {
+                    sk: si.sk.clone(),
+                    vk: si.vk.clone(),
+                    addr,
+                })
+            })
+            .transpose()?;
+        let oi = self.orchard.as_ref().map(|oi| {
+            let addr = oi.vk.address_at(dindex64, Scope::External);
+            OrchardAccountInfo {
+                sk: oi.sk.clone(),
+                vk: oi.vk.clone(),
+                addr,
+            }
+        });
+        let ai = Self {
+            name: self.name.clone(),
+            seed: self.seed.clone(),
+            dindex,
+            transparent: ti,
+            sapling: si,
+            orchard: oi,
+            ..*self
+        };
+
+        Ok(ai)
+    }
+
     pub fn pools(&self) -> PoolMask {
         let t = if self.transparent.is_some() { 1 } else { 0 };
         let s = if self.sapling.is_some() { 2 } else { 0 };
@@ -156,7 +215,7 @@ impl AccountInfo {
         let mut ak = AccountKeys {
             seed: self.seed.clone(),
             aindex: self.aindex,
-            dindex: self.dindex.clone(),
+            dindex: self.dindex,
             cindex: None,
             txsk: None,
             tsk: None,
@@ -306,10 +365,7 @@ impl AccountInfo {
                     ti.vk
                         .as_ref()
                         .map(|vk| {
-                            TransparentAccountInfo::derive_change_address(
-                                vk,
-                                ti.change_index.unwrap(),
-                            )
+                            TransparentAccountInfo::derive_address(vk, 1, ti.change_index.unwrap())
                         })
                         .unwrap_or(ti.addr)
                 })
@@ -325,6 +381,19 @@ impl AccountInfo {
 
             _ => unreachable!(),
         }
+    }
+
+    pub fn next_addr_index(&self, external: bool) -> Result<u32> {
+        let dindex = self.dindex;
+        let ndi = match self.sapling.as_ref() {
+            Some(si) if external => {
+                let ndi = dindex as u64 + 1;
+                let (ndi, _pa) = si.vk.find_address(ndi.into()).unwrap();
+                u32::try_from(ndi).unwrap()
+            }
+            _ => dindex + 1,
+        };
+        Ok(ndi)
     }
 
     pub fn to_addresses(&self, network: &Network) -> Addresses {

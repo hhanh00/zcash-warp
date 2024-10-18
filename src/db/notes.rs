@@ -141,7 +141,7 @@ pub fn list_received_notes(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2 AND (spent IS NULL OR spent > ?1 AND n.account = ?3) AND NOT excluded
+        AND orchard = ?2 AND (spent IS NULL OR spent > ?1) AND n.account = ?3 AND NOT excluded
         ORDER BY n.value DESC")?;
     let rows = s.query_map(params![height, orchard, account], select_note)?;
     let notes = rows.collect::<Result<Vec<_>, _>>()?;

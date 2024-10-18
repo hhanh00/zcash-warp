@@ -65,7 +65,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
         AccountKeys {
             seed: None,
             aindex: 0,
-            dindex: Some(di),
+            dindex: di,
             cindex: None,
             txsk: None,
             tsk: None,
@@ -84,7 +84,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
         AccountKeys {
             seed: None,
             aindex: 0,
-            dindex: Some(di),
+            dindex: di,
             cindex: None,
             txsk: None,
             tsk: None,
@@ -100,8 +100,8 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
         let svk = uvk.sapling();
         let ovk = uvk.orchard();
         let sdi = svk.map(|svk| find_address_index(&svk, 0));
-        let di = sdi.or(Some(0));
-        let taddr = tvk.map(|tvk| TransparentAccountInfo::derive_address(tvk, di.unwrap()));
+        let di = sdi.unwrap_or_default();
+        let taddr = tvk.map(|tvk| TransparentAccountInfo::derive_address(tvk, 0, di));
         AccountKeys {
             seed: None,
             aindex: 0,
@@ -122,7 +122,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
         AccountKeys {
             seed: None,
             aindex: 0,
-            dindex: None,
+            dindex: 0,
             cindex: None,
             txsk: None,
             tsk: ti.sk.clone(),
@@ -141,7 +141,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
         AccountKeys {
             seed: None,
             aindex: 0,
-            dindex: None,
+            dindex: 0,
             cindex: None,
             txsk: Some(txsk),
             tsk: Some(sk),
@@ -158,7 +158,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
         AccountKeys {
             seed: None,
             aindex: 0,
-            dindex: None,
+            dindex: 0,
             cindex: None,
             txsk: None,
             tsk: None,
@@ -173,7 +173,7 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
         AccountKeys {
             seed: None,
             aindex: 0,
-            dindex: None,
+            dindex: 0,
             cindex: None,
             txsk: None,
             tsk: None,
@@ -208,7 +208,7 @@ pub fn create_new_account(
     is_new: bool,
 ) -> Result<u32> {
     let ak = detect_key(network, &key, acc_index)?;
-    let dindex = ak.dindex.unwrap_or_default();
+    let dindex = ak.dindex;
     let db_tx = connection.transaction()?;
     let account = create_account(
         &db_tx,
@@ -221,11 +221,13 @@ pub fn create_new_account(
     )?;
     if let Some(ti) = ak.to_transparent() {
         create_transparent_account(network, &db_tx, account, &ti)?;
+        // this is not merged in the 'if' below to keep the addresses
+        // in this order in the db (it looks nicer)
+        if ti.vk.is_some() && dindex != 0 {
+            create_transparent_address(network, &db_tx, account, 0, 0, &ti)?;
+        }
         create_transparent_address(network, &db_tx, account, 0, dindex, &ti)?;
         if ti.vk.is_some() {
-            if dindex != 0 {
-                create_transparent_address(network, &db_tx, account, 0, 0, &ti)?;
-            }
             create_transparent_address(network, &db_tx, account, 1, 0, &ti)?; // change
         }
     } else if transparent_only {
@@ -294,13 +296,12 @@ pub fn create_transparent_account(
     let xsk = ti.xsk.as_ref().map(|xsk| xsk.to_bytes());
     let sk = ti.sk.as_ref().map(|sk| export_sk_bip38(&sk));
     let vk = ti.vk.as_ref().map(|vk| vk.serialize());
-    let addr_index = ti.index.unwrap_or_default();
     let addr = ti.addr.encode(network);
 
     connection.execute(
-        "INSERT INTO t_accounts(account, addr_index, xsk, sk, vk, address)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![account, addr_index, xsk, sk, vk, addr],
+        "INSERT INTO t_accounts(account, xsk, sk, vk, address)
+        VALUES (?1, ?2, ?3, ?4, ?5)",
+        params![account, xsk, sk, vk, addr],
     )?;
     Ok(())
 }
@@ -329,14 +330,25 @@ pub fn create_transparent_address(
     });
     let sk_from_sk = ti.sk.as_ref().map(|sk| export_sk_bip38(sk));
     let sk = sk_from_xsk.or(sk_from_sk);
-    let addr_from_vk = ti.vk.as_ref().map(|tvk| match external {
-        0 => TransparentAccountInfo::derive_address(tvk, addr_index).encode(network),
-        1 => TransparentAccountInfo::derive_change_address(tvk, addr_index).encode(network),
-        _ => unreachable!(),
+    let addr_from_vk = ti.vk.as_ref().map(|tvk| {
+        TransparentAccountInfo::derive_address(tvk, external, addr_index).encode(network)
     });
     let addr_from_addr = ti.addr.encode(network);
     let addr = addr_from_vk.or(Some(addr_from_addr));
 
+    store_transparent_address(connection, account, external, addr_index, sk, addr)?;
+    Ok(())
+}
+
+pub fn store_transparent_address(
+    connection: &Connection,
+    account: u32,
+    external: u32,
+    addr_index: u32,
+    sk: Option<String>,
+    addr: Option<String>,
+) -> Result<()> {
+    tracing::info!("store_transparent_address {account} {external} {addr_index} {addr:?}");
     connection.execute(
         "INSERT INTO t_addresses(account, external, addr_index, sk, address)
         VALUES (?1, ?2, ?3, ?4, ?5)
@@ -392,25 +404,16 @@ pub fn new_transparent_address(
     network: &Network,
     connection: &Connection,
     account: u32,
-    external: u32,
 ) -> Result<()> {
     let ai = get_account_info(network, connection, account)?;
-    ai.transparent
-        .as_ref()
-        .map(|ti| {
-            if ti.vk.is_none() {
-                anyhow::bail!("Cannot derive additional addresses without an extended public key");
-            }
-            let addr_index = connection.query_row(
-                "SELECT MAX(addr_index) FROM t_addresses WHERE account = ?1
-                AND external = ?2",
-                [account, external],
-                |r| r.get::<_, u32>(0),
-            )? + 1;
-            create_transparent_address(network, connection, account, external, addr_index, &ti)?;
-            Ok::<_, anyhow::Error>(())
-        })
-        .transpose()?;
+    let ndi = ai.next_addr_index(true)?;
+    let nai = ai.clone_with_addr_index(network, ndi)?;
+    let ti = nai.transparent.as_ref();
+    if let Some(ti) = ti {
+        if ti.vk.is_some() {
+            create_transparent_address(network, connection, account, 0, ndi, ti)?;
+        }
+    }
     Ok(())
 }
 
@@ -419,17 +422,37 @@ pub fn trim_excess_transparent_addresses(
     account: u32,
     external: u32,
 ) -> Result<()> {
-    let max_addr_index = connection
-        .query_row(
-            "SELECT MAX(addr_index) FROM utxos WHERE account = ?1 AND external = ?2",
-            [account, external],
-            |r| r.get::<_, Option<u32>>(0),
-        )?
-        .unwrap_or_default();
-    connection.execute(
-        "DELETE FROM t_addresses WHERE account = ?1 AND external = ?2 AND addr_index > ?3",
-        params![account, external, max_addr_index],
+    // last index that got funds
+    let last_addr_index = connection.query_row(
+        "SELECT MAX(t.addr_index) FROM t_addresses t
+        JOIN utxos u
+        ON t.account = u.account AND t.external = u.external
+            AND t.addr_index = u.addr_index
+        WHERE t.account = ?1 AND t.external = ?2",
+        params![account, external],
+        |r| r.get::<_, Option<u32>>(0),
     )?;
+    let last_addr_index = last_addr_index.unwrap_or_default();
+
+    let mut s = connection.prepare(
+        "SELECT addr_index FROM t_addresses t
+        WHERE account = ?1 AND external = ?2 AND addr_index > ?3
+        ORDER BY addr_index
+        LIMIT 1",
+    )?;
+    // Keep 1 empty address
+    let rows = s.query_map(params![account, external, last_addr_index], |r| {
+        r.get::<_, u32>(0)
+    })?;
+    let index = rows.last();
+    if let Some(index) = index {
+        let cut_index = index?;
+        connection.execute(
+            "DELETE FROM t_addresses
+            WHERE account = ?1 AND external = ?2 AND addr_index > ?3",
+            params![account, external, cut_index],
+        )?;
+    }
     Ok(())
 }
 

@@ -18,7 +18,7 @@ use crate::data::fb::{
 };
 use crate::db::contacts::list_contacts;
 use crate::ffi::{map_result, map_result_bytes, CParam, CResult};
-use crate::keys::import_sk_bip38;
+use crate::keys::{export_sk_bip38, import_sk_bip38};
 use crate::network::Network;
 use crate::types::{AccountInfo, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 use crate::warp::TransparentSK;
@@ -61,24 +61,32 @@ pub fn list_account_transparent_addresses(
     account: u32,
 ) -> Result<Vec<TransparentAddressT>> {
     let mut s = connection.prepare(
-        "SELECT external, addr_index, address FROM t_addresses WHERE account = ?1
-        ORDER BY addr_index",
+        "SELECT t.external, t.addr_index, t.address, SUM(u.value)
+        FROM t_addresses t
+        LEFT JOIN utxos u
+        ON t.account = u.account AND t.external = u.external
+            AND t.addr_index = u.addr_index
+        WHERE t.account = ?1
+		GROUP BY t.address
+        ORDER BY t.addr_index",
     )?;
     let rows = s.query_map([account], |r| {
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, u32>(1)?,
             r.get::<_, String>(2)?,
+            r.get::<_, Option<u64>>(3)?,
         ))
     })?;
     let mut addresses = vec![];
     for r in rows {
-        let (external, addr_index, address) = r?;
+        let (external, addr_index, address, value) = r?;
         addresses.push(TransparentAddressT {
             account,
             external,
             addr_index,
             address: Some(address),
+            amount: value.unwrap_or_default(),
         });
     }
     Ok(addresses)
@@ -132,7 +140,7 @@ pub fn get_account_info(
 
     let ai = connection.query_row(
         "SELECT a.name, a.seed, a.aindex, a.dindex, a.birth,
-        t.addr_index as tidx, t.xsk as txsk, t.sk as tsk, t.vk as tvk, t.address as taddr,
+        t.xsk as txsk, t.sk as tsk, t.vk as tvk, t.address as taddr,
         s.sk as ssk, s.vk as svk, s.address as saddr,
         o.sk as osk, o.vk as ovk,
         a.saved
@@ -146,7 +154,7 @@ pub fn get_account_info(
             let name = r.get::<_, String>("name")?;
             let seed = r.get::<_, Option<String>>("seed")?;
             let aindex = r.get::<_, u32>("aindex")?;
-            let dindex = r.get::<_, Option<u32>>("dindex")?;
+            let dindex = r.get::<_, u32>("dindex")?;
             let birth = r.get::<_, u32>("birth")?;
             let saved = r.get::<_, Option<bool>>("saved")?;
 
@@ -154,7 +162,6 @@ pub fn get_account_info(
             let ti = match taddr {
                 None => None,
                 Some(taddr) => {
-                    let index = r.get::<_, Option<u32>>("tidx")?;
                     let txsk = r.get::<_, Option<Vec<u8>>>("txsk")?;
                     let xsk = txsk.map(|txsk| AccountPrivKey::from_bytes(&*txsk).unwrap());
                     let tsk = r.get::<_, Option<String>>("tsk")?;
@@ -164,7 +171,7 @@ pub fn get_account_info(
                         .map(|tvk| AccountPubKey::deserialize(&tvk.try_into().unwrap()).unwrap());
                     let addr = TransparentAddress::decode(network, &taddr).unwrap();
                     let ti = TransparentAccountInfo {
-                        index,
+                        index: dindex,
                         change_index: cindex,
                         xsk,
                         sk,
@@ -210,7 +217,7 @@ pub fn get_account_info(
                         sk
                     });
                     let vk = FullViewingKey::from_bytes(&vk.try_into().unwrap()).unwrap();
-                    let addr = vk.address_at(dindex.unwrap_or_default(), Scope::External);
+                    let addr = vk.address_at(dindex, Scope::External);
                     let oi = OrchardAccountInfo { sk, vk, addr };
                     Some(oi)
                 }
@@ -234,6 +241,49 @@ pub fn get_account_info(
     Ok(ai)
 }
 
+#[c_export]
+pub fn change_account_dindex(
+    network: &Network,
+    connection: &mut Connection,
+    account: u32,
+    dindex: u32,
+) -> Result<()> {
+    let ai = get_account_info(network, connection, account)?;
+    let ai = ai.clone_with_addr_index(network, dindex)?;
+    update_account_addresses(network, connection, &ai)?;
+    Ok(())
+}
+
+pub fn update_account_addresses(
+    network: &Network,
+    connection: &mut Connection,
+    ai: &AccountInfo,
+) -> Result<()> {
+    let db_tx = connection.transaction()?;
+    if let Some(ti) = ai.transparent.as_ref() {
+        let sk = ti.sk.as_ref().map(|sk| export_sk_bip38(sk));
+        let address = ti.addr.encode(network);
+        db_tx.execute(
+            "UPDATE t_accounts SET sk = ?2, address = ?3
+            WHERE account = ?1",
+            params![ai.account, sk, address],
+        )?;
+    }
+    if let Some(si) = ai.sapling.as_ref() {
+        let address = si.addr.encode(network);
+        db_tx.execute(
+            "UPDATE s_accounts SET address = ?2 WHERE account = ?1",
+            params![ai.account, address],
+        )?;
+    }
+    db_tx.execute(
+        "UPDATE accounts SET dindex = ?2 WHERE id_account = ?1",
+        params![ai.account, ai.dindex],
+    )?;
+    db_tx.commit()?;
+    Ok(())
+}
+
 pub fn list_account_tsk(
     network: &Network,
     connection: &Connection,
@@ -252,31 +302,6 @@ pub fn list_account_tsk(
         tsks.push(TransparentSK { address, sk });
     }
     Ok(tsks)
-}
-
-#[c_export]
-pub fn update_account_primary_transparent_address(
-    connection: &Connection,
-    account: u32,
-    addr_index: u32,
-) -> Result<()> {
-    if let Some((sk, address)) = connection
-        .query_row(
-            "SELECT sk, address FROM t_addresses
-        WHERE account = ?1 AND addr_index = ?2",
-            params![account, addr_index],
-            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
-        )
-        .optional()?
-    {
-        connection.execute(
-            "UPDATE t_accounts SET
-            addr_index = ?2, sk = ?3, address = ?4
-            WHERE account = ?1",
-            params![account, addr_index, sk, address],
-        )?;
-    }
-    Ok(())
 }
 
 #[c_export]

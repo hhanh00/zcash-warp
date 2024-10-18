@@ -26,8 +26,9 @@ pub fn get_diversified_address(
         0 => anyhow::bail!("No Receiver"),
         1 => {
             let tvk = ai.transparent.as_ref().and_then(|ti| ti.vk.as_ref());
-            let address = tvk
-                .map(|tvk| TransparentAccountInfo::derive_address(tvk, addr_index).encode(network));
+            let address = tvk.map(|tvk| {
+                TransparentAccountInfo::derive_address(tvk, 0, addr_index).encode(network)
+            });
             address.ok_or(anyhow::anyhow!("No Transparent Address"))?
         }
         _ => {

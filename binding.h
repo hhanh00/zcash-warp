@@ -75,9 +75,7 @@ struct CResult______u8 c_list_accounts(uint8_t coin);
 
 struct CResult______u8 c_list_account_transparent_addresses(uint8_t coin, uint32_t account);
 
-struct CResult_u8 c_update_account_primary_transparent_address(uint8_t coin,
-                                                               uint32_t account,
-                                                               uint32_t addr_index);
+struct CResult_u8 c_change_account_dindex(uint8_t coin, uint32_t account, uint32_t dindex);
 
 struct CResult______u8 c_get_balance(uint8_t coin, uint32_t account, uint32_t height);
 
@@ -102,7 +100,7 @@ struct CResult_u32 c_create_new_account(uint8_t coin,
                                         bool transparent_only,
                                         bool is_new);
 
-struct CResult_u8 c_new_transparent_address(uint8_t coin, uint32_t account, uint32_t external);
+struct CResult_u8 c_new_transparent_address(uint8_t coin, uint32_t account);
 
 struct CResult_u8 c_edit_account_name(uint8_t coin, uint32_t account, char *name);
 

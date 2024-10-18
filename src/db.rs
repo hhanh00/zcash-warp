@@ -79,7 +79,6 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
         xsk BLOB,
         sk TEXT,
         vk BLOB,
-        addr_index INTEGER NOT NULL,
         address TEXT NOT NULL)",
         [],
     )?;

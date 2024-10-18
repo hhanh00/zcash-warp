@@ -5,7 +5,10 @@ use crate::{
 };
 use anyhow::Result;
 use tracing_subscriber::{
-    fmt, layer::SubscriberExt as _, util::SubscriberInitExt as _, EnvFilter, Layer, Registry,
+    fmt::{self, format::FmtSpan},
+    layer::SubscriberExt as _,
+    util::SubscriberInitExt as _,
+    EnvFilter, Layer, Registry,
 };
 
 use crate::{
@@ -31,7 +34,11 @@ fn default_layer<S>() -> BoxedLayer<S>
 where
     S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
 {
-    fmt::layer().with_ansi(false).compact().boxed()
+    fmt::layer()
+        .with_ansi(false)
+        .with_span_events(FmtSpan::ACTIVE)
+        .compact()
+        .boxed()
 }
 
 fn env_layer<S>() -> BoxedLayer<S>

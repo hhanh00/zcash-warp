@@ -2,10 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     data::fb::{IdNoteT, TransactionBytesT},
-    db::{
-        account::{get_account_info, list_account_tsk},
-        account_manager::get_account_by_name,
-    },
+    db::{account::get_account_info, account_manager::get_account_by_name},
     keys::sk_to_address,
     types::TransparentAccountInfo,
     warp::{

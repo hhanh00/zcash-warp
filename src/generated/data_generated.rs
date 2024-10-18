@@ -8296,6 +8296,7 @@ pub mod fb {
         pub const VT_EXTERNAL: flatbuffers::VOffsetT = 6;
         pub const VT_ADDR_INDEX: flatbuffers::VOffsetT = 8;
         pub const VT_ADDRESS: flatbuffers::VOffsetT = 10;
+        pub const VT_AMOUNT: flatbuffers::VOffsetT = 12;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -8312,6 +8313,7 @@ pub mod fb {
             args: &'args TransparentAddressArgs<'args>,
         ) -> flatbuffers::WIPOffset<TransparentAddress<'bldr>> {
             let mut builder = TransparentAddressBuilder::new(_fbb);
+            builder.add_amount(args.amount);
             if let Some(x) = args.address {
                 builder.add_address(x);
             }
@@ -8326,11 +8328,13 @@ pub mod fb {
             let external = self.external();
             let addr_index = self.addr_index();
             let address = self.address().map(|x| x.to_string());
+            let amount = self.amount();
             TransparentAddressT {
                 account,
                 external,
                 addr_index,
                 address,
+                amount,
             }
         }
 
@@ -8377,6 +8381,17 @@ pub mod fb {
                     .get::<flatbuffers::ForwardsUOffset<&str>>(TransparentAddress::VT_ADDRESS, None)
             }
         }
+        #[inline]
+        pub fn amount(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(TransparentAddress::VT_AMOUNT, Some(0))
+                    .unwrap()
+            }
+        }
     }
 
     impl flatbuffers::Verifiable for TransparentAddress<'_> {
@@ -8395,6 +8410,7 @@ pub mod fb {
                     Self::VT_ADDRESS,
                     false,
                 )?
+                .visit_field::<u64>("amount", Self::VT_AMOUNT, false)?
                 .finish();
             Ok(())
         }
@@ -8404,6 +8420,7 @@ pub mod fb {
         pub external: u32,
         pub addr_index: u32,
         pub address: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub amount: u64,
     }
     impl<'a> Default for TransparentAddressArgs<'a> {
         #[inline]
@@ -8413,6 +8430,7 @@ pub mod fb {
                 external: 0,
                 addr_index: 0,
                 address: None,
+                amount: 0,
             }
         }
     }
@@ -8445,6 +8463,11 @@ pub mod fb {
             );
         }
         #[inline]
+        pub fn add_amount(&mut self, amount: u64) {
+            self.fbb_
+                .push_slot::<u64>(TransparentAddress::VT_AMOUNT, amount, 0);
+        }
+        #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> TransparentAddressBuilder<'a, 'b, A> {
@@ -8468,6 +8491,7 @@ pub mod fb {
             ds.field("external", &self.external());
             ds.field("addr_index", &self.addr_index());
             ds.field("address", &self.address());
+            ds.field("amount", &self.amount());
             ds.finish()
         }
     }
@@ -8478,6 +8502,7 @@ pub mod fb {
         pub external: u32,
         pub addr_index: u32,
         pub address: Option<String>,
+        pub amount: u64,
     }
     impl Default for TransparentAddressT {
         fn default() -> Self {
@@ -8486,6 +8511,7 @@ pub mod fb {
                 external: 0,
                 addr_index: 0,
                 address: None,
+                amount: 0,
             }
         }
     }
@@ -8498,6 +8524,7 @@ pub mod fb {
             let external = self.external;
             let addr_index = self.addr_index;
             let address = self.address.as_ref().map(|x| _fbb.create_string(x));
+            let amount = self.amount;
             TransparentAddress::create(
                 _fbb,
                 &TransparentAddressArgs {
@@ -8505,6 +8532,7 @@ pub mod fb {
                     external,
                     addr_index,
                     address,
+                    amount,
                 },
             )
         }

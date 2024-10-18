@@ -108,7 +108,6 @@ pub enum AccountCommand {
     },
     NewTransparentAddress {
         account: u32,
-        external: u32,
     },
     ListTransparentAddresses {
         account: u32,
@@ -422,8 +421,8 @@ async fn process_command(
                         false,
                     )?;
                 }
-                AccountCommand::NewTransparentAddress { account, external } => {
-                    new_transparent_address(network, &connection, account, external)?;
+                AccountCommand::NewTransparentAddress { account } => {
+                    new_transparent_address(network, &connection, account)?;
                 }
                 AccountCommand::ListTransparentAddresses { account } => {
                     let t_addresses = list_account_transparent_addresses(&connection, account)?;

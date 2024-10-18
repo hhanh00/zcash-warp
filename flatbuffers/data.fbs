@@ -245,6 +245,7 @@ table TransparentAddress {
   external: uint32;
   addr_index: uint32;
   address: string;
+  amount: uint64;
 }
 
 struct IdNote {

@@ -33,7 +33,7 @@ use warp_macros::c_export;
 pub struct AccountKeys {
     pub seed: Option<String>,
     pub aindex: u32,
-    pub dindex: Option<u32>,
+    pub dindex: u32,
     pub cindex: Option<u32>,
     pub txsk: Option<AccountPrivKey>,
     pub tsk: Option<SecretKey>,
@@ -65,12 +65,12 @@ impl AccountKeys {
         let tvk = uvk.transparent().cloned();
         let taddr = tvk
             .as_ref()
-            .map(|tvk| TransparentAccountInfo::derive_address(tvk, di));
+            .map(|tvk| TransparentAccountInfo::derive_address(tvk, 0, di));
 
         Ok(AccountKeys {
             seed: Some(phrase.to_string()),
             aindex: acc_index,
-            dindex: Some(di),
+            dindex: di,
             cindex: None,
             txsk: Some(txsk),
             tsk: Some(tsk),
@@ -100,7 +100,7 @@ impl AccountKeys {
 
     pub fn to_sapling(&self) -> Option<SaplingAccountInfo> {
         if let Some(svk) = self.svk.as_ref() {
-            let di = DiversifierIndex::try_from(self.dindex.unwrap()).unwrap();
+            let di = DiversifierIndex::try_from(self.dindex).unwrap();
             let addr = svk.address(di).unwrap();
             Some(SaplingAccountInfo {
                 sk: self.ssk.clone(),
@@ -114,7 +114,7 @@ impl AccountKeys {
 
     pub fn to_orchard(&self) -> Option<OrchardAccountInfo> {
         if let Some(ovk) = self.ovk.as_ref() {
-            let di = DiversifierIndex::try_from(self.dindex.unwrap()).unwrap();
+            let di = DiversifierIndex::try_from(self.dindex).unwrap();
             let addr = ovk.address_at(di, Scope::External);
             Some(OrchardAccountInfo {
                 sk: self.osk.clone(),
@@ -125,38 +125,6 @@ impl AccountKeys {
             None
         }
     }
-
-    // pub fn find(&self, start: u32) -> Result<AccountKeys> {
-    //     let di = DiversifierIndex::try_from(start).unwrap();
-    //     let di = if let Some(svk) = self.svk.as_ref() {
-    //         let (di, _) = svk.find_address(di).unwrap();
-    //         di
-    //     } else {
-    //         di
-    //     };
-    //     self.at_index(di)
-    // }
-
-    // pub fn at_index(&self, di: DiversifierIndex) -> Result<Self> {
-    //     let dindex: u32 = di.try_into().unwrap();
-    //     let taddr = self
-    //         .tvk
-    //         .as_ref()
-    //         .map(|tvk| TransparentAccountInfo::derive_address(tvk, dindex));
-    //     Ok(AccountKeys {
-    //         seed: self.seed.clone(),
-    //         aindex: self.aindex,
-    //         dindex: Some(dindex),
-    //         txsk: self.txsk.clone(),
-    //         tsk: self.tsk.clone(),
-    //         tvk: self.tvk.clone(),
-    //         taddr,
-    //         ssk: self.ssk.clone(),
-    //         svk: self.svk.clone(),
-    //         osk: self.osk.clone(),
-    //         ovk: self.ovk.clone(),
-    //     })
-    // }
 
     fn _check_invariants(&self) {
         // if seed -> di, tsk, tvk, taddr, ssk, svk, osk, ovk
@@ -228,7 +196,7 @@ impl TransparentAccountInfo {
         let pub_key = Ripemd160::digest(&Sha256::digest(&pub_key));
         let addr = TransparentAddress::PublicKeyHash(pub_key.into());
         TransparentAccountInfo {
-            index: None,
+            index: 0,
             change_index: None,
             xsk: None,
             sk: Some(sk.clone()),
@@ -246,42 +214,25 @@ impl TransparentAccountInfo {
         }
     }
 
-    pub fn derive_address(tvk: &AccountPubKey, addr_index: u32) -> TransparentAddress {
+    pub fn derive_address(
+        tvk: &AccountPubKey,
+        external: u32,
+        addr_index: u32,
+    ) -> TransparentAddress {
         let addr_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
-        tvk.derive_external_ivk()
-            .unwrap()
-            .derive_address(addr_index)
-            .unwrap()
-    }
-
-    pub fn derive_change_address(tvk: &AccountPubKey, addr_index: u32) -> TransparentAddress {
-        let addr_index = NonHardenedChildIndex::from_index(addr_index).unwrap();
-        tvk.derive_internal_ivk()
-            .unwrap()
-            .derive_address(addr_index)
-            .unwrap()
-    }
-
-    pub fn new_address(&self, external: u32, addr_index: u32) -> Result<Self> {
-        let aindex = NonHardenedChildIndex::from_index(addr_index).unwrap();
-        let tsk = self.xsk.as_ref().map(|tvk| {
-            tvk.derive_secret_key(TransparentKeyScope::custom(external).unwrap(), aindex)
+        match external {
+            0 => tvk
+                .derive_external_ivk()
                 .unwrap()
-        });
-        let taddr = self.vk.as_ref().map(|tvk| {
-            tvk.derive_external_ivk()
+                .derive_address(addr_index)
+                .unwrap(),
+            1 => tvk
+                .derive_internal_ivk()
                 .unwrap()
-                .derive_address(aindex)
-                .unwrap()
-        });
-        Ok(Self {
-            index: Some(addr_index),
-            change_index: self.change_index,
-            xsk: self.xsk.clone(),
-            sk: tsk,
-            vk: self.vk.clone(),
-            addr: taddr.ok_or(anyhow::anyhow!("No VK"))?,
-        })
+                .derive_address(addr_index)
+                .unwrap(),
+            _ => unreachable!(),
+        }
     }
 }
 

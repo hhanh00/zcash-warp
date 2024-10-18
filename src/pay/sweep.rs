@@ -1,16 +1,18 @@
 use crate::{
     db::{
         account::get_account_info,
-        account_manager::{create_transparent_address, trim_excess_transparent_addresses},
+        account_manager::{store_transparent_address, trim_excess_transparent_addresses},
         notes::store_utxo,
     },
+    keys::export_sk_bip38,
     lwd::get_utxos,
     network::Network,
     types::TransparentAccountInfo,
     Client,
 };
 use anyhow::Result;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
+use tracing::Level;
 use zcash_client_backend::encoding::AddressCodec as _;
 
 use crate::{
@@ -28,6 +30,14 @@ pub async fn scan_transparent_addresses(
     external: u32,
     gap_limit: u32,
 ) -> Result<()> {
+    let span = tracing::span!(Level::DEBUG, "scan_transparent_addresses");
+    let _enter = span.enter();
+    let start = connection.query_row(
+        "SELECT MAX(addr_index) FROM t_addresses
+        WHERE account = ?1 AND external = ?2",
+        params![account, external],
+        |r| r.get::<_, u32>(0),
+    )?;
     let ai = get_account_info(network, connection, account)?;
     let tvk = ai
         .transparent
@@ -35,15 +45,25 @@ pub async fn scan_transparent_addresses(
         .and_then(|ti| ti.vk.as_ref())
         .ok_or(anyhow::anyhow!("No AccountPubKey"))?;
     let ti = ai.transparent.as_ref().unwrap();
-    let mut addr_index = ai.dindex.unwrap() + 1;
+    let mut addr_index = start + 1;
     let mut gap = 0;
     while gap < gap_limit {
-        let taddr = TransparentAccountInfo::derive_address(tvk, addr_index);
-        let address = taddr.encode(network);
-        tracing::info!("Checking {address}");
-        let ti = ti.new_address(external, addr_index)?;
-        create_transparent_address(network, connection, account, external, addr_index, &ti)?;
-        let utxos = get_utxos(client, account, external, addr_index, &address).await?;
+        let sk = ti.xsk.as_ref().map(|xsk| {
+            let sk = TransparentAccountInfo::derive_sk(xsk, 0, addr_index);
+            export_sk_bip38(&sk)
+        });
+        let taddr =
+            TransparentAccountInfo::derive_address(tvk, external, addr_index).encode(network);
+        tracing::event!(Level::INFO, "Checking {taddr}");
+        store_transparent_address(
+            connection,
+            account,
+            external,
+            addr_index,
+            sk,
+            Some(taddr.clone()),
+        )?;
+        let utxos = get_utxos(client, account, external, addr_index, &taddr).await?;
         if utxos.is_empty() {
             gap += 1;
         } else {
