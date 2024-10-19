@@ -52,6 +52,7 @@ table OutputTransparent {
 }
 
 table InputShielded {
+  orchard: bool;
   nf: [uint8];
   address: string;
   value: uint64;
@@ -60,6 +61,7 @@ table InputShielded {
 }
 
 table OutputShielded {
+  orchard: bool;
   incoming: bool;
   cmx: [uint8];
   address: string;

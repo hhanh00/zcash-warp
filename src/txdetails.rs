@@ -649,6 +649,7 @@ impl TransactionDetails {
             .map(|sin| {
                 let note = sin.note.as_ref();
                 InputShieldedT {
+                    orchard: false,
                     nf: Some(sin.nf.to_vec()),
                     address: note.map(|n| {
                         PaymentAddress::from_bytes(&n.address)
@@ -667,6 +668,7 @@ impl TransactionDetails {
             .map(|sout| {
                 let note = sout.note.as_ref();
                 OutputShieldedT {
+                    orchard: false,
                     cmx: Some(sout.cmx.to_vec()),
                     incoming: note.map(|n| n.incoming).unwrap_or_default(),
                     address: note.map(|n| {
@@ -687,6 +689,7 @@ impl TransactionDetails {
             .map(|sin| {
                 let note = sin.note.as_ref();
                 InputShieldedT {
+                    orchard: true,
                     nf: Some(sin.nf.to_vec()),
                     address: note.map(|n| {
                         ua_of_orchard(&Address::from_raw_address_bytes(&n.address).unwrap())
@@ -704,6 +707,7 @@ impl TransactionDetails {
             .map(|sout| {
                 let note = sout.note.as_ref();
                 OutputShieldedT {
+                    orchard: true,
                     cmx: Some(sout.cmx.to_vec()),
                     incoming: note.map(|n| n.incoming).unwrap_or_default(),
                     address: note.map(|n| {

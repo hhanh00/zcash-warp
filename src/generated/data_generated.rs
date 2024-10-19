@@ -1929,11 +1929,12 @@ pub mod fb {
     }
 
     impl<'a> InputShielded<'a> {
-        pub const VT_NF: flatbuffers::VOffsetT = 4;
-        pub const VT_ADDRESS: flatbuffers::VOffsetT = 6;
-        pub const VT_VALUE: flatbuffers::VOffsetT = 8;
-        pub const VT_RCM: flatbuffers::VOffsetT = 10;
-        pub const VT_RHO: flatbuffers::VOffsetT = 12;
+        pub const VT_ORCHARD: flatbuffers::VOffsetT = 4;
+        pub const VT_NF: flatbuffers::VOffsetT = 6;
+        pub const VT_ADDRESS: flatbuffers::VOffsetT = 8;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 10;
+        pub const VT_RCM: flatbuffers::VOffsetT = 12;
+        pub const VT_RHO: flatbuffers::VOffsetT = 14;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1963,16 +1964,19 @@ pub mod fb {
             if let Some(x) = args.nf {
                 builder.add_nf(x);
             }
+            builder.add_orchard(args.orchard);
             builder.finish()
         }
 
         pub fn unpack(&self) -> InputShieldedT {
+            let orchard = self.orchard();
             let nf = self.nf().map(|x| x.into_iter().collect());
             let address = self.address().map(|x| x.to_string());
             let value = self.value();
             let rcm = self.rcm().map(|x| x.into_iter().collect());
             let rho = self.rho().map(|x| x.into_iter().collect());
             InputShieldedT {
+                orchard,
                 nf,
                 address,
                 value,
@@ -1981,6 +1985,17 @@ pub mod fb {
             }
         }
 
+        #[inline]
+        pub fn orchard(&self) -> bool {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<bool>(InputShielded::VT_ORCHARD, Some(false))
+                    .unwrap()
+            }
+        }
         #[inline]
         pub fn nf(&self) -> Option<flatbuffers::Vector<'a, u8>> {
             // Safety:
@@ -2051,6 +2066,7 @@ pub mod fb {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
+                .visit_field::<bool>("orchard", Self::VT_ORCHARD, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
                     "nf",
                     Self::VT_NF,
@@ -2077,6 +2093,7 @@ pub mod fb {
         }
     }
     pub struct InputShieldedArgs<'a> {
+        pub orchard: bool,
         pub nf: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub address: Option<flatbuffers::WIPOffset<&'a str>>,
         pub value: u64,
@@ -2087,6 +2104,7 @@ pub mod fb {
         #[inline]
         fn default() -> Self {
             InputShieldedArgs {
+                orchard: false,
                 nf: None,
                 address: None,
                 value: 0,
@@ -2101,6 +2119,11 @@ pub mod fb {
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> InputShieldedBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_orchard(&mut self, orchard: bool) {
+            self.fbb_
+                .push_slot::<bool>(InputShielded::VT_ORCHARD, orchard, false);
+        }
         #[inline]
         pub fn add_nf(&mut self, nf: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
             self.fbb_
@@ -2146,6 +2169,7 @@ pub mod fb {
     impl core::fmt::Debug for InputShielded<'_> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("InputShielded");
+            ds.field("orchard", &self.orchard());
             ds.field("nf", &self.nf());
             ds.field("address", &self.address());
             ds.field("value", &self.value());
@@ -2157,6 +2181,7 @@ pub mod fb {
     #[non_exhaustive]
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct InputShieldedT {
+        pub orchard: bool,
         pub nf: Option<Vec<u8>>,
         pub address: Option<String>,
         pub value: u64,
@@ -2166,6 +2191,7 @@ pub mod fb {
     impl Default for InputShieldedT {
         fn default() -> Self {
             Self {
+                orchard: false,
                 nf: None,
                 address: None,
                 value: 0,
@@ -2179,6 +2205,7 @@ pub mod fb {
             &self,
             _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
         ) -> flatbuffers::WIPOffset<InputShielded<'b>> {
+            let orchard = self.orchard;
             let nf = self.nf.as_ref().map(|x| _fbb.create_vector(x));
             let address = self.address.as_ref().map(|x| _fbb.create_string(x));
             let value = self.value;
@@ -2187,6 +2214,7 @@ pub mod fb {
             InputShielded::create(
                 _fbb,
                 &InputShieldedArgs {
+                    orchard,
                     nf,
                     address,
                     value,
@@ -2214,13 +2242,14 @@ pub mod fb {
     }
 
     impl<'a> OutputShielded<'a> {
-        pub const VT_INCOMING: flatbuffers::VOffsetT = 4;
-        pub const VT_CMX: flatbuffers::VOffsetT = 6;
-        pub const VT_ADDRESS: flatbuffers::VOffsetT = 8;
-        pub const VT_VALUE: flatbuffers::VOffsetT = 10;
-        pub const VT_RCM: flatbuffers::VOffsetT = 12;
-        pub const VT_RHO: flatbuffers::VOffsetT = 14;
-        pub const VT_MEMO: flatbuffers::VOffsetT = 16;
+        pub const VT_ORCHARD: flatbuffers::VOffsetT = 4;
+        pub const VT_INCOMING: flatbuffers::VOffsetT = 6;
+        pub const VT_CMX: flatbuffers::VOffsetT = 8;
+        pub const VT_ADDRESS: flatbuffers::VOffsetT = 10;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 12;
+        pub const VT_RCM: flatbuffers::VOffsetT = 14;
+        pub const VT_RHO: flatbuffers::VOffsetT = 16;
+        pub const VT_MEMO: flatbuffers::VOffsetT = 18;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2254,10 +2283,12 @@ pub mod fb {
                 builder.add_cmx(x);
             }
             builder.add_incoming(args.incoming);
+            builder.add_orchard(args.orchard);
             builder.finish()
         }
 
         pub fn unpack(&self) -> OutputShieldedT {
+            let orchard = self.orchard();
             let incoming = self.incoming();
             let cmx = self.cmx().map(|x| x.into_iter().collect());
             let address = self.address().map(|x| x.to_string());
@@ -2266,6 +2297,7 @@ pub mod fb {
             let rho = self.rho().map(|x| x.into_iter().collect());
             let memo = self.memo().map(|x| x.to_string());
             OutputShieldedT {
+                orchard,
                 incoming,
                 cmx,
                 address,
@@ -2276,6 +2308,17 @@ pub mod fb {
             }
         }
 
+        #[inline]
+        pub fn orchard(&self) -> bool {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<bool>(OutputShielded::VT_ORCHARD, Some(false))
+                    .unwrap()
+            }
+        }
         #[inline]
         pub fn incoming(&self) -> bool {
             // Safety:
@@ -2367,6 +2410,7 @@ pub mod fb {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
+                .visit_field::<bool>("orchard", Self::VT_ORCHARD, false)?
                 .visit_field::<bool>("incoming", Self::VT_INCOMING, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
                     "cmx",
@@ -2395,6 +2439,7 @@ pub mod fb {
         }
     }
     pub struct OutputShieldedArgs<'a> {
+        pub orchard: bool,
         pub incoming: bool,
         pub cmx: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub address: Option<flatbuffers::WIPOffset<&'a str>>,
@@ -2407,6 +2452,7 @@ pub mod fb {
         #[inline]
         fn default() -> Self {
             OutputShieldedArgs {
+                orchard: false,
                 incoming: false,
                 cmx: None,
                 address: None,
@@ -2423,6 +2469,11 @@ pub mod fb {
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> OutputShieldedBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_orchard(&mut self, orchard: bool) {
+            self.fbb_
+                .push_slot::<bool>(OutputShielded::VT_ORCHARD, orchard, false);
+        }
         #[inline]
         pub fn add_incoming(&mut self, incoming: bool) {
             self.fbb_
@@ -2478,6 +2529,7 @@ pub mod fb {
     impl core::fmt::Debug for OutputShielded<'_> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("OutputShielded");
+            ds.field("orchard", &self.orchard());
             ds.field("incoming", &self.incoming());
             ds.field("cmx", &self.cmx());
             ds.field("address", &self.address());
@@ -2491,6 +2543,7 @@ pub mod fb {
     #[non_exhaustive]
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct OutputShieldedT {
+        pub orchard: bool,
         pub incoming: bool,
         pub cmx: Option<Vec<u8>>,
         pub address: Option<String>,
@@ -2502,6 +2555,7 @@ pub mod fb {
     impl Default for OutputShieldedT {
         fn default() -> Self {
             Self {
+                orchard: false,
                 incoming: false,
                 cmx: None,
                 address: None,
@@ -2517,6 +2571,7 @@ pub mod fb {
             &self,
             _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
         ) -> flatbuffers::WIPOffset<OutputShielded<'b>> {
+            let orchard = self.orchard;
             let incoming = self.incoming;
             let cmx = self.cmx.as_ref().map(|x| _fbb.create_vector(x));
             let address = self.address.as_ref().map(|x| _fbb.create_string(x));
@@ -2527,6 +2582,7 @@ pub mod fb {
             OutputShielded::create(
                 _fbb,
                 &OutputShieldedArgs {
+                    orchard,
                     incoming,
                     cmx,
                     address,
