@@ -244,7 +244,7 @@ pub fn get_account_info(
 #[c_export]
 pub fn change_account_dindex(
     network: &Network,
-    connection: &mut Connection,
+    connection: &Connection,
     account: u32,
     dindex: u32,
 ) -> Result<()> {
@@ -256,14 +256,13 @@ pub fn change_account_dindex(
 
 pub fn update_account_addresses(
     network: &Network,
-    connection: &mut Connection,
+    connection: &Connection,
     ai: &AccountInfo,
 ) -> Result<()> {
-    let db_tx = connection.transaction()?;
     if let Some(ti) = ai.transparent.as_ref() {
         let sk = ti.sk.as_ref().map(|sk| export_sk_bip38(sk));
         let address = ti.addr.encode(network);
-        db_tx.execute(
+        connection.execute(
             "UPDATE t_accounts SET sk = ?2, address = ?3
             WHERE account = ?1",
             params![ai.account, sk, address],
@@ -271,16 +270,15 @@ pub fn update_account_addresses(
     }
     if let Some(si) = ai.sapling.as_ref() {
         let address = si.addr.encode(network);
-        db_tx.execute(
+        connection.execute(
             "UPDATE s_accounts SET address = ?2 WHERE account = ?1",
             params![ai.account, address],
         )?;
     }
-    db_tx.execute(
+    connection.execute(
         "UPDATE accounts SET dindex = ?2 WHERE id_account = ?1",
         params![ai.account, ai.dindex],
     )?;
-    db_tx.commit()?;
     Ok(())
 }
 

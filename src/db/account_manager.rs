@@ -18,14 +18,10 @@ use zcash_primitives::{
 };
 
 use crate::{
-    data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
-    keys::{
+    data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT}, db::account::change_account_dindex, keys::{
         decode_extended_private_key, decode_extended_public_key, export_sk_bip38, import_sk_bip38,
         to_extended_full_viewing_key, AccountKeys,
-    },
-    network::Network,
-    types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
-    utils::keys::find_address_index,
+    }, network::Network, types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo}, utils::keys::find_address_index
 };
 
 use crate::{
@@ -404,7 +400,7 @@ pub fn new_transparent_address(
     network: &Network,
     connection: &Connection,
     account: u32,
-) -> Result<()> {
+) -> Result<u32> {
     let ai = get_account_info(network, connection, account)?;
     let ndi = ai.next_addr_index(true)?;
     let nai = ai.clone_with_addr_index(network, ndi)?;
@@ -414,7 +410,7 @@ pub fn new_transparent_address(
             create_transparent_address(network, connection, account, 0, ndi, ti)?;
         }
     }
-    Ok(())
+    Ok(ndi)
 }
 
 pub fn trim_excess_transparent_addresses(
@@ -456,29 +452,42 @@ pub fn trim_excess_transparent_addresses(
     Ok(())
 }
 
-pub fn extend_transparent_change_addresses(
+pub fn extend_transparent_addresses(
     network: &Network,
     connection: &Connection,
     account: u32,
+    external: u32,
 ) -> Result<()> {
-    tracing::info!("extend_transparent_change_addresses");
+    tracing::info!("extend_transparent_addresses {account} {external}");
     let ai = get_account_info(network, connection, account)?;
     if let Some(ti) = ai.transparent.as_ref() {
-        let cindex = connection
+        let last_addr_index = connection
             .query_row(
                 "SELECT addr_index FROM utxos
-        WHERE account = ?1 AND external = 1 AND
+        WHERE account = ?1 AND external = ?2 AND
         addr_index = (SELECT MAX(addr_index) FROM t_addresses
-        WHERE account = ?1 AND external = 1)",
-                [account],
+        WHERE account = ?1 AND external = ?2)",
+                [account, external],
                 |r| r.get::<_, u32>(0),
             )
             .optional()?;
-        // if change address was used, allocate a new one
-        tracing::info!("{account} {cindex:?}");
-        if let Some(cindex) = cindex {
-            if ti.vk.is_some() {
-                create_transparent_address(network, connection, account, 1, cindex + 1, &ti)?;
+        // if was used, allocate a new one
+        tracing::info!("{account} {last_addr_index:?}");
+        if last_addr_index.is_some() && ti.vk.is_some() {
+            match external {
+                0 => {
+                    let dindex = new_transparent_address(network, connection, account)?;
+                    change_account_dindex(network, connection, account, dindex)?;
+                }
+                1 => create_transparent_address(
+                    network,
+                    connection,
+                    account,
+                    external,
+                    last_addr_index.unwrap() + 1,
+                    &ti,
+                )?,
+                _ => unreachable!(),
             }
         }
     }

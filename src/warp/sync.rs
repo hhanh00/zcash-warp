@@ -7,7 +7,7 @@ use crate::{
     coin::{connect_lwd, CoinDef},
     db::{
         account::{list_account_transparent_addresses, list_accounts},
-        account_manager::extend_transparent_change_addresses,
+        account_manager::extend_transparent_addresses,
         chain::{get_block_header, get_sync_height, rewind_checkpoint, store_block},
         notes::{
             mark_shielded_spent, store_received_note, update_account_balances, update_tx_timestamp,
@@ -372,7 +372,8 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
 
         let accounts = list_accounts(coin, &db_tx)?;
         for a in accounts.items.unwrap() {
-            extend_transparent_change_addresses(&coin.network, &db_tx, a.id)?;
+            extend_transparent_addresses(&coin.network, &db_tx, a.id, 0)?;
+            extend_transparent_addresses(&coin.network, &db_tx, a.id, 1)?;
         }
 
         db_tx.commit().map_err(anyhow::Error::new)?;
@@ -507,7 +508,8 @@ pub async fn transparent_scan(
     // try again
     update_tx_time(&db_tx)?;
 
-    extend_transparent_change_addresses(network, &db_tx, account)?;
+    extend_transparent_addresses(network, &db_tx, account, 0)?;
+    extend_transparent_addresses(network, &db_tx, account, 1)?;
     db_tx.commit()?;
 
     Ok(())
