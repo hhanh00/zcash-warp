@@ -1,21 +1,19 @@
-use orchard::{
-    keys::Scope,
-    note::{RandomSeed, Rho},
-    value::NoteValue,
-    Address, Note,
-};
 use rusqlite::Connection;
+use std::marker::PhantomData;
+use std::sync::mpsc::Sender;
 use std::{collections::HashMap, mem::swap, sync::mpsc::channel};
 
+use crate::coin::CoinDef;
+use crate::db::notes::list_all_received_notes;
+use crate::lwd::rpc::CompactTx;
+use crate::network::Network;
+use crate::warp::sync::IdSpent;
 use crate::{
-    coin::CoinDef,
     db::account::{get_account_info, list_accounts},
     lwd::rpc::{Bridge, CompactBlock},
     types::{AccountInfo, CheckpointHeight},
-    warp::{hasher::OrchardHasher, sync::IdSpent, try_orchard_decrypt},
     Hash,
 };
-use crate::{db::notes::list_all_received_notes, network::Network};
 use anyhow::Result;
 use rayon::prelude::*;
 use tracing::info;
@@ -24,9 +22,41 @@ use crate::warp::{Edge, Hasher, MERKLE_DEPTH};
 
 use super::{ReceivedNote, TxValueUpdate};
 
+pub mod sapling;
+pub mod orchard;
+
+pub trait ShieldedProtocol {
+    type Hasher: Hasher;
+    type IVK: Sync;
+    type Spend;
+    type Output: Sync;
+
+    fn is_orchard() -> bool;
+
+    fn extract_ivk(ai: &AccountInfo) -> Option<(u32, Self::IVK)>;
+    fn extract_inputs(tx: &CompactTx) -> &Vec<Self::Spend>;
+    fn extract_outputs(tx: &CompactTx) -> &Vec<Self::Output>;
+    fn extract_bridge(tx: &CompactTx) -> Option<&Bridge>;
+
+    fn extract_nf(i: &Self::Spend) -> Hash;
+    fn extract_cmx(o: &Self::Output) -> Hash;
+
+    fn try_decrypt(
+        network: &Network,
+        ivks: &[(u32, Self::IVK)],
+        height: u32,
+        time: u32,
+        ivtx: u32,
+        vout: u32,
+        output: &Self::Output,
+        sender: &mut Sender<ReceivedNote>,
+    ) -> Result<()>;
+    fn finalize_received_note(txid: Hash, note: &mut ReceivedNote, ai: &AccountInfo) -> Result<()>;
+}
+
 #[derive(Debug)]
-pub struct Synchronizer {
-    pub hasher: OrchardHasher,
+pub struct Synchronizer<P: ShieldedProtocol> {
+    pub hasher: P::Hasher,
     pub network: Network,
     pub account_infos: Vec<AccountInfo>,
     pub start: u32,
@@ -34,6 +64,7 @@ pub struct Synchronizer {
     pub spends: Vec<(TxValueUpdate, IdSpent<Hash>)>,
     pub position: u32,
     pub tree_state: Edge,
+    pub _data: PhantomData<P>,
 }
 
 #[derive(Debug)]
@@ -43,7 +74,7 @@ struct BridgeExt<'a> {
     e: i32,
 }
 
-impl Synchronizer {
+impl<P: ShieldedProtocol> Synchronizer<P> {
     pub fn new(
         coin: &CoinDef,
         network: &Network,
@@ -52,16 +83,17 @@ impl Synchronizer {
         position: u32,
         tree_state: Edge,
     ) -> Result<Self> {
-        let accounts = list_accounts(&coin, connection)?.items.unwrap();
+        let accounts = list_accounts(coin, connection)?.items.unwrap();
         let mut account_infos = vec![];
         for a in accounts {
             let ai = get_account_info(network, connection, a.id)?;
             account_infos.push(ai);
         }
-        let notes = list_all_received_notes(connection, start, true)?;
+        let is_orchard = P::is_orchard();
+        let notes = list_all_received_notes(connection, start, is_orchard)?;
 
         Ok(Self {
-            hasher: OrchardHasher::default(),
+            hasher: P::Hasher::default(),
             network: *network,
             account_infos,
             start: start.into(),
@@ -69,6 +101,7 @@ impl Synchronizer {
             spends: vec![],
             position,
             tree_state,
+            _data: PhantomData::<P>::default(),
         })
     }
 
@@ -76,34 +109,30 @@ impl Synchronizer {
         let ivks = self
             .account_infos
             .iter()
-            .filter_map(|ai| {
-                ai.orchard
-                    .as_ref()
-                    .map(|oi| (ai.account, oi.vk.to_ivk(Scope::External)))
-            })
+            .filter_map(P::extract_ivk)
             .collect::<Vec<_>>();
 
-        let actions = blocks.into_par_iter().flat_map_iter(|b| {
+        let outputs = blocks.into_par_iter().flat_map_iter(|b| {
             b.vtx.iter().enumerate().flat_map(move |(ivtx, vtx)| {
-                vtx.actions
+                P::extract_outputs(vtx)
                     .iter()
                     .enumerate()
-                    .map(move |(vout, a)| (b.height, b.time, ivtx, vout, a))
+                    .map(move |(vout, o)| (b.height, b.time, ivtx, vout, o))
             })
         });
 
         let (sender, receiver) = channel();
-        actions
+        outputs
             .into_par_iter()
-            .for_each_with(sender, |sender, (height, time, ivtx, vout, a)| {
-                try_orchard_decrypt(
+            .for_each_with(sender, |sender, (height, time, ivtx, vout, o)| {
+                P::try_decrypt(
                     &self.network,
                     &ivks,
                     height as u32,
                     time,
                     ivtx as u32,
                     vout as u32,
-                    a,
+                    o,
                     sender,
                 )
                 .unwrap();
@@ -117,10 +146,8 @@ impl Synchronizer {
                     break;
                 }
                 for tx in cb.vtx.iter() {
-                    position += tx.actions.len() as u32;
-                    position += tx
-                        .orchard_bridge
-                        .as_ref()
+                    position += P::extract_outputs(tx).len() as u32;
+                    position += P::extract_bridge(tx)
                         .map(|b| b.len as u32)
                         .unwrap_or_default();
                 }
@@ -130,10 +157,8 @@ impl Synchronizer {
                 if ivtx as u32 == note.tx.ivtx {
                     break;
                 }
-                position += tx.actions.len() as u32;
-                position += tx
-                    .orchard_bridge
-                    .as_ref()
+                position += P::extract_outputs(tx).len() as u32;
+                position += P::extract_bridge(tx)
                     .map(|b| b.len as u32)
                     .unwrap_or_default();
             }
@@ -145,23 +170,13 @@ impl Synchronizer {
                 .iter()
                 .find(|&ai| ai.account == note.account)
                 .unwrap();
-            let recipient = Address::from_raw_address_bytes(&note.address).unwrap();
-            let rho = Rho::from_bytes(&note.rho.unwrap()).unwrap();
-            let n = Note::from_parts(
-                recipient,
-                NoteValue::from_raw(note.value),
-                rho,
-                RandomSeed::from_bytes(note.rcm, &rho).unwrap(),
-            )
-            .unwrap();
-            let vk = &ai.orchard.as_ref().unwrap().vk;
-            let nf = n.nullifier(&vk);
-            note.nf = nf.to_bytes();
-            note.tx.txid = cb.vtx[note.tx.ivtx as usize]
+            let txid = cb.vtx[note.tx.ivtx as usize]
                 .hash
                 .clone()
                 .try_into()
                 .unwrap();
+            P::finalize_received_note(txid, &mut note, ai)?;
+            tracing::info!("{:?}", note);
             notes.push(note);
         }
 
@@ -169,8 +184,8 @@ impl Synchronizer {
         let mut p = self.position;
         for cb in blocks.iter() {
             for tx in cb.vtx.iter() {
-                p += tx.actions.len() as u32;
-                if let Some(b) = &tx.orchard_bridge {
+                p += P::extract_outputs(tx).len() as u32;
+                if let Some(b) = P::extract_bridge(tx) {
                     let be = BridgeExt {
                         b,
                         s: p as i32,
@@ -197,11 +212,12 @@ impl Synchronizer {
             if depth == 0 {
                 for cb in blocks.iter() {
                     for vtx in cb.vtx.iter() {
-                        for ca in vtx.actions.iter() {
-                            cmxs.push(Some(ca.cmx.clone().try_into().unwrap()));
+                        for co in P::extract_outputs(vtx).iter() {
+                            let cmx = P::extract_cmx(co);
+                            cmxs.push(Some(cmx));
                         }
-                        count_cmxs += vtx.actions.len();
-                        if let Some(b) = &vtx.orchard_bridge {
+                        count_cmxs += P::extract_outputs(vtx).len();
+                        if let Some(b) = P::extract_bridge(vtx) {
                             for _ in 0..b.len {
                                 cmxs.push(None);
                             }
@@ -213,10 +229,13 @@ impl Synchronizer {
 
             // restore bridge start/end nodes
             let p = position as i32;
-            for (idx, be) in bridges.iter_mut().enumerate() {
+            for be in bridges.iter_mut() {
                 let b = be.b;
-                tracing::debug!("{} {} {}", idx, be.s, be.e);
-                tracing::debug!("{:?}", b);
+                // tracing::info!("{depth} {i} {} {}", be.s, be.e);
+                // tracing::info!("{} {}", be.s - p, be.e - p);
+                // tracing::info!("{:?} {:?}",
+                //     b.start.as_ref().unwrap().levels[depth],
+                //     b.end.as_ref().unwrap().levels[depth]);
                 let h = &b.start.as_ref().unwrap().levels[depth].hash;
                 if !h.is_empty() {
                     // fill the *right* node of the be.s pair
@@ -309,16 +328,16 @@ impl Synchronizer {
             .collect::<HashMap<_, _>>();
         for cb in blocks.iter() {
             for vtx in cb.vtx.iter() {
-                for ca in vtx.actions.iter() {
-                    let nf = &*ca.nullifier;
-                    if let Some(n) = nfs.get_mut(nf) {
+                for sp in P::extract_inputs(vtx).iter() {
+                    let nf = P::extract_nf(sp);
+                    if let Some(n) = nfs.get_mut(&nf) {
                         n.spent = Some(cb.height as u32);
                         let id_spent = IdSpent::<Hash> {
                             id_note: n.id,
                             account: n.account,
                             height: cb.height as u32, // height at which the spent occurs
                             txid: vtx.hash.clone().try_into().unwrap(),
-                            note_ref: ca.nullifier.clone().try_into().unwrap(),
+                            note_ref: nf.clone().try_into().unwrap(),
                         };
                         let tx = TxValueUpdate {
                             account: n.account,

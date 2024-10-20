@@ -39,6 +39,7 @@ use prost::Message;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use shielded::Synchronizer;
 use std::sync::Arc;
 use thiserror::Error;
 use tokio::sync::{
@@ -64,9 +65,8 @@ use warp_macros::c_export;
 
 pub mod builder;
 mod header;
-mod orchard;
-mod sapling;
 mod transparent;
+mod shielded;
 
 #[derive(Error, Debug)]
 pub enum SyncError {
@@ -163,8 +163,8 @@ pub struct ReceivedNote {
     pub witness: Witness,
 }
 
-pub use orchard::Synchronizer as OrchardSync;
-pub use sapling::Synchronizer as SaplingSync;
+pub type SaplingSync = Synchronizer<shielded::sapling::SaplingProtocol>;
+pub type OrchardSync = Synchronizer<shielded::orchard::OrchardProtocol>;
 
 #[c_export]
 pub async fn download_warp_blocks(
