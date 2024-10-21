@@ -176,7 +176,7 @@ impl AccountInfo {
                 let addr = si
                     .vk
                     .address(dindex64.into())
-                    .ok_or(anyhow::anyhow!("Invalid index"))?;
+                    .ok_or(anyhow::anyhow!("Address Index is not a valid Sapling DI"))?;
                 Ok::<_, anyhow::Error>(SaplingAccountInfo {
                     sk: si.sk.clone(),
                     vk: si.vk.clone(),
