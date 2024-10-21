@@ -100,7 +100,11 @@ struct CResult_u32 c_create_new_account(uint8_t coin,
                                         bool transparent_only,
                                         bool is_new);
 
-struct CResult_u8 c_new_transparent_address(uint8_t coin, uint32_t account);
+struct CResult_u8 c_hide_account(uint8_t coin, uint32_t account, bool hidden);
+
+struct CResult_u8 c_reorder_account(uint8_t coin, uint32_t account, uint32_t new_position);
+
+struct CResult_u32 c_new_transparent_address(uint8_t coin, uint32_t account);
 
 struct CResult_u8 c_edit_account_name(uint8_t coin, uint32_t account, char *name);
 

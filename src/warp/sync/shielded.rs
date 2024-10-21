@@ -22,8 +22,8 @@ use crate::warp::{Edge, Hasher, MERKLE_DEPTH};
 
 use super::{ReceivedNote, TxValueUpdate};
 
-pub mod sapling;
 pub mod orchard;
+pub mod sapling;
 
 pub trait ShieldedProtocol {
     type Hasher: Hasher;

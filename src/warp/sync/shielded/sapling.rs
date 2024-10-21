@@ -3,10 +3,10 @@ use jubjub::Fr;
 use sapling_crypto::{value::NoteValue, Note, PaymentAddress, Rseed, SaplingIvk};
 
 use crate::{
-    Hash,
     lwd::rpc::{Bridge, CompactSaplingOutput, CompactSaplingSpend, CompactTx},
     types::AccountInfo,
     warp::{hasher::SaplingHasher, sync::ReceivedNote, try_sapling_decrypt},
+    Hash,
 };
 
 use super::ShieldedProtocol;
@@ -71,11 +71,7 @@ impl ShieldedProtocol for SaplingProtocol {
         )
     }
 
-    fn finalize_received_note(
-        txid: Hash,
-        note: &mut ReceivedNote,
-        ai: &AccountInfo,
-    ) -> Result<()> {
+    fn finalize_received_note(txid: Hash, note: &mut ReceivedNote, ai: &AccountInfo) -> Result<()> {
         let recipient = PaymentAddress::from_bytes(&note.address).unwrap();
         if let Some(vk) = ai.sapling.as_ref().map(|si| &si.vk.fvk().vk) {
             let n = Note::from_parts(

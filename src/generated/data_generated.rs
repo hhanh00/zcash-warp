@@ -4194,6 +4194,7 @@ pub mod fb {
         pub const VT_NAME: flatbuffers::VOffsetT = 8;
         pub const VT_BIRTH: flatbuffers::VOffsetT = 10;
         pub const VT_BALANCE: flatbuffers::VOffsetT = 12;
+        pub const VT_HIDDEN: flatbuffers::VOffsetT = 14;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -4216,6 +4217,7 @@ pub mod fb {
                 builder.add_name(x);
             }
             builder.add_id(args.id);
+            builder.add_hidden(args.hidden);
             builder.add_coin(args.coin);
             builder.finish()
         }
@@ -4226,12 +4228,14 @@ pub mod fb {
             let name = self.name().map(|x| x.to_string());
             let birth = self.birth();
             let balance = self.balance();
+            let hidden = self.hidden();
             AccountNameT {
                 coin,
                 id,
                 name,
                 birth,
                 balance,
+                hidden,
             }
         }
 
@@ -4281,6 +4285,17 @@ pub mod fb {
                     .unwrap()
             }
         }
+        #[inline]
+        pub fn hidden(&self) -> bool {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<bool>(AccountName::VT_HIDDEN, Some(false))
+                    .unwrap()
+            }
+        }
     }
 
     impl flatbuffers::Verifiable for AccountName<'_> {
@@ -4296,6 +4311,7 @@ pub mod fb {
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
                 .visit_field::<u32>("birth", Self::VT_BIRTH, false)?
                 .visit_field::<u64>("balance", Self::VT_BALANCE, false)?
+                .visit_field::<bool>("hidden", Self::VT_HIDDEN, false)?
                 .finish();
             Ok(())
         }
@@ -4306,6 +4322,7 @@ pub mod fb {
         pub name: Option<flatbuffers::WIPOffset<&'a str>>,
         pub birth: u32,
         pub balance: u64,
+        pub hidden: bool,
     }
     impl<'a> Default for AccountNameArgs<'a> {
         #[inline]
@@ -4316,6 +4333,7 @@ pub mod fb {
                 name: None,
                 birth: 0,
                 balance: 0,
+                hidden: false,
             }
         }
     }
@@ -4348,6 +4366,11 @@ pub mod fb {
                 .push_slot::<u64>(AccountName::VT_BALANCE, balance, 0);
         }
         #[inline]
+        pub fn add_hidden(&mut self, hidden: bool) {
+            self.fbb_
+                .push_slot::<bool>(AccountName::VT_HIDDEN, hidden, false);
+        }
+        #[inline]
         pub fn new(
             _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
         ) -> AccountNameBuilder<'a, 'b, A> {
@@ -4372,6 +4395,7 @@ pub mod fb {
             ds.field("name", &self.name());
             ds.field("birth", &self.birth());
             ds.field("balance", &self.balance());
+            ds.field("hidden", &self.hidden());
             ds.finish()
         }
     }
@@ -4383,6 +4407,7 @@ pub mod fb {
         pub name: Option<String>,
         pub birth: u32,
         pub balance: u64,
+        pub hidden: bool,
     }
     impl Default for AccountNameT {
         fn default() -> Self {
@@ -4392,6 +4417,7 @@ pub mod fb {
                 name: None,
                 birth: 0,
                 balance: 0,
+                hidden: false,
             }
         }
     }
@@ -4405,6 +4431,7 @@ pub mod fb {
             let name = self.name.as_ref().map(|x| _fbb.create_string(x));
             let birth = self.birth;
             let balance = self.balance;
+            let hidden = self.hidden;
             AccountName::create(
                 _fbb,
                 &AccountNameArgs {
@@ -4413,6 +4440,7 @@ pub mod fb {
                     name,
                     birth,
                     balance,
+                    hidden,
                 },
             )
         }

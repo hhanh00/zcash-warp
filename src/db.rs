@@ -64,12 +64,14 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
         "CREATE TABLE IF NOT EXISTS accounts(
         id_account INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
+        position INTEGER NOT NULL,
         seed TEXT,
         aindex INTEGER NOT NULL,
         dindex INTEGER NOT NULL,
         birth INTEGER NOT NULL,
         balance INTEGER NOT NULL,
-        saved BOOL NOT NULL)",
+        saved BOOL NOT NULL,
+        hidden BOOL NOT NULL)",
         [],
     )?;
 

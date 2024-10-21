@@ -65,8 +65,8 @@ use warp_macros::c_export;
 
 pub mod builder;
 mod header;
-mod transparent;
 mod shielded;
+mod transparent;
 
 #[derive(Error, Debug)]
 pub enum SyncError {
@@ -257,6 +257,7 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
         orchard_state.to_edge(&orch_hasher),
     )?;
 
+    tracing::info!("Transparent Sync...");
     let mut trp_dec = TransparentSync::new(&coin.network, &connection)?;
 
     let addresses = trp_dec.addresses.clone();
@@ -275,6 +276,8 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
         let address = taddr.encode(&coin.network);
         trp_dec.process_txs(&address, &txs)?;
     }
+
+    tracing::info!("Shielded Sync...");
     let heights = trp_dec
         .txs
         .iter()
@@ -378,6 +381,7 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
 
         db_tx.commit().map_err(anyhow::Error::new)?;
     }
+    tracing::info!("Sync finished");
 
     Ok(())
 }

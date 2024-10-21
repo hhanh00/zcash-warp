@@ -181,6 +181,7 @@ pub fn mark_transparent_spent(
         JOIN txs t
         WHERE u.txid = ?3 AND u.vout = ?4 AND u.account = ?1
         AND t.txid = ?5 AND t.account = ?1
+        ON CONFLICT DO UPDATE SET account = excluded.account
         RETURNING id_utxo",
     )?;
     let id_utxo = s.query_row(

@@ -28,25 +28,28 @@ use warp_macros::c_export;
 
 #[c_export]
 pub fn list_accounts(coin: &CoinDef, connection: &Connection) -> Result<AccountNameListT> {
-    let mut s = connection
-        .prepare("SELECT id_account, name, birth, balance FROM accounts ORDER BY id_account")?;
+    let mut s = connection.prepare(
+        "SELECT id_account, name, birth, balance, hidden FROM accounts ORDER BY position",
+    )?;
     let rows = s.query_map([], |r| {
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, String>(1)?,
             r.get::<_, u32>(2)?,
             r.get::<_, u64>(3)?,
+            r.get::<_, bool>(4)?,
         ))
     })?;
     let mut accounts = vec![];
     for r in rows {
-        let (id, name, birth, balance) = r?;
+        let (id, name, birth, balance, hidden) = r?;
         accounts.push(AccountNameT {
             coin: coin.coin,
             id,
             name: Some(name),
             birth,
             balance,
+            hidden,
         });
     }
     let accounts = AccountNameListT {
@@ -139,7 +142,7 @@ pub fn get_account_info(
     )?;
 
     let ai = connection.query_row(
-        "SELECT a.name, a.seed, a.aindex, a.dindex, a.birth,
+        "SELECT a.name, a.position, a.seed, a.aindex, a.dindex, a.birth,
         t.xsk as txsk, t.sk as tsk, t.vk as tvk, t.address as taddr,
         s.sk as ssk, s.vk as svk, s.address as saddr,
         o.sk as osk, o.vk as ovk,
@@ -152,6 +155,7 @@ pub fn get_account_info(
         [account],
         |r| {
             let name = r.get::<_, String>("name")?;
+            let position = r.get::<_, u32>("position")?;
             let seed = r.get::<_, Option<String>>("seed")?;
             let aindex = r.get::<_, u32>("aindex")?;
             let dindex = r.get::<_, u32>("dindex")?;
@@ -225,6 +229,7 @@ pub fn get_account_info(
 
             let ai = AccountInfo {
                 account,
+                position,
                 name,
                 seed,
                 aindex,

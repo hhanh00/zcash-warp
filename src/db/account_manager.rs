@@ -18,10 +18,15 @@ use zcash_primitives::{
 };
 
 use crate::{
-    data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT}, db::account::change_account_dindex, keys::{
+    data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
+    db::account::change_account_dindex,
+    keys::{
         decode_extended_private_key, decode_extended_public_key, export_sk_bip38, import_sk_bip38,
         to_extended_full_viewing_key, AccountKeys,
-    }, network::Network, types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo}, utils::keys::find_address_index
+    },
+    network::Network,
+    types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
+    utils::keys::find_address_index,
 };
 
 use crate::{
@@ -251,13 +256,50 @@ pub fn create_account(
     birth: u32,
     is_new: bool,
 ) -> Result<u32> {
+    let position =
+        connection.query_row("SELECT COUNT(*) FROM accounts", [], |r| r.get::<_, u32>(0))?;
     connection.execute(
-        "INSERT INTO accounts(name, seed, aindex, dindex, birth, balance, saved)
-        VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)",
-        params![name, seed, acc_index, addr_index, birth, !is_new],
+        "INSERT INTO accounts
+        (name, position, seed, aindex, dindex, birth, balance, saved, hidden)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0, ?7, 0)",
+        params![name, position, seed, acc_index, addr_index, birth, !is_new],
     )?;
     let account = connection.last_insert_rowid();
     Ok(account as u32)
+}
+
+#[c_export]
+pub fn hide_account(connection: &Connection, account: u32, hidden: bool) -> Result<()> {
+    connection.execute(
+        "UPDATE accounts SET hidden = ?2 WHERE id_account = ?1",
+        params![account, hidden],
+    )?;
+    Ok(())
+}
+
+#[c_export]
+pub fn reorder_account(
+    network: &Network,
+    connection: &mut Connection,
+    account: u32,
+    new_position: u32,
+) -> Result<()> {
+    let db_tx = connection.transaction()?;
+    let ai = get_account_info(network, &db_tx, account)?;
+    let old_position = ai.position;
+    {
+        let mut s = db_tx
+            .prepare("SELECT id_account, position FROM accounts ORDER BY position LIMIT ?1")?;
+        let rows = s.query_map([new_position + 1], |r| {
+            Ok((r.get::<_, u32>(0)?, r.get::<_, u32>(1)?))
+        })?;
+        let (to_id, to_position) = rows.last().unwrap()?;
+        let mut s = db_tx.prepare("UPDATE accounts SET position = ?2 WHERE id_account = ?1")?;
+        s.execute(params![account, to_position])?;
+        s.execute(params![to_id, old_position])?;
+    }
+    db_tx.commit()?;
+    Ok(())
 }
 
 pub fn create_sapling_account(

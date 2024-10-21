@@ -125,6 +125,7 @@ table AccountName {
   name: string;
   birth: uint32;
   balance: uint64;
+  hidden: bool;
 }
 
 table AccountNameList {

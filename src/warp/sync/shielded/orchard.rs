@@ -1,7 +1,12 @@
 use std::sync::mpsc::Sender;
 
 use anyhow::Result;
-use orchard::{keys::{IncomingViewingKey, Scope}, note::{RandomSeed, Rho}, value::NoteValue, Address, Note};
+use orchard::{
+    keys::{IncomingViewingKey, Scope},
+    note::{RandomSeed, Rho},
+    value::NoteValue,
+    Address, Note,
+};
 
 use crate::{
     lwd::rpc::{Bridge, CompactOrchardAction, CompactTx},
