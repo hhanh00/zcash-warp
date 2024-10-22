@@ -162,6 +162,7 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
         nf BLOB NOT NULL,
         rho BLOB,
         spent INTEGER,
+        expiration INTEGER,
         orchard BOOL NOT NULL,
         excluded BOOL NOT NULL,
         UNIQUE (account, position, orchard),
@@ -200,6 +201,7 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
         vout INTEGER NULL,
         value INTEGER NOT NULL,
         spent INTEGER,
+        expiration INTEGER,
         UNIQUE (account, txid, vout))",
         [],
     )?;

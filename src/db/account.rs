@@ -69,7 +69,7 @@ pub fn list_account_transparent_addresses(
         LEFT JOIN utxos u
         ON t.account = u.account AND t.external = u.external
             AND t.addr_index = u.addr_index
-        WHERE t.account = ?1
+        WHERE t.account = ?1 AND u.spent IS NULL
 		GROUP BY t.address
         ORDER BY t.addr_index",
     )?;
@@ -313,7 +313,7 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
     let transparent = connection
         .query_row(
             "SELECT SUM(value) FROM utxos
-        WHERE account = ?1 AND height <= ?2 AND (spent IS NULL OR spent = 0)",
+        WHERE account = ?1 AND height <= ?2 AND spent IS NULL",
             params![account, height],
             |r| r.get::<_, Option<u64>>(0),
         )?
@@ -322,7 +322,7 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
         .query_row(
             "SELECT SUM(value) FROM notes
         WHERE account = ?1 AND height <= ?2 AND orchard = 0
-        AND (spent IS NULL OR spent = 0)",
+        AND spent IS NULL",
             params![account, height],
             |r| r.get::<_, Option<u64>>(0),
         )?
@@ -331,7 +331,7 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
         .query_row(
             "SELECT SUM(value) FROM notes
         WHERE account = ?1 AND height <= ?2 AND orchard = 1
-        AND (spent IS NULL OR spent = 0)",
+        AND spent IS NULL",
             params![account, height],
             |r| r.get::<_, Option<u64>>(0),
         )?

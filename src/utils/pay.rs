@@ -16,7 +16,7 @@ use crate::{
     lwd::{broadcast, get_last_height, get_tree_state},
     network::Network,
     pay::{make_payment, UnsignedTransaction},
-    Client,
+    Client, EXPIRATION_HEIGHT_DELTA,
 };
 
 use crate::{
@@ -139,7 +139,7 @@ pub async fn tx_broadcast(
 ) -> Result<String> {
     let bc_height = get_last_height(client).await?;
     if let Some(id_notes) = txbytes.notes.as_deref() {
-        mark_notes_unconfirmed_spent(connection, id_notes)?;
+        mark_notes_unconfirmed_spent(connection, id_notes, bc_height + EXPIRATION_HEIGHT_DELTA)?;
     }
     let id = broadcast(client, bc_height, txbytes).await?;
     Ok(id)

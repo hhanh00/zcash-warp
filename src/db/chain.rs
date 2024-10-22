@@ -102,9 +102,9 @@ pub fn reset_scan(
     db_tx.execute("DELETE FROM utxo_spends WHERE height >= ?1", [height])?;
     db_tx.execute("DELETE FROM msgs", [])?;
     db_tx.execute("UPDATE notes SET spent = NULL WHERE spent >= ?1", [height])?;
-    db_tx.execute("UPDATE notes SET spent = NULL WHERE spent = 0", [])?;
+    db_tx.execute("UPDATE notes SET expiration = NULL", [])?;
     db_tx.execute("UPDATE utxos SET spent = NULL WHERE spent >= ?1", [height])?;
-    db_tx.execute("UPDATE utxos SET spent = NULL WHERE spent = 0", [])?;
+    db_tx.execute("UPDATE utxos SET expiration = NULL", [])?;
     update_account_balances(&db_tx, height)?;
     db_tx.commit()?;
 
@@ -151,9 +151,9 @@ pub async fn rewind(
         db_tx.execute("DELETE FROM txdetails WHERE height > ?1", [height])?;
         db_tx.execute("DELETE FROM msgs WHERE height > ?1", [height])?;
         db_tx.execute("UPDATE notes SET spent = NULL WHERE spent > ?1", [height])?;
-        db_tx.execute("UPDATE notes SET spent = NULL WHERE spent = 0", [])?;
+        db_tx.execute("UPDATE notes SET expiration = NULL", [])?;
         db_tx.execute("UPDATE utxos SET spent = NULL WHERE spent > ?1", [height])?;
-        db_tx.execute("UPDATE utxos SET spent = NULL WHERE spent = 0", [])?;
+        db_tx.execute("UPDATE utxos SET expiration = NULL", [])?;
         update_account_balances(&db_tx, height)?;
         db_tx.commit()?;
     } else {

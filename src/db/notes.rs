@@ -113,6 +113,8 @@ fn select_note(row: &Row) -> Result<ReceivedNote, rusqlite::Error> {
     Ok(note)
 }
 
+// used by synchronization
+// must returned all the nodes including the ones spent but unconfirmed
 pub fn list_all_received_notes(
     connection: &Connection,
     height: CheckpointHeight,
@@ -123,7 +125,7 @@ pub fn list_all_received_notes(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2 AND (spent IS NULL OR spent = 0)
+        AND orchard = ?2 AND spent IS NULL
         ORDER BY n.value DESC")?;
     let rows = s.query_map(params![height, orchard], select_note)?;
     let notes = rows.collect::<Result<Vec<_>, _>>()?;
@@ -142,6 +144,7 @@ pub fn list_received_notes(
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
         AND orchard = ?2 AND (spent IS NULL OR spent > ?1) AND n.account = ?3 AND NOT excluded
+        AND expiration IS NULL
         ORDER BY n.value DESC")?;
     let rows = s.query_map(params![height, orchard, account], select_note)?;
     let notes = rows.collect::<Result<Vec<_>, _>>()?;
@@ -166,7 +169,7 @@ pub fn mark_shielded_spent(connection: &Transaction, id_spent: &IdSpent<Hash>) -
         ],
         |r| r.get::<_, u32>(0),
     )?;
-    let mut s = connection.prepare_cached("UPDATE notes SET spent = ?2 WHERE id_note = ?1")?;
+    let mut s = connection.prepare_cached("UPDATE notes SET spent = ?2, expiration = NULL WHERE id_note = ?1")?;
     s.execute(params![id_note, id_spent.height])?;
     Ok(())
 }
@@ -194,26 +197,38 @@ pub fn mark_transparent_spent(
         ],
         |r| r.get::<_, u32>(0),
     )?;
-    let mut s = connection.prepare_cached("UPDATE utxos SET spent = ?2 WHERE id_utxo = ?1")?;
+    let mut s = connection.prepare_cached("UPDATE utxos SET spent = ?2, expiration = NULL WHERE id_utxo = ?1")?;
     s.execute(params![id_utxo, id_spent.height])?;
     Ok(())
 }
 
-pub fn mark_notes_unconfirmed_spent(connection: &Connection, id_notes: &[IdNoteT]) -> Result<()> {
+pub fn mark_notes_unconfirmed_spent(connection: &Connection, id_notes: &[IdNoteT], expiration: u32) -> Result<()> {
     let mut upd_transparent =
-        connection.prepare("UPDATE utxos SET spent = 0 WHERE id_utxo = ?1")?;
-    let mut upd_shielded = connection.prepare("UPDATE notes SET spent = 0 WHERE id_note = ?1")?;
+        connection.prepare("UPDATE utxos SET expiration = ?2 WHERE id_utxo = ?1")?;
+    let mut upd_shielded = connection.prepare("UPDATE notes SET expiration = ?2 WHERE id_note = ?1")?;
     for note in id_notes {
         match note.pool {
             0 => {
-                upd_transparent.execute([note.id])?;
+                upd_transparent.execute([note.id, expiration])?;
             }
             1 | 2 => {
-                upd_shielded.execute([note.id])?;
+                upd_shielded.execute([note.id, expiration])?;
             }
             _ => unreachable!(),
         }
     }
+    Ok(())
+}
+
+pub fn recover_expired_spends(connection: &Connection, height: u32) -> Result<()> {
+    connection.execute(
+        "UPDATE notes SET expiration = NULL WHERE expiration < ?1",
+        [height]
+    )?;
+    connection.execute(
+        "UPDATE utxos SET expiration = NULL WHERE expiration < ?1",
+        [height]
+    )?;
     Ok(())
 }
 
@@ -314,6 +329,7 @@ fn select_utxo(r: &Row) -> Result<UTXO, rusqlite::Error> {
     Ok(utxo)
 }
 
+// include unconfirmed spent
 pub fn list_all_utxos(connection: &Connection) -> Result<Vec<UTXO>> {
     // include the unconfirmed spents
     let mut s = connection.prepare(
@@ -323,7 +339,7 @@ pub fn list_all_utxos(connection: &Connection) -> Result<Vec<UTXO>> {
         JOIN t_addresses s ON s.account = t.account
             AND s.external = u.external
             AND s.addr_index = u.addr_index
-        WHERE u.spent IS NULL OR u.spent = 0
+        WHERE u.spent IS NULL
         ORDER BY u.height DESC"
     )?;
     let rows = s.query_map([], select_utxo)?;
@@ -347,6 +363,7 @@ pub fn list_utxos(
             AND s.external = u.external
             AND s.addr_index = u.addr_index
         WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
+        AND expiration IS NULL
         AND u.account = ?2 ORDER BY u.height DESC"),
     )?;
     let rows = s.query_map(params![height, account], select_utxo)?;
@@ -423,7 +440,7 @@ pub fn get_unspent_notes(
     let mut s = connection.prepare(
         "SELECT n.id_note, n.height, t.timestamp, n.value, n.orchard, n.excluded
         FROM notes n JOIN txs t ON n.tx = t.id_tx
-        WHERE n.account = ?1 AND (spent IS NULL OR spent > ?2 OR spent = 0)
+        WHERE n.account = ?1 AND (spent IS NULL OR spent > ?2)
         ORDER BY n.height DESC",
     )?;
     let rows = s.query_map(params![account, bc_height], |r| {
