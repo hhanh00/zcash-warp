@@ -124,7 +124,8 @@ pub fn list_all_received_notes(
     let mut s = connection.prepare(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
-        FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
+        FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND
+        w.account = n.account AND w.note = n.id_note AND w.height = ?1
         AND orchard = ?2 AND spent IS NULL
         ORDER BY n.value DESC")?;
     let rows = s.query_map(params![height, orchard], select_note)?;
@@ -269,8 +270,8 @@ pub fn store_received_note(
         }
         let id_note = connection.query_row(
             "SELECT id_note FROM notes
-            WHERE position = ?1 AND orchard = ?2",
-            params![n.position, orchard],
+            WHERE account = ?1 AND position = ?2 AND orchard = ?3",
+            params![n.account, n.position, orchard],
             |r| r.get::<_, u32>(0),
         )?;
         store_witness(connection, n.account, id_note, height, &n.witness)?;
@@ -421,7 +422,7 @@ pub fn update_account_balances(connection: &Transaction, height: u32) -> Result<
     connection.execute(
         "UPDATE accounts SET balance = coins.balance FROM
         (WITH coins AS
-        (SELECT account, value, spent FROM notes UNION
+        (SELECT account, value, spent FROM notes UNION ALL
         SELECT account, value, spent FROM utxos)
         SELECT account, SUM(value) AS balance FROM coins
         WHERE spent IS NULL OR spent > ?1 GROUP BY account)

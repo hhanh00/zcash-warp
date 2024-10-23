@@ -176,7 +176,6 @@ impl<P: ShieldedProtocol> Synchronizer<P> {
                 .try_into()
                 .unwrap();
             P::finalize_received_note(txid, &mut note, ai)?;
-            tracing::info!("{:?}", note);
             notes.push(note);
         }
 
@@ -321,33 +320,36 @@ impl<P: ShieldedProtocol> Synchronizer<P> {
 
         // detect spends
 
-        let mut nfs = self
-            .notes
-            .iter_mut()
-            .map(|n| (n.nf.clone(), n))
-            .collect::<HashMap<_, _>>();
+        let mut nfs: HashMap<Hash, Vec<&mut ReceivedNote>> = HashMap::new();
+        for n in self.notes.iter_mut() {
+            let e = nfs.entry(n.nf).or_insert(vec![]);
+            e.push(n);
+        }
+
         for cb in blocks.iter() {
             for vtx in cb.vtx.iter() {
                 for sp in P::extract_inputs(vtx).iter() {
                     let nf = P::extract_nf(sp);
-                    if let Some(n) = nfs.get_mut(&nf) {
-                        n.spent = Some(cb.height as u32);
-                        let id_spent = IdSpent::<Hash> {
-                            id_note: n.id,
-                            account: n.account,
-                            height: cb.height as u32, // height at which the spent occurs
-                            txid: vtx.hash.clone().try_into().unwrap(),
-                            note_ref: nf.clone().try_into().unwrap(),
-                        };
-                        let tx = TxValueUpdate {
-                            account: n.account,
-                            txid: vtx.hash.clone().try_into().unwrap(),
-                            value: -(n.value as i64),
-                            id_tx: 0,
-                            height: cb.height as u32,
-                            timestamp: cb.time,
-                        };
-                        self.spends.push((tx, id_spent));
+                    if let Some(ns) = nfs.get_mut(&nf) {
+                        for n in ns {
+                            n.spent = Some(cb.height as u32);
+                            let id_spent = IdSpent::<Hash> {
+                                id_note: n.id,
+                                account: n.account,
+                                height: cb.height as u32, // height at which the spent occurs
+                                txid: vtx.hash.clone().try_into().unwrap(),
+                                note_ref: nf.clone().try_into().unwrap(),
+                            };
+                            let tx = TxValueUpdate {
+                                account: n.account,
+                                txid: vtx.hash.clone().try_into().unwrap(),
+                                value: -(n.value as i64),
+                                id_tx: 0,
+                                height: cb.height as u32,
+                                timestamp: cb.time,
+                            };
+                            self.spends.push((tx, id_spent));
+                        }
                     }
                 }
             }

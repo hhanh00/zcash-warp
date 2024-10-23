@@ -11,7 +11,7 @@ use crate::{
     Client,
 };
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use tracing::Level;
 use zcash_client_backend::encoding::AddressCodec as _;
 
@@ -32,12 +32,6 @@ pub async fn scan_transparent_addresses(
 ) -> Result<()> {
     let span = tracing::span!(Level::DEBUG, "scan_transparent_addresses");
     let _enter = span.enter();
-    let start = connection.query_row(
-        "SELECT MAX(addr_index) FROM t_addresses
-        WHERE account = ?1 AND external = ?2",
-        params![account, external],
-        |r| r.get::<_, u32>(0),
-    )?;
     let ai = get_account_info(network, connection, account)?;
     let tvk = ai
         .transparent
@@ -45,11 +39,11 @@ pub async fn scan_transparent_addresses(
         .and_then(|ti| ti.vk.as_ref())
         .ok_or(anyhow::anyhow!("No AccountPubKey"))?;
     let ti = ai.transparent.as_ref().unwrap();
-    let mut addr_index = start + 1;
+    let mut addr_index = 0;
     let mut gap = 0;
     while gap < gap_limit {
         let sk = ti.xsk.as_ref().map(|xsk| {
-            let sk = TransparentAccountInfo::derive_sk(xsk, 0, addr_index);
+            let sk = TransparentAccountInfo::derive_sk(xsk, external, addr_index);
             export_sk_bip38(&sk)
         });
         let taddr =

@@ -514,7 +514,6 @@ pub fn extend_transparent_addresses(
             )
             .optional()?;
         // if was used, allocate a new one
-        tracing::info!("{account} {last_addr_index:?}");
         if last_addr_index.is_some() && ti.vk.is_some() {
             match external {
                 0 => {

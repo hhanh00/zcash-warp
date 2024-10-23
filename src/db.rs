@@ -185,7 +185,8 @@ fn migrate_v1(network: &Network, connection: &mut Connection, upgrade: bool) -> 
         account INTEGER NOT NULL,
         note INTEGER NOT NULL,
         height INTEGER NOT NULL,
-        witness BLOB NOT NULL)",
+        witness BLOB NOT NULL,
+        UNIQUE (account, note, height))",
         [],
     )?;
 
