@@ -1,5 +1,5 @@
 use anyhow::Result;
-use bech32::{Bech32m, Hrp};
+use bip32::Prefix;
 use orchard::{
     keys::{FullViewingKey, Scope, SpendingKey},
     Address,
@@ -274,12 +274,16 @@ impl AccountInfo {
 
         let txsk = self.transparent.as_ref().and_then(|ti| {
             ti.xsk.as_ref().map(|xsk| {
-                bech32::encode::<Bech32m>(Hrp::parse("txprv").unwrap(), &*xsk.to_bytes()).unwrap()
+                let xsk = xsk.clone().into_inner();
+                let xprv_encoded = xsk.to_string(Prefix::XPRV);
+                xprv_encoded.to_string()
             })
         });
         let tvk = self.transparent.as_ref().and_then(|ti| {
             ti.vk.as_ref().map(|vk| {
-                bech32::encode::<Bech32m>(Hrp::parse("txpub").unwrap(), &*vk.serialize()).unwrap()
+                let xpub = vk.clone().into_inner();
+                let xpub_encoded = xpub.to_string(Prefix::XPUB);
+                xpub_encoded
             })
         });
         let taddr = self.transparent.as_ref().map(|ti| ti.addr.encode(network));

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use base58check::{FromBase58Check, ToBase58Check};
+use bip32::{ExtendedPrivateKey, ExtendedPublicKey};
 use bip39::Mnemonic;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use prost::bytes::BufMut as _;
@@ -27,6 +28,7 @@ use crate::{
     network::Network,
 };
 use std::ffi::c_char;
+use std::str::FromStr;
 use warp_macros::c_export;
 
 #[derive(Debug)]
@@ -157,22 +159,18 @@ pub fn export_sk_bip38(sk: &SecretKey) -> String {
 }
 
 pub fn decode_extended_private_key(key: &str) -> Result<AccountPrivKey> {
-    let (hrp, key) = bech32::decode(key)?;
-    if hrp.as_str() != "txprv" {
-        anyhow::bail!("Not an extended private key");
-    }
-    let key =
-        AccountPrivKey::from_bytes(&*key).ok_or(anyhow::anyhow!("Invalid extended private key"))?;
-    Ok(key)
+    let exsk = ExtendedPrivateKey::<SecretKey>::from_str(key)?;
+    let xsk = AccountPrivKey::from_extended_privkey(exsk);
+    Ok(xsk)
 }
 
 pub fn decode_extended_public_key(key: &str) -> Result<AccountPubKey> {
-    let (hrp, key) = bech32::decode(key)?;
-    if hrp.as_str() != "txpub" {
-        anyhow::bail!("Not an extended public key");
-    }
-    let key = AccountPubKey::deserialize(&key.try_into().unwrap())?;
-    Ok(key)
+    let exvk = ExtendedPublicKey::<PublicKey>::from_str(key)?;
+    let mut bytes = [0u8; 65];
+    bytes[..32].copy_from_slice(&exvk.attrs().chain_code);
+    bytes[32..].copy_from_slice(&exvk.public_key().serialize());
+    let vk = AccountPubKey::deserialize(&bytes)?;
+    Ok(vk)
 }
 
 pub fn import_sk_bip38(key: &str) -> Result<SecretKey> {
