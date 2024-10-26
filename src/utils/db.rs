@@ -1,7 +1,7 @@
-use crate::db::reset_tables;
+use crate::db::create_schema;
 use crate::network::Network;
 use anyhow::Result;
-use rusqlite::{params, Connection, OptionalExtension as _};
+use rusqlite::{Connection, OptionalExtension as _};
 
 use crate::account::address::get_diversified_address;
 use crate::{data::fb::BackupT, db::account::get_account_info, types::PoolMask};
@@ -59,13 +59,7 @@ pub fn get_address(
     mask: u8,
 ) -> Result<String> {
     let address = if mask & 8 != 0 {
-        Some(get_diversified_address(
-            network,
-            connection,
-            account,
-            time,
-            PoolMask(mask),
-        )?)
+        get_diversified_address(network, connection, account, time, PoolMask(mask))?
     } else {
         let ai = get_account_info(network, &connection, account)?;
         ai.to_address(network, PoolMask(mask))
@@ -95,36 +89,9 @@ pub extern "C" fn c_schema_version() -> u32 {
 }
 
 #[c_export]
-pub fn create_db(network: &Network, path: &str, password: &str) -> Result<()> {
+pub fn create_db(path: &str, password: &str, version: &str) -> Result<()> {
     let mut connection = open_with_password(path, password)?;
-    reset_tables(network, &mut connection, false)?;
-    Ok(())
-}
-
-#[c_export]
-pub fn migrate_db(
-    network: &Network,
-    major: u8,
-    src: &str,
-    dest: &str,
-    password: &str,
-) -> Result<()> {
-    let mut dest = open_with_password(dest, password)?;
-
-    dest.execute(
-        "ATTACH DATABASE ?1 AS src_db KEY ?2",
-        params![src, password],
-    )?;
-
-    match major {
-        1 => migrate_v1(network, &mut dest)?,
-        _ => anyhow::bail!("Unsupported upgrade"),
-    }
-    Ok(())
-}
-
-pub fn migrate_v1(network: &Network, db: &mut Connection) -> Result<()> {
-    reset_tables(network, db, true)?;
+    create_schema(&mut connection, version)?;
     Ok(())
 }
 

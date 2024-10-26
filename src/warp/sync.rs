@@ -10,7 +10,8 @@ use crate::{
         account_manager::extend_transparent_addresses,
         chain::{get_block_header, get_sync_height, rewind_checkpoint, store_block},
         notes::{
-            mark_shielded_spent, recover_expired_spends, store_received_note, update_account_balances, update_tx_timestamp
+            mark_shielded_spent, recover_expired_spends, store_received_note,
+            update_account_balances, update_tx_timestamp,
         },
         tx::{
             add_tx_value, copy_block_times_from_tx, drop_transparent_data,

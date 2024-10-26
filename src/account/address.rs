@@ -18,18 +18,18 @@ pub fn get_diversified_address(
     account: u32,
     addr_index: u32,
     pools: PoolMask,
-) -> Result<String> {
+) -> Result<Option<String>> {
     let ai = get_account_info(network, connection, account)?;
     let ai = ai.select_pools(pools);
     let pool_mask = ai.to_mask();
     let address = match pool_mask {
-        0 => anyhow::bail!("No Receiver"),
+        0 => None,
         1 => {
             let tvk = ai.transparent.as_ref().and_then(|ti| ti.vk.as_ref());
             let address = tvk.map(|tvk| {
                 TransparentAccountInfo::derive_address(tvk, 0, addr_index).encode(network)
             });
-            address.ok_or(anyhow::anyhow!("No Transparent Address"))?
+            address
         }
         _ => {
             let uvk = ai.to_vk()?;
@@ -38,11 +38,14 @@ pub fn get_diversified_address(
                 ai.orchard.is_some(),
                 ai.sapling.is_some(),
                 ai.transparent.is_some(),
-            )
-            .ok_or(anyhow::anyhow!("Must have shielded receiver"))?;
-            let (address, _) = uvk.find_address(di, ua_request)?;
-            let address = address.encode(network);
-            address
+            );
+            if let Some(ua_request) = ua_request {
+                let (address, _) = uvk.find_address(di, ua_request)?;
+                let address = address.encode(network);
+                Some(address)
+            } else {
+                None
+            }
         }
     };
     Ok(address)

@@ -26,16 +26,16 @@ typedef struct CResult______u8 {
   uint32_t len;
 } CResult______u8;
 
+typedef struct CParam {
+  uint8_t *value;
+  uint32_t len;
+} CParam;
+
 typedef struct CResult_bool {
   bool value;
   char *error;
   uint32_t len;
 } CResult_bool;
-
-typedef struct CParam {
-  uint8_t *value;
-  uint32_t len;
-} CParam;
 
 typedef struct CResult_u32 {
   uint32_t value;
@@ -69,7 +69,7 @@ struct CResult_u8 c_add_contact(uint8_t coin,
 
 struct CResult______u8 c_get_txs(uint8_t coin, uint32_t account, uint32_t bc_height);
 
-struct CResult_bool c_reset_tables(uint8_t coin, bool upgrade);
+struct CResult_u8 c_create_schema(uint8_t coin, char *_version);
 
 struct CResult______u8 c_list_accounts(uint8_t coin);
 
@@ -202,9 +202,7 @@ struct CResult_u8 c_set_db_path_password(uint8_t coin, char *path, char *passwor
 
 uint32_t c_schema_version(void);
 
-struct CResult_u8 c_create_db(uint8_t coin, char *path, char *password);
-
-struct CResult_u8 c_migrate_db(uint8_t coin, uint8_t major, char *src, char *dest, char *password);
+struct CResult_u8 c_create_db(uint8_t coin, char *path, char *password, char *version);
 
 struct CResult______u8 c_derive_zip32_keys(uint8_t coin,
                                            uint32_t account,

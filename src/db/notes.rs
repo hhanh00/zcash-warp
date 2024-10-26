@@ -127,7 +127,8 @@ pub fn list_all_received_notes(
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND
         w.account = n.account AND w.note = n.id_note AND w.height = ?1
         AND orchard = ?2 AND spent IS NULL
-        ORDER BY n.value DESC")?;
+        ORDER BY n.value DESC",
+    )?;
     let rows = s.query_map(params![height, orchard], select_note)?;
     let notes = rows.collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
@@ -170,7 +171,8 @@ pub fn mark_shielded_spent(connection: &Transaction, id_spent: &IdSpent<Hash>) -
         ],
         |r| r.get::<_, u32>(0),
     )?;
-    let mut s = connection.prepare_cached("UPDATE notes SET spent = ?2, expiration = NULL WHERE id_note = ?1")?;
+    let mut s = connection
+        .prepare_cached("UPDATE notes SET spent = ?2, expiration = NULL WHERE id_note = ?1")?;
     s.execute(params![id_note, id_spent.height])?;
     Ok(())
 }
@@ -198,15 +200,21 @@ pub fn mark_transparent_spent(
         ],
         |r| r.get::<_, u32>(0),
     )?;
-    let mut s = connection.prepare_cached("UPDATE utxos SET spent = ?2, expiration = NULL WHERE id_utxo = ?1")?;
+    let mut s = connection
+        .prepare_cached("UPDATE utxos SET spent = ?2, expiration = NULL WHERE id_utxo = ?1")?;
     s.execute(params![id_utxo, id_spent.height])?;
     Ok(())
 }
 
-pub fn mark_notes_unconfirmed_spent(connection: &Connection, id_notes: &[IdNoteT], expiration: u32) -> Result<()> {
+pub fn mark_notes_unconfirmed_spent(
+    connection: &Connection,
+    id_notes: &[IdNoteT],
+    expiration: u32,
+) -> Result<()> {
     let mut upd_transparent =
         connection.prepare("UPDATE utxos SET expiration = ?2 WHERE id_utxo = ?1")?;
-    let mut upd_shielded = connection.prepare("UPDATE notes SET expiration = ?2 WHERE id_note = ?1")?;
+    let mut upd_shielded =
+        connection.prepare("UPDATE notes SET expiration = ?2 WHERE id_note = ?1")?;
     for note in id_notes {
         match note.pool {
             0 => {
@@ -224,11 +232,11 @@ pub fn mark_notes_unconfirmed_spent(connection: &Connection, id_notes: &[IdNoteT
 pub fn recover_expired_spends(connection: &Connection, height: u32) -> Result<()> {
     connection.execute(
         "UPDATE notes SET expiration = NULL WHERE expiration < ?1",
-        [height]
+        [height],
     )?;
     connection.execute(
         "UPDATE utxos SET expiration = NULL WHERE expiration < ?1",
-        [height]
+        [height],
     )?;
     Ok(())
 }

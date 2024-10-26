@@ -56,9 +56,9 @@ use crate::{
         contacts::{
             delete_contact, edit_contact_address, edit_contact_name, get_contact, list_contacts,
         },
+        create_schema,
         messages::{get_message, list_messages, mark_all_read, mark_read},
         notes::{exclude_note, get_unspent_notes, reverse_note_exclusion},
-        reset_tables,
         tx::{get_tx_details_account, get_txid, store_tx_details},
     },
     keys::generate_random_mnemonic_phrase,
@@ -385,7 +385,7 @@ async fn process_command(
     match command {
         Command::CreateDatabase => {
             let mut connection = zec.connection().unwrap();
-            reset_tables(network, &mut connection, false)?;
+            create_schema(&mut connection, "")?;
         }
         Command::Account(account_cmd) => {
             let mut connection = zec.connection()?;
@@ -641,7 +641,7 @@ async fn process_command(
                 let connection = zec.connection()?;
                 let address =
                     get_diversified_address(network, &connection, account, index, PoolMask(pools))?;
-                println!("{address}");
+                println!("{address:?}");
             }
         },
         Command::QRData(qr_command) => match qr_command.command {
