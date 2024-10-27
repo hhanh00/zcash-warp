@@ -8,7 +8,7 @@ use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    data::fb::RecipientT,
+    data::fb::{RecipientT, UnconfirmedTxT},
     db::{
         account::get_account_info,
         notes::{list_received_notes, list_utxos},
@@ -356,6 +356,7 @@ impl PaymentBuilder {
             tx_notes,
             tx_outputs,
             change,
+            sum_outs,
         };
 
         tracing::debug!("tx {:?}", transaction);
@@ -383,6 +384,12 @@ impl PaymentBuilder {
         }
         tracing::debug!("{:?}", utx.tx_outputs);
 
+        let tx = UnconfirmedTxT {
+            account: self.account,
+            txid: None,
+            amount: -(utx.sum_outs as i64),
+            expiration: 0,
+        };
         let utx = UnsignedTransaction {
             account: self.account,
             account_name: self.ai.name.clone(),
@@ -398,6 +405,7 @@ impl PaymentBuilder {
             tx_notes: utx.tx_notes,
             tx_outputs: utx.tx_outputs,
             fees: self.fee_manager,
+            tx,
             redirect,
         };
 

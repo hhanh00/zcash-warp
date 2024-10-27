@@ -39,10 +39,6 @@ use crate::{
     Hash,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CResult},
-};
 use warp_macros::c_export;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

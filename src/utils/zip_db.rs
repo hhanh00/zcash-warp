@@ -14,12 +14,6 @@ use crate::data::fb::{AGEKeysT, ZipDbConfig, ZipDbConfigT};
 use crate::fb_unwrap;
 use rusqlite::{backup::Backup, Connection};
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, map_result_bytes, CParam, CResult},
-};
-use flatbuffers::FlatBufferBuilder;
-use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 #[c_export]

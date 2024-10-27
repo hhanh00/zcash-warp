@@ -7,13 +7,7 @@ use zcash_client_backend::zip321::{Payment, TransactionRequest};
 use zcash_protocol::memo::Memo;
 use zcash_protocol::{memo::MemoBytes, value::Zatoshis};
 
-use crate::{
-    coin::COINS,
-    data::fb::{PaymentRequest, PaymentRequestT, RecipientT},
-    ffi::{map_result, map_result_bytes, map_result_string, CParam, CResult},
-};
-use flatbuffers::FlatBufferBuilder;
-use std::ffi::{c_char, CStr};
+use crate::data::fb::{PaymentRequest, PaymentRequestT, RecipientT};
 use warp_macros::c_export;
 
 use super::ua::{decode_address, filter_address};
@@ -48,8 +42,13 @@ pub fn make_payment_uri(network: &Network, payment: &PaymentRequestT) -> Result<
 }
 
 #[c_export]
-pub fn parse_payment_uri(uri: &str, height: u32, expiration: u32) -> Result<PaymentRequestT> {
-    let treq = TransactionRequest::from_uri(uri)?;
+pub fn parse_payment_uri(
+    #[allow(unused_variables)] network: &Network,
+    uri: &str,
+    height: u32,
+    expiration: u32,
+) -> Result<PaymentRequestT> {
+    let treq = TransactionRequest::from_uri(uri)?; // this should include network
     let recipients = treq
         .payments()
         .iter()
@@ -94,7 +93,7 @@ pub fn parse_payment_uri(uri: &str, height: u32, expiration: u32) -> Result<Paym
 pub fn is_valid_address_or_uri(network: &Network, s: &str) -> Result<u8> {
     let res = if decode_address(network, s).is_ok() {
         1
-    } else if parse_payment_uri(s, 0, 0).is_ok() {
+    } else if parse_payment_uri(network, s, 0, 0).is_ok() {
         2
     } else {
         0

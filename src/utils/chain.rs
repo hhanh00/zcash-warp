@@ -13,10 +13,6 @@ use crate::{
     Client,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CResult},
-};
 use warp_macros::c_export;
 
 #[c_export]

@@ -9,11 +9,6 @@ use crate::{
     txdetails::analyze_raw_transaction,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result_bytes, CResult},
-};
-use flatbuffers::FlatBufferBuilder;
 use warp_macros::c_export;
 
 #[c_export]

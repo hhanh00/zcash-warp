@@ -29,11 +29,6 @@ use crate::{
     utils::keys::find_address_index,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CParam, CResult},
-};
-use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 use super::account::get_account_info;

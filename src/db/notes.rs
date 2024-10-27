@@ -10,11 +10,6 @@ use crate::{
 use anyhow::{Error, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, map_result_bytes, CResult},
-};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
 
 use super::tx::{add_tx_value, store_tx};
@@ -146,7 +141,7 @@ pub fn list_received_notes(
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
         FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
         AND orchard = ?2 AND (spent IS NULL OR spent > ?1) AND n.account = ?3 AND NOT excluded
-        AND expiration IS NULL
+        AND n.expiration IS NULL
         ORDER BY n.value DESC")?;
     let rows = s.query_map(params![height, orchard, account], select_note)?;
     let notes = rows.collect::<Result<Vec<_>, _>>()?;
@@ -154,12 +149,30 @@ pub fn list_received_notes(
 }
 
 pub fn mark_shielded_spent(connection: &Transaction, id_spent: &IdSpent<Hash>) -> Result<()> {
+    let mut s = connection.prepare(
+        "SELECT n.id_note FROM notes n
+        JOIN txs t
+        WHERE n.nf = ?2 AND n.account = ?1
+        AND t.txid = ?3 AND t.account = ?1
+        AND t.height IS NOT NULL",
+    )?;
+    let rows = s.query_map(
+        params![id_spent.account, &id_spent.note_ref, &id_spent.txid],
+        |r| r.get::<_, u32>(0),
+    )?;
+    for r in rows {
+        let id_note = r?;
+        tracing::info!(">> mark_shielded_spent {id_note}");
+    }
+
+    tracing::info!("---");
     let mut s = connection.prepare_cached(
         "INSERT INTO note_spends(id_note, account, height, id_tx)
         SELECT n.id_note, ?1, ?2, t.id_tx FROM notes n
         JOIN txs t
         WHERE n.nf = ?3 AND n.account = ?1
         AND t.txid = ?4 AND t.account = ?1
+        ON CONFLICT DO NOTHING
         RETURNING id_note",
     )?;
     let id_note = s.query_row(
@@ -171,6 +184,7 @@ pub fn mark_shielded_spent(connection: &Transaction, id_spent: &IdSpent<Hash>) -
         ],
         |r| r.get::<_, u32>(0),
     )?;
+    tracing::info!("+mark_shielded_spent {id_note}");
     let mut s = connection
         .prepare_cached("UPDATE notes SET spent = ?2, expiration = NULL WHERE id_note = ?1")?;
     s.execute(params![id_note, id_spent.height])?;
@@ -234,6 +248,11 @@ pub fn recover_expired_spends(connection: &Connection, height: u32) -> Result<()
         "UPDATE notes SET expiration = NULL WHERE expiration < ?1",
         [height],
     )?;
+    connection.execute(
+        "UPDATE utxos SET expiration = NULL WHERE expiration < ?1",
+        [height],
+    )?;
+    connection.execute("DELETE FROM txs WHERE expiration < ?1", [height])?;
     connection.execute(
         "UPDATE utxos SET expiration = NULL WHERE expiration < ?1",
         [height],
@@ -372,7 +391,7 @@ pub fn list_utxos(
             AND s.external = u.external
             AND s.addr_index = u.addr_index
         WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
-        AND expiration IS NULL
+        AND u.expiration IS NULL
         AND u.account = ?2 ORDER BY u.height DESC"),
     )?;
     let rows = s.query_map(params![height, account], select_utxo)?;
@@ -449,7 +468,7 @@ pub fn get_unspent_notes(
     let mut s = connection.prepare(
         "SELECT n.id_note, n.height, t.timestamp, n.value, n.orchard, n.excluded
         FROM notes n JOIN txs t ON n.tx = t.id_tx
-        WHERE n.account = ?1 AND (spent IS NULL OR spent > ?2)
+        WHERE n.account = ?1 AND (spent IS NULL OR spent > ?2) AND n.expiration IS NULL
         ORDER BY n.height DESC",
     )?;
     let rows = s.query_map(params![account, bc_height], |r| {

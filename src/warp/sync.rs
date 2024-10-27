@@ -56,12 +56,6 @@ use zip::unstable::{LittleEndianReadExt, LittleEndianWriteExt};
 
 use super::Witness;
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CResult},
-};
-use std::ffi::{c_char, CStr};
-
 use warp_macros::c_export;
 
 pub mod builder;

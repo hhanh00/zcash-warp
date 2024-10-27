@@ -13,17 +13,14 @@ use zcash_protocol::consensus::{BlockHeight, BranchId};
 use crate::{
     coin::CoinDef,
     data::fb::UnconfirmedTxT,
-    db::mempool::{clear_unconfirmed_tx, store_unconfirmed_tx},
+    db::tx::store_unconfirmed_tx,
     fb_unwrap,
     lwd::rpc::{Empty, RawTransaction},
     network::Network,
     txdetails::analyze_raw_transaction,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CResult},
-};
+use crate::coin::COINS;
 use warp_macros::c_export;
 
 #[derive(Clone, Debug)]
@@ -42,7 +39,6 @@ impl Mempool {
             let mut client = coin.connect_lwd()?;
             let connection = coin.connection()?;
             'outer: loop {
-                clear_unconfirmed_tx(&connection)?;
                 tracing::info!("mempool open");
                 let mut mempool = client
                     .get_mempool_stream(Request::new(Empty {}))
@@ -76,8 +72,8 @@ impl Mempool {
                                 let txv = compute_tx_value(&coin, &coin.network, &connection, account, &tx).unwrap();
                                 tracing::info!("{:?}", txv);
                                 let txid = fb_unwrap!(txv.txid).clone();
-                                store_unconfirmed_tx(&connection, account,
-                                    &txid.try_into().unwrap(), txv.amount)?;
+                                let tx = UnconfirmedTxT { account, txid: Some(txid), amount: txv.amount, expiration: 0 };
+                                store_unconfirmed_tx(&connection, &tx)?;
                             }
                             else {
                                 break;
@@ -87,7 +83,6 @@ impl Mempool {
                 }
                 tracing::info!("mempool close");
                 tracing::info!("Sleeping before new block");
-                clear_unconfirmed_tx(&connection)?;
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
             Ok::<_, anyhow::Error>(())
@@ -112,6 +107,7 @@ fn compute_tx_value(
         account,
         txid: Some(txd.txid.to_vec()),
         amount: txd.value,
+        expiration: 0,
     })
 }
 

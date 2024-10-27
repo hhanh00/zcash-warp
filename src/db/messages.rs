@@ -8,11 +8,6 @@ use crate::{
     txdetails::TransactionDetails,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, map_result_bytes, CResult},
-};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
 
 use super::contacts::address_to_bytes;

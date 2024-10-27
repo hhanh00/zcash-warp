@@ -8,28 +8,22 @@ use crate::{data::fb::BackupT, db::account::get_account_info, types::PoolMask};
 
 use crate::{
     coin::COINS,
-    ffi::{map_result, map_result_bytes, map_result_string, CResult},
+    ffi::{map_result, CResult},
 };
-use flatbuffers::FlatBufferBuilder;
 use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
-#[no_mangle]
-pub extern "C" fn c_check_db_password(path: *mut c_char, password: *mut c_char) -> CResult<u8> {
-    let res = || {
-        let path = unsafe { CStr::from_ptr(path).to_string_lossy() };
-        let password = unsafe { CStr::from_ptr(password).to_string_lossy() };
-        let connection = Connection::open(&*path)?;
-        let _ = connection
-            .query_row(&format!("PRAGMA key = '{}'", password), [], |_| Ok(()))
-            .optional();
-        let c = connection.query_row("SELECT COUNT(*) FROM sqlite_master", [], |r| {
-            r.get::<_, u32>(0)
-        });
-        let r = if c.is_ok() { 1 } else { 0 };
-        Ok::<_, anyhow::Error>(r)
-    };
-    map_result(res())
+#[c_export]
+pub fn check_db_password(path: &str, password: &str) -> Result<u8> {
+    let connection = Connection::open(path)?;
+    let _ = connection
+        .query_row(&format!("PRAGMA key = '{}'", password), [], |_| Ok(()))
+        .optional();
+    let c = connection.query_row("SELECT COUNT(*) FROM sqlite_master", [], |r| {
+        r.get::<_, u32>(0)
+    });
+    let r = if c.is_ok() { 1 } else { 0 };
+    Ok(r)
 }
 
 #[c_export]

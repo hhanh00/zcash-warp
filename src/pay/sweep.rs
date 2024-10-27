@@ -15,10 +15,6 @@ use rusqlite::Connection;
 use tracing::Level;
 use zcash_client_backend::encoding::AddressCodec as _;
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CResult},
-};
 use warp_macros::c_export;
 
 #[c_export]

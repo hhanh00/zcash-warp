@@ -5,14 +5,10 @@ use anyhow::Result;
 use rusqlite::{params, Connection};
 use zcash_keys::address::Address as RecipientAddress;
 
-use crate::coin::COINS;
-use crate::ffi::{map_result, map_result_bytes, CParam, CResult};
 use crate::{
     data::fb::{ContactCard, ContactCardT},
     types::Contact,
 };
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 #[c_export]

@@ -2,11 +2,6 @@ use crate::{data::fb::TransactionInfoT, db::tx::list_txs};
 use anyhow::Result;
 use rusqlite::Connection;
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result_bytes, CResult},
-};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
 
 #[c_export]

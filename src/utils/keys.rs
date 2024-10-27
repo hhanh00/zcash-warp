@@ -9,17 +9,12 @@ use zcash_protocol::consensus::NetworkConstants;
 use zip32::DiversifierIndex;
 
 use crate::{
-    coin::COINS,
-    ffi::{map_result_bytes, CResult},
-};
-use crate::{
     data::fb::ZIP32KeysT,
     db::account::get_account_info,
     keys::{export_sk_bip38, AccountKeys},
     network::Network,
     types::TransparentAccountInfo,
 };
-use flatbuffers::FlatBufferBuilder;
 use warp_macros::c_export;
 
 #[c_export]

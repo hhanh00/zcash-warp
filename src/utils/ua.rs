@@ -10,12 +10,6 @@ use zcash_primitives::legacy::TransparentAddress;
 
 use crate::{data::fb::UAReceiversT, types::PoolMask};
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result_bytes, map_result_string, CResult},
-};
-use flatbuffers::FlatBufferBuilder;
-use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 pub fn split_address(

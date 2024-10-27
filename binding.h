@@ -154,13 +154,19 @@ struct CResult_u8 c_reverse_note_exclusion(uint8_t coin, uint32_t account);
 
 struct CResult______u8 c_get_tx_details(uint8_t coin, struct CParam txid);
 
-struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(uint8_t coin);
+struct CResult_u8 c_store_swap(uint8_t coin, uint32_t account, struct CParam swap);
+
+struct CResult______u8 c_list_swaps(uint8_t coin, uint32_t account);
+
+struct CResult_u8 c_clear_swap_history(uint8_t coin, uint32_t account);
+
+struct CResult_____c_char c_generate_random_mnemonic_phrase_os_rng(void);
 
 struct CResult_u32 c_get_last_height(uint8_t coin);
 
 struct CResult_u64 c_ping(uint8_t coin, char *lwd_url);
 
-struct CResult_u8 c_init_sapling_prover(uint8_t coin, struct CParam spend, struct CParam output);
+struct CResult_u8 c_init_sapling_prover(struct CParam spend, struct CParam output);
 
 struct CResult_u8 c_scan_transparent_addresses(uint8_t coin,
                                                uint32_t account,
@@ -183,9 +189,9 @@ struct CResult_u32 c_get_time_by_height(uint8_t coin, uint32_t height);
 
 struct CResult_u8 c_reset_chain(uint8_t coin, uint32_t height);
 
-struct CResult______u8 c_split(uint8_t coin, struct CParam data, uint32_t threshold);
+struct CResult______u8 c_split(struct CParam data, uint32_t threshold);
 
-struct CResult______u8 c_merge(uint8_t coin, struct CParam parts);
+struct CResult______u8 c_merge(struct CParam parts);
 
 struct CResult_u8 c_check_db_password(char *path, char *password);
 
@@ -202,7 +208,7 @@ struct CResult_u8 c_set_db_path_password(uint8_t coin, char *path, char *passwor
 
 uint32_t c_schema_version(void);
 
-struct CResult_u8 c_create_db(uint8_t coin, char *path, char *password, char *version);
+struct CResult_u8 c_create_db(char *path, char *password, char *version);
 
 struct CResult______u8 c_derive_zip32_keys(uint8_t coin,
                                            uint32_t account,
@@ -255,14 +261,13 @@ struct CResult______u8 c_parse_payment_uri(uint8_t coin,
 
 struct CResult_u8 c_is_valid_address_or_uri(uint8_t coin, char *s);
 
-struct CResult_u8 c_encrypt_zip_database_files(uint8_t coin, struct CParam zip_db_config);
+struct CResult_u8 c_encrypt_zip_database_files(struct CParam zip_db_config);
 
-struct CResult_u8 c_decrypt_zip_database_files(uint8_t coin,
-                                               char *file_path,
+struct CResult_u8 c_decrypt_zip_database_files(char *file_path,
                                                char *target_directory,
                                                char *secret_key);
 
-struct CResult______u8 c_generate_zip_database_keys(uint8_t coin);
+struct CResult______u8 c_generate_zip_database_keys(void);
 
 struct CResult_u8 c_mempool_run(uint8_t coin);
 

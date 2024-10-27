@@ -1,10 +1,5 @@
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CResult},
-};
 use anyhow::Result;
 use rusqlite::Connection;
-use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 pub mod account;
@@ -14,6 +9,7 @@ pub mod contacts;
 pub mod mempool;
 pub mod messages;
 pub mod notes;
+pub mod swap;
 pub mod tx;
 pub mod witnesses;
 
@@ -96,22 +92,13 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         id_tx INTEGER PRIMARY KEY,
         account INTEGER NOT NULL,
         txid BLOB NOT NULL,
-        height INTEGER NOT NULL,
-        timestamp INTEGER NOT NULL,
+        height INTEGER,
+        timestamp INTEGER,
         value INTEGER NOT NULL,
         address TEXT,
         receiver BLOB,
         memo TEXT,
-        UNIQUE (account, txid))",
-        [],
-    )?;
-
-    connection.execute(
-        "CREATE TABLE IF NOT EXISTS unconfirmed_txs(
-        id_utx INTEGER PRIMARY KEY,
-        account INTEGER NOT NULL,
-        txid BLOB NOT NULL,
-        value INTEGER NOT NULL,
+        expiration INTEGER,
         UNIQUE (account, txid))",
         [],
     )?;
@@ -240,6 +227,25 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         "CREATE TABLE IF NOT EXISTS blck_times(
         height INTEGER PRIMARY KEY,
         timestamp INTEGER NOT NULL)",
+        [],
+    )?;
+
+    connection.execute(
+        "CREATE TABLE IF NOT EXISTS swaps(
+            id_swap INTEGER NOT NULL PRIMARY KEY,
+            account INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            provider_id TEXT NOT NULL,
+            timestamp INTEGER,
+            from_currency TEXT NOT NULL,
+            from_amount TEXT NOT NULL,
+            from_address TEXT NOT NULL,
+            from_image TEXT NOT NULL,
+            to_currency TEXT NOT NULL,
+            to_amount TEXT NOT NULL,
+            to_address TEXT NOT NULL,
+            to_image TEXT NOT NULL
+        )",
         [],
     )?;
 

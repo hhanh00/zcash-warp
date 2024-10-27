@@ -3,12 +3,6 @@ use raptorq::{Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation};
 
 use crate::data::fb::{PacketT, Packets, PacketsT};
 use crate::fb_unwrap;
-use crate::ffi::CParam;
-use crate::{
-    coin::COINS,
-    ffi::{map_result_bytes, CResult},
-};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
 
 const QR_DATA_SIZE: u16 = 256;

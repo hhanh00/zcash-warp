@@ -1,5 +1,5 @@
 use crate::{
-    data::fb::TransactionInfoExtendedT,
+    data::fb::{TransactionInfoExtendedT, UnconfirmedTxT},
     network::Network,
     txdetails::TransactionDetails,
     warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate},
@@ -8,11 +8,6 @@ use crate::{
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result_bytes, CParam, CResult},
-};
-use flatbuffers::FlatBufferBuilder;
 use warp_macros::c_export;
 
 use super::contacts::address_to_bytes;
@@ -50,8 +45,8 @@ pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedRec
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, Vec<u8>>(1)?,
-            r.get::<_, u32>(2)?,
-            r.get::<_, u32>(3)?,
+            r.get::<_, Option<u32>>(2)?,
+            r.get::<_, Option<u32>>(3)?,
             r.get::<_, i64>(4)?,
             r.get::<_, Option<String>>(5)?,
             r.get::<_, Option<String>>(6)?,
@@ -64,9 +59,9 @@ pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedRec
         let rtx = ReceivedTx {
             id: id_tx,
             account,
-            height,
+            height: height.unwrap_or_default(),
             txid: txid.try_into().unwrap(),
-            timestamp,
+            timestamp: timestamp.unwrap_or_default(),
             value,
             ivtx: 0,
         };
@@ -139,27 +134,44 @@ pub fn get_tx_details(
 }
 
 pub fn store_tx(connection: &Transaction, tx: &ReceivedTx) -> Result<()> {
+    // Reset value if tx is confirmed
     let mut s_tx = connection.prepare_cached(
         "INSERT INTO txs
         (account, txid, height, timestamp, value)
         VAlUES (?1, ?2, ?3, ?4, 0)
-        ON CONFLICT DO NOTHING",
+        ON CONFLICT DO UPDATE SET
+        height = excluded.height, timestamp = excluded.timestamp,
+        value = IIF(height IS NULL, 0, value)",
     )?;
     s_tx.execute(params![tx.account, tx.txid, tx.height, tx.timestamp,])?;
     Ok(())
 }
 
-pub fn add_tx_value(connection: &Transaction, tx_value: &TxValueUpdate) -> Result<()> {
+pub fn store_unconfirmed_tx(connection: &Connection, tx: &UnconfirmedTxT) -> Result<()> {
     let mut s_tx = connection.prepare_cached(
-        "INSERT INTO txs(account, txid, height, timestamp, value)
-        VALUES (?1, ?2, ?3, ?4, 0) ON CONFLICT DO NOTHING",
+        "INSERT INTO txs
+        (account, txid, value, expiration, timestamp)
+        VAlUES (?1, ?2, ?3, ?4, 0)
+        ON CONFLICT DO NOTHING",
     )?;
-    s_tx.execute(params![
-        tx_value.account,
-        tx_value.txid,
-        tx_value.height,
-        tx_value.timestamp
-    ])?;
+    s_tx.execute(params![tx.account, tx.txid, tx.amount, tx.expiration,])?;
+    Ok(())
+}
+
+pub fn add_tx_value(connection: &Transaction, tx_value: &TxValueUpdate) -> Result<()> {
+    let tx = ReceivedTx {
+        id: 0,
+        account: tx_value.account,
+        height: tx_value.height,
+        txid: tx_value.txid,
+        timestamp: tx_value.timestamp,
+        ivtx: 0,
+        value: 0,
+    };
+    store_tx(connection, &tx)?;
+    if tx_value.height == 16895 {
+        tracing::info!("{:?}", tx_value);
+    }
     let mut s_tx = connection
         .prepare_cached("UPDATE txs SET value = value + ?3 WHERE txid = ?1 AND account = ?2")?;
     s_tx.execute(params![tx_value.txid, tx_value.account, tx_value.value])?;
@@ -244,7 +256,7 @@ pub fn copy_block_times_from_tx(connection: &Connection) -> Result<()> {
     connection.execute(
         "INSERT INTO blck_times(height, timestamp)
     SELECT height, timestamp FROM txs
-    WHERE true ON CONFLICT DO NOTHING",
+    WHERE timestamp IS NOT NULL ON CONFLICT DO NOTHING",
         [],
     )?;
     Ok(())

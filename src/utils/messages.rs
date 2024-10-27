@@ -8,15 +8,7 @@ use crate::{
     fb_unwrap,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result_bytes, CResult},
-};
-use flatbuffers::FlatBufferBuilder;
-use std::{
-    ffi::{c_char, CStr},
-    str::FromStr as _,
-};
+use std::str::FromStr as _;
 use warp_macros::c_export;
 
 pub fn navigate_message(

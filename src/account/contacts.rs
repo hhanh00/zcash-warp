@@ -24,11 +24,6 @@ use crate::{
     warp::legacy::CommitmentTreeFrontier,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CResult},
-};
-use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 #[c_export]

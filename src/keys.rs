@@ -22,12 +22,7 @@ use zip32::{AccountId, DiversifierIndex};
 use crate::db::account_manager::parse_seed_phrase;
 use crate::types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result_string, CResult},
-    network::Network,
-};
-use std::ffi::c_char;
+use crate::network::Network;
 use std::str::FromStr;
 use warp_macros::c_export;
 

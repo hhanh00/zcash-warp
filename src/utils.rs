@@ -11,10 +11,7 @@ use tracing_subscriber::{
     EnvFilter, Layer, Registry,
 };
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CParam, CResult},
-};
+use crate::coin::COINS;
 use warp_macros::c_export;
 
 pub mod chain;

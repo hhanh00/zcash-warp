@@ -257,6 +257,7 @@ struct IdNote {
 }
 
 table TransactionBytes {
+  tx: UnconfirmedTx;
   notes: [IdNote];
   data: [uint8];
   redirect: string;
@@ -266,7 +267,27 @@ table UnconfirmedTx {
   account: uint32;
   txid: [uint8];
   amount: int64;
+  expiration: uint32;
 }
+
+table Swap {
+  provider: string;
+  provider_id: string;
+  timestamp: uint32;
+  from_currency: string;
+  from_amount: string;
+  from_address: string;
+  from_image: string;
+  to_currency: string;
+  to_amount: string;
+  to_address: string;
+  to_image: string;
+}
+
+table SwapList {
+  items: [Swap];
+}
+
 
 /* Lists
 Spendings

@@ -9,11 +9,6 @@ use crate::utils::chain::reset_chain;
 use crate::{data::fb::CheckpointT, warp::BlockHeader};
 use crate::{Client, Hash};
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, map_result_bytes, CResult},
-};
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
 use warp_macros::c_export;
 
 pub fn snap_to_checkpoint(connection: &Connection, height: u32) -> Result<CheckpointHeight> {

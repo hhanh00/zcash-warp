@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    data::fb::{IdNoteT, TransactionBytesT},
+    data::fb::{IdNoteT, TransactionBytesT, UnconfirmedTxT},
     db::{account::get_account_info, account_manager::get_account_by_name},
     keys::sk_to_address,
     types::TransparentAccountInfo,
@@ -40,11 +40,7 @@ use zcash_primitives::{
 };
 use zcash_proofs::prover::LocalTxProver;
 
-use crate::{
-    coin::COINS,
-    ffi::{map_result, CParam, CResult},
-    network::Network,
-};
+use crate::network::Network;
 use warp_macros::c_export;
 
 const DUST: u64 = 54;
@@ -333,13 +329,20 @@ impl UnsignedTransaction {
                 orchard_bundle,
             );
         let tx = tx_data.freeze().unwrap();
+        let txid = tx.txid().as_ref().clone();
 
         let mut tx_bytes = vec![];
         tx.write(&mut tx_bytes).unwrap();
 
+        let tx = UnconfirmedTxT {
+            txid: Some(txid.to_vec()),
+            expiration: expiration_height,
+            ..self.tx
+        };
         let tx_bytes = TransactionBytesT {
             notes: Some(id_notes),
             data: Some(tx_bytes),
+            tx: Some(Box::new(tx)),
             redirect: self.redirect.clone(),
         };
         Ok(tx_bytes)

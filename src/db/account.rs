@@ -11,19 +11,16 @@ use zcash_primitives::legacy::keys::{AccountPrivKey, AccountPubKey};
 use zcash_primitives::legacy::TransparentAddress;
 
 use crate::account::contacts::recipient_contains;
-use crate::coin::{CoinDef, COINS};
+use crate::coin::CoinDef;
 use crate::data::fb::{
     AccountNameListT, AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendingT,
     TransparentAddressT,
 };
 use crate::db::contacts::list_contacts;
-use crate::ffi::{map_result, map_result_bytes, CParam, CResult};
 use crate::keys::{export_sk_bip38, import_sk_bip38};
 use crate::network::Network;
 use crate::types::{AccountInfo, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 use crate::warp::TransparentSK;
-use flatbuffers::{FlatBufferBuilder, WIPOffset};
-use std::ffi::{c_char, CStr};
 use warp_macros::c_export;
 
 #[c_export]
