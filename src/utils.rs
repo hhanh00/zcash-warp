@@ -3,7 +3,7 @@ use crate::{
     data::fb::{Config, ConfigT},
     Hash,
 };
-use anyhow::Result;
+use anyhow::{Result, Context};
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt as _,
@@ -155,5 +155,19 @@ impl ConfigT {
         if other.regtest {
             self.regtest = other.regtest;
         }
+    }
+}
+
+/// Helper function that adds file and line context to an operation.
+pub trait ContextExt<T> {
+    fn with_file_line<F: FnOnce() -> S, S: std::fmt::Display>(self, message: F) -> Result<T>;
+}
+
+impl<T, E> ContextExt<T> for Result<T, E>
+where
+    E: std::error::Error + std::fmt::Debug + Send + Sync + 'static,
+{
+    fn with_file_line<F: FnOnce() -> S, S: std::fmt::Display>(self, message: F) -> Result<T> {
+        self.with_context(|| format!("{} at {}:{}", message(), file!(), line!()))
     }
 }

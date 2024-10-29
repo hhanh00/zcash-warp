@@ -23,6 +23,7 @@ use crate::{
     types::CheckpointHeight,
     warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2, UTXO},
     Client,
+    utils::ContextExt as _,
 };
 
 use warp_macros::c_export;
@@ -239,7 +240,8 @@ pub fn get_txin_coins(coin: &CoinDef, network: Network, ops: Vec<OutPoint>) -> R
                         index: 0,
                         hash: op.txid.to_vec(),
                     }))
-                    .await?
+                    .await
+                    .with_file_line(|| "get_transaction")?
                     .into_inner();
                 let data = &*tx.data;
                 let tx = Transaction::read(data, BranchId::Nu5)?;
@@ -271,7 +273,8 @@ pub async fn get_transaction(
             index: 0,
             hash: txid.to_vec(),
         }))
-        .await?
+        .await
+        .with_file_line(|| format!("txid {}", hex::encode(txid)))?
         .into_inner();
     let height = tx.height as u32;
     let tx = Transaction::read(

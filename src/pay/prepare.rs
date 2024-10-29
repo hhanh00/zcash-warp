@@ -356,6 +356,7 @@ impl PaymentBuilder {
             tx_notes,
             tx_outputs,
             change,
+            sum_ins,
             sum_outs,
         };
 
@@ -372,9 +373,15 @@ impl PaymentBuilder {
         tracing::debug!("{:?}", utx.tx_notes);
         let change = utx.change;
         if change < 0 {
-            let missing = Decimal::try_from(-change).unwrap();
-            let missing = missing / Dec!(100000000.0);
-            return Err(Error::NotEnoughFunds(missing));
+            fn to_decimal(amount: u64) -> Decimal {
+                let d = Decimal::try_from(amount).unwrap();
+                let d = d / Dec!(100000000.0);
+                d
+            }
+            return Err(Error::NotEnoughFunds(
+                to_decimal(utx.sum_outs),
+                to_decimal(utx.sum_ins),
+                to_decimal(-change as u64)));
         }
         if self.use_change {
             let change_output = utx.tx_outputs.last_mut().unwrap();

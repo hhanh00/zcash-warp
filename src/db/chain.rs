@@ -6,6 +6,7 @@ use crate::db::notes::update_account_balances;
 use crate::network::Network;
 use crate::types::CheckpointHeight;
 use crate::utils::chain::reset_chain;
+use crate::utils::ContextExt;
 use crate::{data::fb::CheckpointT, warp::BlockHeader};
 use crate::{Client, Hash};
 
@@ -32,7 +33,8 @@ pub fn get_block_header(connection: &Connection, height: u32) -> Result<BlockHea
                 r.get::<_, u32>(2)?,
             ))
         },
-    )?;
+    )
+    .with_file_line(|| format!("No height {height}"))?;
     Ok(BlockHeader {
         height,
         hash: hash.try_into().unwrap(),

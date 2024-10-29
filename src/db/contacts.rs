@@ -1,4 +1,4 @@
-use crate::fb_unwrap;
+use crate::{fb_unwrap, utils::ContextExt};
 use crate::network::Network;
 use crate::utils::ua::split_address;
 use anyhow::Result;
@@ -93,7 +93,8 @@ pub fn get_contact_card(connection: &Connection, id: u32) -> Result<ContactCardT
     let mut s = connection.prepare(
         "SELECT account, name, address,
         saved FROM contacts WHERE id_contact = ?1",
-    )?;
+    )
+    .with_file_line(|| format!("No contact {id}"))?;
     let (account, name, address, saved) = s.query_row([id], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -159,7 +160,8 @@ pub fn upsert_contact_receivers(
         "SELECT account FROM contacts WHERE id_contact = ?1",
         [id],
         |r| r.get::<_, u32>(0),
-    )?;
+    )
+    .with_file_line(|| format!("No contact {id}"))?;
 
     let (t, s, o, _) = split_address(network, address)?;
     connection.execute("DELETE FROM contact_receivers WHERE contact = ?1", [id])?;

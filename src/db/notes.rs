@@ -149,23 +149,6 @@ pub fn list_received_notes(
 }
 
 pub fn mark_shielded_spent(connection: &Transaction, id_spent: &IdSpent<Hash>) -> Result<()> {
-    let mut s = connection.prepare(
-        "SELECT n.id_note FROM notes n
-        JOIN txs t
-        WHERE n.nf = ?2 AND n.account = ?1
-        AND t.txid = ?3 AND t.account = ?1
-        AND t.height IS NOT NULL",
-    )?;
-    let rows = s.query_map(
-        params![id_spent.account, &id_spent.note_ref, &id_spent.txid],
-        |r| r.get::<_, u32>(0),
-    )?;
-    for r in rows {
-        let id_note = r?;
-        tracing::info!(">> mark_shielded_spent {id_note}");
-    }
-
-    tracing::info!("---");
     let mut s = connection.prepare_cached(
         "INSERT INTO note_spends(id_note, account, height, id_tx)
         SELECT n.id_note, ?1, ?2, t.id_tx FROM notes n
@@ -184,7 +167,6 @@ pub fn mark_shielded_spent(connection: &Transaction, id_spent: &IdSpent<Hash>) -
         ],
         |r| r.get::<_, u32>(0),
     )?;
-    tracing::info!("+mark_shielded_spent {id_note}");
     let mut s = connection
         .prepare_cached("UPDATE notes SET spent = ?2, expiration = NULL WHERE id_note = ?1")?;
     s.execute(params![id_note, id_spent.height])?;

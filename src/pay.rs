@@ -31,14 +31,16 @@ pub mod sweep;
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("Not Enough Funds, {0} more needed")]
-    NotEnoughFunds(Decimal),
+    #[error("Not Enough Funds, {0} needed, {1} available, {2} more needed")]
+    NotEnoughFunds(Decimal, Decimal, Decimal),
     #[error("Amount/Fee {0} too high to be paid by the recipient")]
     FeesTooHighForRecipient(u64),
     #[error("Transaction has no recipient")]
     NoRecipient,
     #[error("Transaction has no change output")]
     NoChangeOutput,
+    #[error("No Funds available. Some funds may not have enough confirmations yet.")]
+    NoFunds,
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
@@ -171,6 +173,7 @@ pub struct PaymentBuilder {
 pub struct AdjustableUnsignedTransaction {
     pub tx_notes: Vec<TxInput>,
     pub tx_outputs: Vec<TxOutput>,
+    pub sum_ins: u64,
     pub sum_outs: u64,
     pub change: i64,
 }

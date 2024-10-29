@@ -20,6 +20,7 @@ use crate::db::contacts::list_contacts;
 use crate::keys::{export_sk_bip38, import_sk_bip38};
 use crate::network::Network;
 use crate::types::{AccountInfo, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
+use crate::utils::ContextExt;
 use crate::warp::TransparentSK;
 use warp_macros::c_export;
 
@@ -239,7 +240,8 @@ pub fn get_account_info(
             };
             Ok(ai)
         },
-    )?;
+    )
+    .with_file_line(|| format!("No account {account}"))?;
     Ok(ai)
 }
 

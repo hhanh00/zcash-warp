@@ -5,7 +5,7 @@ use crate::{
     data::fb::{ShieldedMessageT, UserMemoT},
     fb_unwrap,
     network::Network,
-    txdetails::TransactionDetails,
+    txdetails::TransactionDetails, utils::ContextExt,
 };
 
 use warp_macros::c_export;
@@ -88,7 +88,8 @@ pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT>
         ON m.txid = t.txid WHERE m.id_msg = ?1",
         [id],
         select_message,
-    )?;
+    )
+    .with_file_line(|| format!("No msg {id}"))?;
     let (
         id_msg,
         account,

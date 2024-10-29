@@ -1,9 +1,5 @@
 use crate::{
-    data::fb::{TransactionInfoExtendedT, UnconfirmedTxT},
-    network::Network,
-    txdetails::TransactionDetails,
-    warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate},
-    Hash,
+    data::fb::{TransactionInfoExtendedT, UnconfirmedTxT}, network::Network, txdetails::TransactionDetails, utils::ContextExt, warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate}, Hash
 };
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
@@ -85,16 +81,17 @@ pub fn get_tx(connection: &Connection, id_tx: u32) -> Result<ReceivedTx> {
             Ok((
                 r.get::<_, u32>(0)?,
                 r.get::<_, Vec<u8>>(1)?,
-                r.get::<_, u32>(2)?,
+                r.get::<_, Option<u32>>(2)?,
                 r.get::<_, u32>(3)?,
                 r.get::<_, i64>(4)?,
             ))
         },
-    )?;
+    )
+    .with_file_line(|| format!("No tx {id_tx}"))?;
     let tx = ReceivedTx {
         id: id_tx,
         account,
-        height,
+        height: height.unwrap_or_default(),
         txid: txid.try_into().unwrap(),
         timestamp,
         value,
@@ -113,7 +110,8 @@ pub fn get_tx_details_account(
         WHERE t.id_tx = ?1",
         [id_tx],
         |r| Ok((r.get::<_, u32>(0)?, r.get::<_, Vec<u8>>(1)?)),
-    )?;
+    )
+    .with_file_line(|| format!("No txdetails {id_tx}"))?;
     let tx: TransactionDetails = bincode::deserialize_from(&*tx_bin)?;
     Ok((account, tx))
 }
@@ -127,7 +125,8 @@ pub fn get_tx_details(
     let tx_bin =
         connection.query_row("SELECT data FROM txdetails WHERE txid = ?1", [txid], |r| {
             r.get::<_, Vec<u8>>(0)
-        })?;
+        })
+        .with_file_line(|| format!("No txdetails {}", hex::encode(txid)))?;
     let tx: TransactionDetails = bincode::deserialize_from(&*tx_bin)?;
     let etx = tx.to_transaction_info_ext(network);
     Ok(etx)
@@ -239,7 +238,7 @@ pub fn get_txid(connection: &Connection, id: u32) -> Result<(Vec<u8>, u32)> {
         "SELECT txid, timestamp FROM txs WHERE id_tx = ?1",
         [id],
         |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, u32>(1)?)),
-    )?;
+    ).with_file_line(|| format!("No tx {id}"))?;
     Ok((txid, timestamp))
 }
 

@@ -2,6 +2,8 @@ use anyhow::Result;
 use rusqlite::Connection;
 use warp_macros::c_export;
 
+use crate::utils::ContextExt;
+
 pub mod account;
 pub mod account_manager;
 pub mod chain;
@@ -23,7 +25,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         value BLOB NOT NULL,
         UNIQUE (account, name))",
         [],
-    )?;
+    ).with_file_line(|| "props")?;
     connection.execute(
         "CREATE TABLE IF NOT EXISTS accounts(
         id_account INTEGER PRIMARY KEY,
@@ -37,7 +39,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         saved BOOL NOT NULL,
         hidden BOOL NOT NULL)",
         [],
-    )?;
+    ).with_file_line(|| "accounts")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS t_accounts(
@@ -47,7 +49,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         vk BLOB,
         address TEXT NOT NULL)",
         [],
-    )?;
+    ).with_file_line(|| "t_accounts")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS t_addresses(
@@ -59,7 +61,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         address TEXT NOT NULL,
         UNIQUE (account, external, addr_index))",
         [],
-    )?;
+    ).with_file_line(|| "t_addresses")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS s_accounts(
@@ -68,7 +70,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         vk TEXT NOT NULL,
         address TEXT NOT NULL)",
         [],
-    )?;
+    ).with_file_line(|| "s_accounts")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS o_accounts(
@@ -76,7 +78,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         sk BLOB,
         vk BLOB NOT NULL)",
         [],
-    )?;
+    ).with_file_line(|| "o_accounts")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS blcks(
@@ -85,7 +87,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         prev_hash BLOB NOT NULL,
         timestamp INTEGER NOT NULL)",
         [],
-    )?;
+    ).with_file_line(|| "blcks")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS txs(
@@ -101,7 +103,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         expiration INTEGER,
         UNIQUE (account, txid))",
         [],
-    )?;
+    ).with_file_line(|| "txs")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS notes(
@@ -123,7 +125,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         UNIQUE (account, position, orchard),
         UNIQUE (account, nf))",
         [],
-    )?;
+    ).with_file_line(|| "notes")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS note_spends(
@@ -132,7 +134,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         height INTEGER NOT NULL,
         id_tx INTEGER NOT NULL)",
         [],
-    )?;
+    ).with_file_line(|| "note_spends")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS witnesses(
@@ -143,7 +145,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         witness BLOB NOT NULL,
         UNIQUE (account, note, height))",
         [],
-    )?;
+    ).with_file_line(|| "witnesses")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS utxos(
@@ -160,7 +162,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         expiration INTEGER,
         UNIQUE (account, txid, vout))",
         [],
-    )?;
+    ).with_file_line(|| "utxos")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS utxo_spends(
@@ -169,7 +171,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         height INTEGER NOT NULL,
         id_tx INTEGER NOT NULL)",
         [],
-    )?;
+    ).with_file_line(|| "utxo_spends")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS txdetails(
@@ -180,7 +182,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         data BLOB NOT NULL,
         UNIQUE (account, txid))",
         [],
-    )?;
+    ).with_file_line(|| "txdetails")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS msgs(
@@ -199,7 +201,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         read BOOL NOT NULL,
         UNIQUE (account, txid, nout))",
         [],
-    )?;
+    ).with_file_line(|| "msgs")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS contacts(
@@ -210,7 +212,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         saved BOOL NOT NULL,
         UNIQUE (account, name))",
         [],
-    )?;
+    ).with_file_line(|| "contacts")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS contact_receivers(
@@ -221,14 +223,14 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         address BLOB NOT NULL,
         UNIQUE (account, contact, pool))",
         [],
-    )?;
+    ).with_file_line(|| "contact_receivers")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS blck_times(
         height INTEGER PRIMARY KEY,
         timestamp INTEGER NOT NULL)",
         [],
-    )?;
+    ).with_file_line(|| "blck_times")?;
 
     connection.execute(
         "CREATE TABLE IF NOT EXISTS swaps(
@@ -247,7 +249,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
             to_image TEXT NOT NULL
         )",
         [],
-    )?;
+    ).with_file_line(|| "swaps")?;
 
     Ok(())
 }

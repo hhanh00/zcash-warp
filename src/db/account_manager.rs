@@ -26,7 +26,7 @@ use crate::{
     },
     network::Network,
     types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo},
-    utils::keys::find_address_index,
+    utils::{keys::find_address_index, ContextExt},
 };
 
 use warp_macros::c_export;
@@ -422,11 +422,13 @@ pub fn get_account_by_name(connection: &Connection, name: &str) -> Result<Option
 }
 
 pub fn get_account_seed(connection: &Connection, account: u32) -> Result<(Seed, u32)> {
-    let (phrase, aindex) = connection.query_row(
-        "SELECT seed, aindex FROM accounts WHERE id_account = ?1",
-        [account],
-        |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, u32>(1)?)),
-    )?;
+    let (phrase, aindex) = connection
+        .query_row(
+            "SELECT seed, aindex FROM accounts WHERE id_account = ?1",
+            [account],
+            |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, u32>(1)?)),
+        )
+        .with_file_line(|| format!("{account}"))?;
     let phrase = phrase.ok_or(anyhow::anyhow!("No seed"))?;
     let seed = parse_seed_phrase(&phrase)?;
     Ok((seed, aindex))
