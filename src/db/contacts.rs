@@ -1,6 +1,6 @@
-use crate::{fb_unwrap, utils::ContextExt};
 use crate::network::Network;
 use crate::utils::ua::split_address;
+use crate::{fb_unwrap, utils::ContextExt};
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use zcash_keys::address::Address as RecipientAddress;
@@ -90,11 +90,12 @@ pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Resul
 
 #[c_export]
 pub fn get_contact_card(connection: &Connection, id: u32) -> Result<ContactCardT> {
-    let mut s = connection.prepare(
-        "SELECT account, name, address,
+    let mut s = connection
+        .prepare(
+            "SELECT account, name, address,
         saved FROM contacts WHERE id_contact = ?1",
-    )
-    .with_file_line(|| format!("No contact {id}"))?;
+        )
+        .with_file_line(|| format!("No contact {id}"))?;
     let (account, name, address, saved) = s.query_row([id], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -156,12 +157,13 @@ pub fn upsert_contact_receivers(
     id: u32,
     address: &str,
 ) -> Result<()> {
-    let account = connection.query_row(
-        "SELECT account FROM contacts WHERE id_contact = ?1",
-        [id],
-        |r| r.get::<_, u32>(0),
-    )
-    .with_file_line(|| format!("No contact {id}"))?;
+    let account = connection
+        .query_row(
+            "SELECT account FROM contacts WHERE id_contact = ?1",
+            [id],
+            |r| r.get::<_, u32>(0),
+        )
+        .with_file_line(|| format!("No contact {id}"))?;
 
     let (t, s, o, _) = split_address(network, address)?;
     connection.execute("DELETE FROM contact_receivers WHERE contact = ?1", [id])?;

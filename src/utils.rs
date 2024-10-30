@@ -3,7 +3,7 @@ use crate::{
     data::fb::{Config, ConfigT},
     Hash,
 };
-use anyhow::{Result, Context};
+use anyhow::{Context, Result};
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},
     layer::SubscriberExt as _,

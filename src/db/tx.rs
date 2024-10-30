@@ -1,5 +1,10 @@
 use crate::{
-    data::fb::{TransactionInfoExtendedT, UnconfirmedTxT}, network::Network, txdetails::TransactionDetails, utils::ContextExt, warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate}, Hash
+    data::fb::TransactionInfoExtendedT,
+    network::Network,
+    txdetails::TransactionDetails,
+    utils::ContextExt,
+    warp::sync::{ExtendedReceivedTx, ReceivedTx, TxValueUpdate},
+    Hash,
 };
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
@@ -41,8 +46,8 @@ pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedRec
         Ok((
             r.get::<_, u32>(0)?,
             r.get::<_, Vec<u8>>(1)?,
-            r.get::<_, Option<u32>>(2)?,
-            r.get::<_, Option<u32>>(3)?,
+            r.get::<_, u32>(2)?,
+            r.get::<_, u32>(3)?,
             r.get::<_, i64>(4)?,
             r.get::<_, Option<String>>(5)?,
             r.get::<_, Option<String>>(6)?,
@@ -55,9 +60,9 @@ pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedRec
         let rtx = ReceivedTx {
             id: id_tx,
             account,
-            height: height.unwrap_or_default(),
+            height,
             txid: txid.try_into().unwrap(),
-            timestamp: timestamp.unwrap_or_default(),
+            timestamp,
             value,
             ivtx: 0,
         };
@@ -73,25 +78,26 @@ pub fn list_txs(connection: &Connection, account: u32) -> Result<Vec<ExtendedRec
 }
 
 pub fn get_tx(connection: &Connection, id_tx: u32) -> Result<ReceivedTx> {
-    let (account, txid, height, timestamp, value) = connection.query_row(
-        "SELECT account, txid, height, timestamp, value
+    let (account, txid, height, timestamp, value) = connection
+        .query_row(
+            "SELECT account, txid, height, timestamp, value
         FROM txs WHERE id_tx = ?1",
-        [id_tx],
-        |r| {
-            Ok((
-                r.get::<_, u32>(0)?,
-                r.get::<_, Vec<u8>>(1)?,
-                r.get::<_, Option<u32>>(2)?,
-                r.get::<_, u32>(3)?,
-                r.get::<_, i64>(4)?,
-            ))
-        },
-    )
-    .with_file_line(|| format!("No tx {id_tx}"))?;
+            [id_tx],
+            |r| {
+                Ok((
+                    r.get::<_, u32>(0)?,
+                    r.get::<_, Vec<u8>>(1)?,
+                    r.get::<_, u32>(2)?,
+                    r.get::<_, u32>(3)?,
+                    r.get::<_, i64>(4)?,
+                ))
+            },
+        )
+        .with_file_line(|| format!("No tx {id_tx}"))?;
     let tx = ReceivedTx {
         id: id_tx,
         account,
-        height: height.unwrap_or_default(),
+        height,
         txid: txid.try_into().unwrap(),
         timestamp,
         value,
@@ -104,14 +110,15 @@ pub fn get_tx_details_account(
     connection: &Connection,
     id_tx: u32,
 ) -> Result<(u32, TransactionDetails)> {
-    let (account, tx_bin) = connection.query_row(
-        "SELECT t.account, d.data FROM txs t
+    let (account, tx_bin) = connection
+        .query_row(
+            "SELECT t.account, d.data FROM txs t
         JOIN txdetails d ON t.id_tx = d.id_tx 
         WHERE t.id_tx = ?1",
-        [id_tx],
-        |r| Ok((r.get::<_, u32>(0)?, r.get::<_, Vec<u8>>(1)?)),
-    )
-    .with_file_line(|| format!("No txdetails {id_tx}"))?;
+            [id_tx],
+            |r| Ok((r.get::<_, u32>(0)?, r.get::<_, Vec<u8>>(1)?)),
+        )
+        .with_file_line(|| format!("No txdetails {id_tx}"))?;
     let tx: TransactionDetails = bincode::deserialize_from(&*tx_bin)?;
     Ok((account, tx))
 }
@@ -122,8 +129,8 @@ pub fn get_tx_details(
     connection: &Connection,
     txid: &[u8],
 ) -> Result<TransactionInfoExtendedT> {
-    let tx_bin =
-        connection.query_row("SELECT data FROM txdetails WHERE txid = ?1", [txid], |r| {
+    let tx_bin = connection
+        .query_row("SELECT data FROM txdetails WHERE txid = ?1", [txid], |r| {
             r.get::<_, Vec<u8>>(0)
         })
         .with_file_line(|| format!("No txdetails {}", hex::encode(txid)))?;
@@ -132,7 +139,7 @@ pub fn get_tx_details(
     Ok(etx)
 }
 
-pub fn store_tx(connection: &Transaction, tx: &ReceivedTx) -> Result<()> {
+pub fn store_tx(connection: &Transaction, tx: &ReceivedTx) -> Result<u32> {
     // Reset value if tx is confirmed
     let mut s_tx = connection.prepare_cached(
         "INSERT INTO txs
@@ -140,21 +147,14 @@ pub fn store_tx(connection: &Transaction, tx: &ReceivedTx) -> Result<()> {
         VAlUES (?1, ?2, ?3, ?4, 0)
         ON CONFLICT DO UPDATE SET
         height = excluded.height, timestamp = excluded.timestamp,
-        value = IIF(height IS NULL, 0, value)",
+        value = IIF(height IS NULL, 0, value)
+        RETURNING id_tx",
     )?;
-    s_tx.execute(params![tx.account, tx.txid, tx.height, tx.timestamp,])?;
-    Ok(())
-}
-
-pub fn store_unconfirmed_tx(connection: &Connection, tx: &UnconfirmedTxT) -> Result<()> {
-    let mut s_tx = connection.prepare_cached(
-        "INSERT INTO txs
-        (account, txid, value, expiration, timestamp)
-        VAlUES (?1, ?2, ?3, ?4, 0)
-        ON CONFLICT DO NOTHING",
+    let id = s_tx.query_row(
+        params![tx.account, tx.txid, tx.height, tx.timestamp,],
+        |r| r.get::<_, u32>(0),
     )?;
-    s_tx.execute(params![tx.account, tx.txid, tx.amount, tx.expiration,])?;
-    Ok(())
+    Ok(id)
 }
 
 pub fn add_tx_value(connection: &Transaction, tx_value: &TxValueUpdate) -> Result<()> {
@@ -168,9 +168,6 @@ pub fn add_tx_value(connection: &Transaction, tx_value: &TxValueUpdate) -> Resul
         value: 0,
     };
     store_tx(connection, &tx)?;
-    if tx_value.height == 16895 {
-        tracing::info!("{:?}", tx_value);
-    }
     let mut s_tx = connection
         .prepare_cached("UPDATE txs SET value = value + ?3 WHERE txid = ?1 AND account = ?2")?;
     s_tx.execute(params![tx_value.txid, tx_value.account, tx_value.value])?;
@@ -234,11 +231,13 @@ pub fn update_tx_values(connection: &Connection) -> Result<()> {
 }
 
 pub fn get_txid(connection: &Connection, id: u32) -> Result<(Vec<u8>, u32)> {
-    let (txid, timestamp) = connection.query_row(
-        "SELECT txid, timestamp FROM txs WHERE id_tx = ?1",
-        [id],
-        |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, u32>(1)?)),
-    ).with_file_line(|| format!("No tx {id}"))?;
+    let (txid, timestamp) = connection
+        .query_row(
+            "SELECT txid, timestamp FROM txs WHERE id_tx = ?1",
+            [id],
+            |r| Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, u32>(1)?)),
+        )
+        .with_file_line(|| format!("No tx {id}"))?;
     Ok((txid, timestamp))
 }
 
@@ -255,7 +254,7 @@ pub fn copy_block_times_from_tx(connection: &Connection) -> Result<()> {
     connection.execute(
         "INSERT INTO blck_times(height, timestamp)
     SELECT height, timestamp FROM txs
-    WHERE timestamp IS NOT NULL ON CONFLICT DO NOTHING",
+    WHERE TRUE ON CONFLICT DO NOTHING",
         [],
     )?;
     Ok(())

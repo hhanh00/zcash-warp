@@ -248,7 +248,6 @@ pub fn analyze_raw_transaction(
         if let Some(orchard) = ai.orchard.as_ref() {
             let ivk =
                 orchard::keys::PreparedIncomingViewingKey::new(&orchard.vk.to_ivk(Scope::External));
-            let ovk = &orchard.vk.to_ovk(Scope::External);
             for a in b.actions() {
                 let spend = get_note_by_nf(connection, account, &a.nullifier().to_bytes())?;
                 oins.push(ShieldedInput {
@@ -257,19 +256,8 @@ pub fn analyze_raw_transaction(
                 });
 
                 let domain = OrchardDomain::for_rho(&a.rho());
-                let fnote = try_note_decryption(&domain, &ivk, a)
-                    .map(|(n, a, m)| (n, a, m, true))
-                    .or_else(|| {
-                        try_output_recovery_with_ovk(
-                            &domain,
-                            ovk,
-                            a,
-                            a.cv_net(),
-                            &a.encrypted_note().out_ciphertext,
-                        )
-                        .map(|(n, a, m)| (n, a, m, false))
-                    })
-                    .map(|(n, addr, m, incoming)| FullPlainNote {
+                let fnote =
+                    try_note_decryption(&domain, &ivk, a).map(|(n, addr, m)| FullPlainNote {
                         note: PlainNote {
                             id: 0,
                             address: addr.to_raw_address_bytes(),
@@ -278,7 +266,7 @@ pub fn analyze_raw_transaction(
                             rho: Some(a.nullifier().to_bytes()),
                         },
                         memo: CompressedMemo(m.to_vec()),
-                        incoming,
+                        incoming: true,
                     });
                 let cmx = a.cmx();
                 let cmx = cmx.to_bytes();
@@ -352,7 +340,7 @@ pub fn analyze_raw_transaction(
         })
         .sum::<i64>();
     let value = (tout_value + sout_value + oout_value) - (tin_value + sin_value + oin_value);
-
+    // tracing::info!("{tin_value} {tout_value} {sin_value} {sout_value} {oin_value} {oout_value} = {value}");
     let tx = TransactionDetails {
         height,
         timestamp,

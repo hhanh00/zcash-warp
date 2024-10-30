@@ -11,9 +11,7 @@ use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::{
-        PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT, UnconfirmedTxT,
-    },
+    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT},
     fb_unwrap,
     network::Network,
     types::{AccountInfo, CheckpointHeight, PoolMask},
@@ -188,7 +186,6 @@ pub struct UnsignedTransaction {
     pub roots: [Hash; 2],
     pub edges: [AuthPath; 2],
     pub fees: FeeManager,
-    pub tx: UnconfirmedTxT,
     pub redirect: Option<String>,
 }
 

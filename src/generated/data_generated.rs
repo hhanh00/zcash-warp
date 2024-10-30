@@ -8639,10 +8639,9 @@ pub mod fb {
     }
 
     impl<'a> TransactionBytes<'a> {
-        pub const VT_TX: flatbuffers::VOffsetT = 4;
-        pub const VT_NOTES: flatbuffers::VOffsetT = 6;
-        pub const VT_DATA: flatbuffers::VOffsetT = 8;
-        pub const VT_REDIRECT: flatbuffers::VOffsetT = 10;
+        pub const VT_NOTES: flatbuffers::VOffsetT = 4;
+        pub const VT_DATA: flatbuffers::VOffsetT = 6;
+        pub const VT_REDIRECT: flatbuffers::VOffsetT = 8;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -8668,38 +8667,20 @@ pub mod fb {
             if let Some(x) = args.notes {
                 builder.add_notes(x);
             }
-            if let Some(x) = args.tx {
-                builder.add_tx(x);
-            }
             builder.finish()
         }
 
         pub fn unpack(&self) -> TransactionBytesT {
-            let tx = self.tx().map(|x| Box::new(x.unpack()));
             let notes = self.notes().map(|x| x.iter().map(|t| t.unpack()).collect());
             let data = self.data().map(|x| x.into_iter().collect());
             let redirect = self.redirect().map(|x| x.to_string());
             TransactionBytesT {
-                tx,
                 notes,
                 data,
                 redirect,
             }
         }
 
-        #[inline]
-        pub fn tx(&self) -> Option<UnconfirmedTx<'a>> {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<flatbuffers::ForwardsUOffset<UnconfirmedTx>>(
-                        TransactionBytes::VT_TX,
-                        None,
-                    )
-            }
-        }
         #[inline]
         pub fn notes(&self) -> Option<flatbuffers::Vector<'a, IdNote>> {
             // Safety:
@@ -8746,11 +8727,6 @@ pub mod fb {
         ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
             use self::flatbuffers::Verifiable;
             v.visit_table(pos)?
-                .visit_field::<flatbuffers::ForwardsUOffset<UnconfirmedTx>>(
-                    "tx",
-                    Self::VT_TX,
-                    false,
-                )?
                 .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, IdNote>>>(
                     "notes",
                     Self::VT_NOTES,
@@ -8771,7 +8747,6 @@ pub mod fb {
         }
     }
     pub struct TransactionBytesArgs<'a> {
-        pub tx: Option<flatbuffers::WIPOffset<UnconfirmedTx<'a>>>,
         pub notes: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, IdNote>>>,
         pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub redirect: Option<flatbuffers::WIPOffset<&'a str>>,
@@ -8780,7 +8755,6 @@ pub mod fb {
         #[inline]
         fn default() -> Self {
             TransactionBytesArgs {
-                tx: None,
                 notes: None,
                 data: None,
                 redirect: None,
@@ -8793,14 +8767,6 @@ pub mod fb {
         start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
     }
     impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> TransactionBytesBuilder<'a, 'b, A> {
-        #[inline]
-        pub fn add_tx(&mut self, tx: flatbuffers::WIPOffset<UnconfirmedTx<'b>>) {
-            self.fbb_
-                .push_slot_always::<flatbuffers::WIPOffset<UnconfirmedTx>>(
-                    TransactionBytes::VT_TX,
-                    tx,
-                );
-        }
         #[inline]
         pub fn add_notes(
             &mut self,
@@ -8841,7 +8807,6 @@ pub mod fb {
     impl core::fmt::Debug for TransactionBytes<'_> {
         fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             let mut ds = f.debug_struct("TransactionBytes");
-            ds.field("tx", &self.tx());
             ds.field("notes", &self.notes());
             ds.field("data", &self.data());
             ds.field("redirect", &self.redirect());
@@ -8851,7 +8816,6 @@ pub mod fb {
     #[non_exhaustive]
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
     pub struct TransactionBytesT {
-        pub tx: Option<Box<UnconfirmedTxT>>,
         pub notes: Option<Vec<IdNoteT>>,
         pub data: Option<Vec<u8>>,
         pub redirect: Option<String>,
@@ -8859,7 +8823,6 @@ pub mod fb {
     impl Default for TransactionBytesT {
         fn default() -> Self {
             Self {
-                tx: None,
                 notes: None,
                 data: None,
                 redirect: None,
@@ -8871,7 +8834,6 @@ pub mod fb {
             &self,
             _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
         ) -> flatbuffers::WIPOffset<TransactionBytes<'b>> {
-            let tx = self.tx.as_ref().map(|x| x.pack(_fbb));
             let notes = self.notes.as_ref().map(|x| {
                 let w: Vec<_> = x.iter().map(|t| t.pack()).collect();
                 _fbb.create_vector(&w)
@@ -8881,7 +8843,6 @@ pub mod fb {
             TransactionBytes::create(
                 _fbb,
                 &TransactionBytesArgs {
-                    tx,
                     notes,
                     data,
                     redirect,
@@ -8909,8 +8870,7 @@ pub mod fb {
     impl<'a> UnconfirmedTx<'a> {
         pub const VT_ACCOUNT: flatbuffers::VOffsetT = 4;
         pub const VT_TXID: flatbuffers::VOffsetT = 6;
-        pub const VT_AMOUNT: flatbuffers::VOffsetT = 8;
-        pub const VT_EXPIRATION: flatbuffers::VOffsetT = 10;
+        pub const VT_VALUE: flatbuffers::VOffsetT = 8;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -8927,8 +8887,7 @@ pub mod fb {
             args: &'args UnconfirmedTxArgs<'args>,
         ) -> flatbuffers::WIPOffset<UnconfirmedTx<'bldr>> {
             let mut builder = UnconfirmedTxBuilder::new(_fbb);
-            builder.add_amount(args.amount);
-            builder.add_expiration(args.expiration);
+            builder.add_value(args.value);
             if let Some(x) = args.txid {
                 builder.add_txid(x);
             }
@@ -8939,13 +8898,11 @@ pub mod fb {
         pub fn unpack(&self) -> UnconfirmedTxT {
             let account = self.account();
             let txid = self.txid().map(|x| x.into_iter().collect());
-            let amount = self.amount();
-            let expiration = self.expiration();
+            let value = self.value();
             UnconfirmedTxT {
                 account,
                 txid,
-                amount,
-                expiration,
+                value,
             }
         }
 
@@ -8974,24 +8931,13 @@ pub mod fb {
             }
         }
         #[inline]
-        pub fn amount(&self) -> i64 {
+        pub fn value(&self) -> i64 {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab
-                    .get::<i64>(UnconfirmedTx::VT_AMOUNT, Some(0))
-                    .unwrap()
-            }
-        }
-        #[inline]
-        pub fn expiration(&self) -> u32 {
-            // Safety:
-            // Created from valid Table for this object
-            // which contains a valid value in this slot
-            unsafe {
-                self._tab
-                    .get::<u32>(UnconfirmedTx::VT_EXPIRATION, Some(0))
+                    .get::<i64>(UnconfirmedTx::VT_VALUE, Some(0))
                     .unwrap()
             }
         }
@@ -9011,8 +8957,7 @@ pub mod fb {
                     Self::VT_TXID,
                     false,
                 )?
-                .visit_field::<i64>("amount", Self::VT_AMOUNT, false)?
-                .visit_field::<u32>("expiration", Self::VT_EXPIRATION, false)?
+                .visit_field::<i64>("value", Self::VT_VALUE, false)?
                 .finish();
             Ok(())
         }
@@ -9020,8 +8965,7 @@ pub mod fb {
     pub struct UnconfirmedTxArgs<'a> {
         pub account: u32,
         pub txid: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
-        pub amount: i64,
-        pub expiration: u32,
+        pub value: i64,
     }
     impl<'a> Default for UnconfirmedTxArgs<'a> {
         #[inline]
@@ -9029,8 +8973,7 @@ pub mod fb {
             UnconfirmedTxArgs {
                 account: 0,
                 txid: None,
-                amount: 0,
-                expiration: 0,
+                value: 0,
             }
         }
     }
@@ -9051,14 +8994,9 @@ pub mod fb {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(UnconfirmedTx::VT_TXID, txid);
         }
         #[inline]
-        pub fn add_amount(&mut self, amount: i64) {
+        pub fn add_value(&mut self, value: i64) {
             self.fbb_
-                .push_slot::<i64>(UnconfirmedTx::VT_AMOUNT, amount, 0);
-        }
-        #[inline]
-        pub fn add_expiration(&mut self, expiration: u32) {
-            self.fbb_
-                .push_slot::<u32>(UnconfirmedTx::VT_EXPIRATION, expiration, 0);
+                .push_slot::<i64>(UnconfirmedTx::VT_VALUE, value, 0);
         }
         #[inline]
         pub fn new(
@@ -9082,8 +9020,7 @@ pub mod fb {
             let mut ds = f.debug_struct("UnconfirmedTx");
             ds.field("account", &self.account());
             ds.field("txid", &self.txid());
-            ds.field("amount", &self.amount());
-            ds.field("expiration", &self.expiration());
+            ds.field("value", &self.value());
             ds.finish()
         }
     }
@@ -9092,16 +9029,14 @@ pub mod fb {
     pub struct UnconfirmedTxT {
         pub account: u32,
         pub txid: Option<Vec<u8>>,
-        pub amount: i64,
-        pub expiration: u32,
+        pub value: i64,
     }
     impl Default for UnconfirmedTxT {
         fn default() -> Self {
             Self {
                 account: 0,
                 txid: None,
-                amount: 0,
-                expiration: 0,
+                value: 0,
             }
         }
     }
@@ -9112,15 +9047,13 @@ pub mod fb {
         ) -> flatbuffers::WIPOffset<UnconfirmedTx<'b>> {
             let account = self.account;
             let txid = self.txid.as_ref().map(|x| _fbb.create_vector(x));
-            let amount = self.amount;
-            let expiration = self.expiration;
+            let value = self.value;
             UnconfirmedTx::create(
                 _fbb,
                 &UnconfirmedTxArgs {
                     account,
                     txid,
-                    amount,
-                    expiration,
+                    value,
                 },
             )
         }

@@ -5,7 +5,6 @@ use rpc::{
     BlockId, BlockRange, CompactBlock, Empty, GetAddressUtxosArg, RawTransaction,
     TransparentAddressBlockFilter, TreeState, TxFilter,
 };
-use rusqlite::Connection;
 use tokio::runtime::Handle;
 use tonic::{Request, Streaming};
 use zcash_client_backend::encoding::AddressCodec as _;
@@ -18,12 +17,11 @@ use zcash_primitives::{
 use crate::{
     coin::{connect_lwd, CoinDef},
     data::fb::TransactionBytesT,
-    db::tx::store_unconfirmed_tx,
     network::Network,
     types::CheckpointHeight,
+    utils::ContextExt as _,
     warp::{legacy::CommitmentTreeFrontier, OutPoint, TransparentTx, TxOut2, UTXO},
     Client,
-    utils::ContextExt as _,
 };
 
 use warp_macros::c_export;
@@ -207,12 +205,7 @@ pub async fn get_transparent(
     Ok(ttxs)
 }
 
-pub async fn broadcast(
-    connection: &Connection,
-    client: &mut Client,
-    height: u32,
-    tx: &TransactionBytesT,
-) -> Result<String> {
+pub async fn broadcast(client: &mut Client, height: u32, tx: &TransactionBytesT) -> Result<String> {
     let bb = tx.data.as_ref();
     let res = client
         .send_transaction(Request::new(RawTransaction {
@@ -221,10 +214,6 @@ pub async fn broadcast(
         }))
         .await?
         .into_inner();
-    if let Some(utx) = tx.tx.as_ref() {
-        tracing::info!("store_unconfirmed_tx");
-        store_unconfirmed_tx(connection, &utx)?;
-    }
     Ok(res.error_message)
 }
 

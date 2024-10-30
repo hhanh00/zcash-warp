@@ -139,8 +139,9 @@ pub fn get_account_info(
         |r| r.get::<_, Option<u32>>(0),
     )?;
 
-    let ai = connection.query_row(
-        "SELECT a.name, a.position, a.seed, a.aindex, a.dindex, a.birth,
+    let ai = connection
+        .query_row(
+            "SELECT a.name, a.position, a.seed, a.aindex, a.dindex, a.birth,
         t.xsk as txsk, t.sk as tsk, t.vk as tvk, t.address as taddr,
         s.sk as ssk, s.vk as svk, s.address as saddr,
         o.sk as osk, o.vk as ovk,
@@ -150,98 +151,99 @@ pub fn get_account_info(
         LEFT JOIN s_accounts s ON s.account = a.id_account
         LEFT JOIN o_accounts o ON o.account = a.id_account
         WHERE id_account = ?1",
-        [account],
-        |r| {
-            let name = r.get::<_, String>("name")?;
-            let position = r.get::<_, u32>("position")?;
-            let seed = r.get::<_, Option<String>>("seed")?;
-            let aindex = r.get::<_, u32>("aindex")?;
-            let dindex = r.get::<_, u32>("dindex")?;
-            let birth = r.get::<_, u32>("birth")?;
-            let saved = r.get::<_, Option<bool>>("saved")?;
+            [account],
+            |r| {
+                let name = r.get::<_, String>("name")?;
+                let position = r.get::<_, u32>("position")?;
+                let seed = r.get::<_, Option<String>>("seed")?;
+                let aindex = r.get::<_, u32>("aindex")?;
+                let dindex = r.get::<_, u32>("dindex")?;
+                let birth = r.get::<_, u32>("birth")?;
+                let saved = r.get::<_, Option<bool>>("saved")?;
 
-            let taddr = r.get::<_, Option<String>>("taddr")?;
-            let ti = match taddr {
-                None => None,
-                Some(taddr) => {
-                    let txsk = r.get::<_, Option<Vec<u8>>>("txsk")?;
-                    let xsk = txsk.map(|txsk| AccountPrivKey::from_bytes(&*txsk).unwrap());
-                    let tsk = r.get::<_, Option<String>>("tsk")?;
-                    let sk = tsk.map(|tsk| import_sk_bip38(&tsk).unwrap());
-                    let tvk = r.get::<_, Option<Vec<u8>>>("tvk")?;
-                    let vk = tvk
-                        .map(|tvk| AccountPubKey::deserialize(&tvk.try_into().unwrap()).unwrap());
-                    let addr = TransparentAddress::decode(network, &taddr).unwrap();
-                    let ti = TransparentAccountInfo {
-                        index: dindex,
-                        change_index: cindex,
-                        xsk,
-                        sk,
-                        vk,
-                        addr,
-                    };
-                    Some(ti)
-                }
-            };
+                let taddr = r.get::<_, Option<String>>("taddr")?;
+                let ti = match taddr {
+                    None => None,
+                    Some(taddr) => {
+                        let txsk = r.get::<_, Option<Vec<u8>>>("txsk")?;
+                        let xsk = txsk.map(|txsk| AccountPrivKey::from_bytes(&*txsk).unwrap());
+                        let tsk = r.get::<_, Option<String>>("tsk")?;
+                        let sk = tsk.map(|tsk| import_sk_bip38(&tsk).unwrap());
+                        let tvk = r.get::<_, Option<Vec<u8>>>("tvk")?;
+                        let vk = tvk.map(|tvk| {
+                            AccountPubKey::deserialize(&tvk.try_into().unwrap()).unwrap()
+                        });
+                        let addr = TransparentAddress::decode(network, &taddr).unwrap();
+                        let ti = TransparentAccountInfo {
+                            index: dindex,
+                            change_index: cindex,
+                            xsk,
+                            sk,
+                            vk,
+                            addr,
+                        };
+                        Some(ti)
+                    }
+                };
 
-            let saddr = r.get::<_, Option<String>>("saddr")?;
-            let si = match saddr {
-                None => None,
-                Some(saddr) => {
-                    let sk = r.get::<_, Option<String>>("ssk")?.map(|sk| {
-                        decode_extended_spending_key(
-                            network.hrp_sapling_extended_spending_key(),
-                            &sk,
+                let saddr = r.get::<_, Option<String>>("saddr")?;
+                let si = match saddr {
+                    None => None,
+                    Some(saddr) => {
+                        let sk = r.get::<_, Option<String>>("ssk")?.map(|sk| {
+                            decode_extended_spending_key(
+                                network.hrp_sapling_extended_spending_key(),
+                                &sk,
+                            )
+                            .unwrap()
+                        });
+                        let vk = r.get::<_, String>("svk")?;
+                        let vk = decode_extended_full_viewing_key(
+                            network.hrp_sapling_extended_full_viewing_key(),
+                            &vk,
                         )
-                        .unwrap()
-                    });
-                    let vk = r.get::<_, String>("svk")?;
-                    let vk = decode_extended_full_viewing_key(
-                        network.hrp_sapling_extended_full_viewing_key(),
-                        &vk,
-                    )
-                    .unwrap();
-                    let vk = vk.to_diversifiable_full_viewing_key();
-                    let addr =
-                        decode_payment_address(network.hrp_sapling_payment_address(), &saddr)
-                            .unwrap();
-                    let si = SaplingAccountInfo { sk, vk, addr };
-                    Some(si)
-                }
-            };
+                        .unwrap();
+                        let vk = vk.to_diversifiable_full_viewing_key();
+                        let addr =
+                            decode_payment_address(network.hrp_sapling_payment_address(), &saddr)
+                                .unwrap();
+                        let si = SaplingAccountInfo { sk, vk, addr };
+                        Some(si)
+                    }
+                };
 
-            let ovk = r.get::<_, Option<Vec<u8>>>("ovk")?;
-            let oi = match ovk {
-                None => None,
-                Some(vk) => {
-                    let sk = r.get::<_, Option<Vec<u8>>>("osk")?.map(|sk| {
-                        let sk = SpendingKey::from_bytes(sk.try_into().unwrap()).unwrap();
-                        sk
-                    });
-                    let vk = FullViewingKey::from_bytes(&vk.try_into().unwrap()).unwrap();
-                    let addr = vk.address_at(dindex, Scope::External);
-                    let oi = OrchardAccountInfo { sk, vk, addr };
-                    Some(oi)
-                }
-            };
+                let ovk = r.get::<_, Option<Vec<u8>>>("ovk")?;
+                let oi = match ovk {
+                    None => None,
+                    Some(vk) => {
+                        let sk = r.get::<_, Option<Vec<u8>>>("osk")?.map(|sk| {
+                            let sk = SpendingKey::from_bytes(sk.try_into().unwrap()).unwrap();
+                            sk
+                        });
+                        let vk = FullViewingKey::from_bytes(&vk.try_into().unwrap()).unwrap();
+                        let addr = vk.address_at(dindex, Scope::External);
+                        let oi = OrchardAccountInfo { sk, vk, addr };
+                        Some(oi)
+                    }
+                };
 
-            let ai = AccountInfo {
-                account,
-                position,
-                name,
-                seed,
-                aindex,
-                dindex,
-                birth,
-                transparent: ti,
-                sapling: si,
-                orchard: oi,
-                saved: saved.unwrap_or_default(),
-            };
-            Ok(ai)
-        },
-    )
-    .with_file_line(|| format!("No account {account}"))?;
+                let ai = AccountInfo {
+                    account,
+                    position,
+                    name,
+                    seed,
+                    aindex,
+                    dindex,
+                    birth,
+                    transparent: ti,
+                    sapling: si,
+                    orchard: oi,
+                    saved: saved.unwrap_or_default(),
+                };
+                Ok(ai)
+            },
+        )
+        .with_file_line(|| format!("No account {account}"))?;
     Ok(ai)
 }
 

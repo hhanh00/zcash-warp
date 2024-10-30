@@ -23,18 +23,19 @@ pub fn snap_to_checkpoint(connection: &Connection, height: u32) -> Result<Checkp
 }
 
 pub fn get_block_header(connection: &Connection, height: u32) -> Result<BlockHeader> {
-    let (hash, prev_hash, timestamp) = connection.query_row(
-        "SELECT hash, prev_hash, timestamp FROM blcks WHERE height = ?1",
-        [height],
-        |r| {
-            Ok((
-                r.get::<_, Vec<u8>>(0)?,
-                r.get::<_, Vec<u8>>(1)?,
-                r.get::<_, u32>(2)?,
-            ))
-        },
-    )
-    .with_file_line(|| format!("No height {height}"))?;
+    let (hash, prev_hash, timestamp) = connection
+        .query_row(
+            "SELECT hash, prev_hash, timestamp FROM blcks WHERE height = ?1",
+            [height],
+            |r| {
+                Ok((
+                    r.get::<_, Vec<u8>>(0)?,
+                    r.get::<_, Vec<u8>>(1)?,
+                    r.get::<_, u32>(2)?,
+                ))
+            },
+        )
+        .with_file_line(|| format!("No height {height}"))?;
     Ok(BlockHeader {
         height,
         hash: hash.try_into().unwrap(),

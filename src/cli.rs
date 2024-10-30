@@ -851,14 +851,13 @@ async fn process_command(
             *txbytes = display_tx(network, &connection, summary)?;
         }
         Command::BroadcastLatest { clear } => {
-            let connection = zec.connection()?;
             let clear = clear.unwrap_or(1);
             if clear != 0 {
                 if let Some(tx_bytes) = txbytes.data.as_ref() {
                     tracing::info!("{}", hex::encode(tx_bytes));
                     let mut client = zec.connect_lwd()?;
                     let bc_height = get_last_height(&mut client).await?;
-                    let r = broadcast(&connection, &mut client, bc_height, txbytes).await?;
+                    let r = broadcast(&mut client, bc_height, txbytes).await?;
                     println!("{}", r);
                 }
             }

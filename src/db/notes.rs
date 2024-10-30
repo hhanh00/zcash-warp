@@ -1,6 +1,7 @@
 use crate::{
     data::fb::{IdNoteT, InputTransparentT, ShieldedNoteT},
     types::CheckpointHeight,
+    utils::ContextExt,
     warp::{
         sync::{IdSpent, PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
         BlockHeader, OutPoint, Witness, UTXO,
@@ -119,8 +120,9 @@ pub fn list_all_received_notes(
     let mut s = connection.prepare(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
-        FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND
-        w.account = n.account AND w.note = n.id_note AND w.height = ?1
+        FROM notes n, txs t, witnesses w WHERE
+        n.tx = t.id_tx AND n.account = t.account
+        AND w.account = n.account AND w.note = n.id_note AND w.height = ?1
         AND orchard = ?2 AND spent IS NULL
         ORDER BY n.value DESC",
     )?;
@@ -139,10 +141,13 @@ pub fn list_received_notes(
     let mut s = connection.prepare(
         "SELECT n.id_note, n.account, n.position, n.height, n.output_index, n.address,
         n.value, n.rcm, n.nf, n.rho, n.spent, t.txid, t.timestamp, t.value, w.witness
-        FROM notes n, txs t, witnesses w WHERE n.tx = t.id_tx AND w.note = n.id_note AND w.height = ?1
-        AND orchard = ?2 AND (spent IS NULL OR spent > ?1) AND n.account = ?3 AND NOT excluded
-        AND n.expiration IS NULL
-        ORDER BY n.value DESC")?;
+        FROM notes n, txs t, witnesses w
+        WHERE n.tx = t.id_tx AND n.account = t.account
+        AND w.note = n.id_note AND w.account = n.account AND w.height = ?1
+        AND orchard = ?2 AND spent IS NULL AND n.account = ?3 AND NOT excluded
+        AND n.height <= ?1 AND n.expiration IS NULL
+        ORDER BY n.value DESC",
+    )?;
     let rows = s.query_map(params![height, orchard, account], select_note)?;
     let notes = rows.collect::<Result<Vec<_>, _>>()?;
     Ok(notes)
@@ -155,18 +160,19 @@ pub fn mark_shielded_spent(connection: &Transaction, id_spent: &IdSpent<Hash>) -
         JOIN txs t
         WHERE n.nf = ?3 AND n.account = ?1
         AND t.txid = ?4 AND t.account = ?1
-        ON CONFLICT DO NOTHING
         RETURNING id_note",
     )?;
-    let id_note = s.query_row(
-        params![
-            id_spent.account,
-            id_spent.height,
-            &id_spent.note_ref,
-            &id_spent.txid
-        ],
-        |r| r.get::<_, u32>(0),
-    )?;
+    let id_note = s
+        .query_row(
+            params![
+                id_spent.account,
+                id_spent.height,
+                &id_spent.note_ref,
+                &id_spent.txid
+            ],
+            |r| r.get::<_, u32>(0),
+        )
+        .with_file_line(|| format!("{}", hex::encode(&id_spent.note_ref)))?;
     let mut s = connection
         .prepare_cached("UPDATE notes SET spent = ?2, expiration = NULL WHERE id_note = ?1")?;
     s.execute(params![id_note, id_spent.height])?;
@@ -255,7 +261,7 @@ pub fn store_received_note(
     for n in notes {
         let orchard = n.rho.is_some();
         if n.is_new {
-            store_tx(connection, &n.tx)?;
+            let id_tx = store_tx(connection, &n.tx)?;
             add_tx_value(
                 connection,
                 &TxValueUpdate {
@@ -266,11 +272,6 @@ pub fn store_received_note(
                     timestamp: n.tx.timestamp,
                     value: n.tx.value,
                 },
-            )?;
-            let id_tx = connection.query_row(
-                "SELECT id_tx FROM txs WHERE txid = ?1",
-                [n.tx.txid],
-                |r| r.get::<_, u32>(0),
             )?;
             s_note.execute(params![
                 n.account, n.position, n.height, id_tx, n.vout, n.address, n.value, n.rcm, n.nf,

@@ -135,7 +135,7 @@ pub async fn tx_broadcast(
     if let Some(id_notes) = txbytes.notes.as_deref() {
         mark_notes_unconfirmed_spent(connection, id_notes, bc_height + EXPIRATION_HEIGHT_DELTA)?;
     }
-    let id = broadcast(connection, client, bc_height, txbytes).await?;
+    let id = broadcast(client, bc_height, txbytes).await?;
     Ok(id)
 }
 

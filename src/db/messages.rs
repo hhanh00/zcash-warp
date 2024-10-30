@@ -5,7 +5,8 @@ use crate::{
     data::fb::{ShieldedMessageT, UserMemoT},
     fb_unwrap,
     network::Network,
-    txdetails::TransactionDetails, utils::ContextExt,
+    txdetails::TransactionDetails,
+    utils::ContextExt,
 };
 
 use warp_macros::c_export;

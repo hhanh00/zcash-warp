@@ -12,16 +12,17 @@ use zcash_protocol::consensus::{BlockHeight, BranchId};
 
 use crate::{
     coin::CoinDef,
-    data::fb::UnconfirmedTxT,
-    db::tx::store_unconfirmed_tx,
-    fb_unwrap,
+    db::mempool::{clear_unconfirmed_tx, store_unconfirmed_tx},
     lwd::rpc::{Empty, RawTransaction},
     network::Network,
     txdetails::analyze_raw_transaction,
+    utils::ContextExt,
 };
 
 use crate::coin::COINS;
 use warp_macros::c_export;
+
+use super::sync::ReceivedTx;
 
 #[derive(Clone, Debug)]
 pub enum MempoolMsg {
@@ -40,9 +41,11 @@ impl Mempool {
             let connection = coin.connection()?;
             'outer: loop {
                 tracing::info!("mempool open");
+                clear_unconfirmed_tx(&connection)?;
                 let mut mempool = client
                     .get_mempool_stream(Request::new(Empty {}))
-                    .await?
+                    .await
+                    .with_file_line(|| "get_mempool_stream")?
                     .into_inner();
                 loop {
                     tokio::select! {
@@ -69,10 +72,7 @@ impl Mempool {
                             if let Some(tx) = tx {
                                 tracing::info!("{}", tx.height);
                                 if account == 0 { continue }
-                                let txv = compute_tx_value(&coin, &coin.network, &connection, account, &tx).unwrap();
-                                tracing::info!("{:?}", txv);
-                                let txid = fb_unwrap!(txv.txid).clone();
-                                let tx = UnconfirmedTxT { account, txid: Some(txid), amount: txv.amount, expiration: 0 };
+                                let tx = parse_raw_tx(&coin, &coin.network, &connection, account, &tx).unwrap();
                                 store_unconfirmed_tx(&connection, &tx)?;
                             }
                             else {
@@ -83,32 +83,39 @@ impl Mempool {
                 }
                 tracing::info!("mempool close");
                 tracing::info!("Sleeping before new block");
+                clear_unconfirmed_tx(&connection)?;
                 tokio::time::sleep(Duration::from_secs(5)).await;
             }
+            tracing::info!("mempool quit");
             Ok::<_, anyhow::Error>(())
         });
         Ok(tx)
     }
 }
 
-fn compute_tx_value(
+fn parse_raw_tx(
     coin: &CoinDef,
     network: &Network,
     connection: &Connection,
     account: u32,
     raw_tx: &RawTransaction,
-) -> Result<UnconfirmedTxT> {
+) -> Result<ReceivedTx> {
     let height = raw_tx.height as u32;
     let raw_tx = &*raw_tx.data;
     let branch_id = BranchId::for_height(network, BlockHeight::from_u32(height));
     let tx = Transaction::read(raw_tx, branch_id)?;
+    let txid = tx.txid();
     let txd = analyze_raw_transaction(coin, network, connection, account, height, 0, tx)?;
-    Ok(UnconfirmedTxT {
+    let tx = ReceivedTx {
+        id: 0,
         account,
-        txid: Some(txd.txid.to_vec()),
-        amount: txd.value,
-        expiration: 0,
-    })
+        height,
+        txid: txid.clone().try_into().unwrap(),
+        timestamp: 0,
+        ivtx: 0,
+        value: txd.value,
+    };
+    Ok(tx)
 }
 
 #[c_export]
