@@ -8,7 +8,7 @@ use rusqlite::Connection;
 use sapling_crypto::{note_encryption::SaplingDomain, PaymentAddress};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use zcash_client_backend::encoding::AddressCodec as _;
-use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
+use zcash_note_encryption::try_note_decryption;
 use zcash_primitives::{
     memo::Memo,
     transaction::{components::sapling::zip212_enforcement, Transaction as ZTransaction},
@@ -203,7 +203,6 @@ pub fn analyze_raw_transaction(
     if let Some(b) = data.sapling_bundle() {
         if let Some(si) = ai.sapling.as_ref() {
             let ivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(&si.vk.fvk().vk.ivk());
-            let ovk = &si.vk.fvk().ovk;
             for sin in b.shielded_spends() {
                 let spend = get_note_by_nf(connection, account, &sin.nullifier().0)?;
                 sins.push(ShieldedInput {
@@ -213,19 +212,8 @@ pub fn analyze_raw_transaction(
             }
             for sout in b.shielded_outputs() {
                 let domain = SaplingDomain::new(zip212_enforcement);
-                let fnote = try_note_decryption(&domain, &ivk, sout)
-                    .map(|(n, p, m)| (n, p, m, true))
-                    .or_else(|| {
-                        try_output_recovery_with_ovk(
-                            &domain,
-                            ovk,
-                            sout,
-                            sout.cv(),
-                            sout.out_ciphertext(),
-                        )
-                        .map(|(n, p, m)| (n, p, m, false))
-                    })
-                    .map(|(n, p, m, incoming)| FullPlainNote {
+                let fnote =
+                    try_note_decryption(&domain, &ivk, sout).map(|(n, p, m)| FullPlainNote {
                         note: PlainNote {
                             id: 0,
                             address: p.to_bytes(),
@@ -234,7 +222,7 @@ pub fn analyze_raw_transaction(
                             rho: None,
                         },
                         memo: CompressedMemo(m.as_slice().to_vec()),
-                        incoming,
+                        incoming: true,
                     });
                 let cmx = sout.cmu().to_bytes();
                 let output = ShieldedOutput { cmx, note: fnote };
@@ -340,7 +328,9 @@ pub fn analyze_raw_transaction(
         })
         .sum::<i64>();
     let value = (tout_value + sout_value + oout_value) - (tin_value + sin_value + oin_value);
-    // tracing::info!("{tin_value} {tout_value} {sin_value} {sout_value} {oin_value} {oout_value} = {value}");
+    tracing::info!(
+        "{tin_value} {tout_value} {sin_value} {sout_value} {oin_value} {oout_value} = {value}"
+    );
     let tx = TransactionDetails {
         height,
         timestamp,
