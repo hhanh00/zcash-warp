@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
+use tokio::sync::Mutex;
 use rusqlite::Connection;
 use tokio::{
     runtime::Runtime,
@@ -34,60 +35,78 @@ pub struct Mempool {}
 impl Mempool {
     pub fn run(coin: CoinDef, runtime: Arc<Runtime>) -> Result<Sender<MempoolMsg>> {
         tracing::info!("Running mempool for coin {}", coin.coin);
-        let (tx, mut rx) = mpsc::channel::<MempoolMsg>(1);
+        let (tx, rx) = mpsc::channel::<MempoolMsg>(8);
+        let rx = Arc::new(Mutex::new(rx));
         runtime.spawn(async move {
-            let mut account = 0;
-            let mut client = coin.connect_lwd()?;
-            let connection = coin.connection()?;
-            'outer: loop {
-                tracing::info!("mempool open");
-                clear_unconfirmed_tx(&connection)?;
-                let mut mempool = client
-                    .get_mempool_stream(Request::new(Empty {}))
-                    .await
-                    .with_file_line(|| "get_mempool_stream")?
-                    .into_inner();
-                loop {
-                    tokio::select! {
-                        msg = rx.recv() => {
-                            if let Some(msg) = msg {
-                                tracing::info!("Recv {:?}", msg);
-                                match msg {
-                                    MempoolMsg::Account(new_account) => {
-                                        if new_account != account {
-                                            account = new_account;
-                                            break; // need to request the mempool again
+            let mempool_loop = || {
+                let c = coin.clone();
+                let rx = rx.clone();
+                async move {
+                    let mut account = 0;
+                    let mut client = c.connect_lwd()?;
+                    let connection = c.connection()?;
+                    'outer: loop {
+                        tracing::info!("mempool open");
+                        clear_unconfirmed_tx(&connection)?;
+                        let mut mempool = client
+                            .get_mempool_stream(Request::new(Empty {}))
+                            .await
+                            .with_file_line(|| "get_mempool_stream")?
+                            .into_inner();
+                        let mut rx = rx.lock().await;
+                        loop {
+                            tokio::select! {
+                                msg = rx.recv() => {
+                                    if let Some(msg) = msg {
+                                        tracing::info!("Recv {:?}", msg);
+                                        match msg {
+                                            MempoolMsg::Account(new_account) => {
+                                                if new_account != account {
+                                                    account = new_account;
+                                                    break; // need to request the mempool again
+                                                }
+                                            }
+                                        // change of servers?
                                         }
                                     }
-                                // change of servers?
+                                    else {
+                                        break 'outer Ok::<_, anyhow::Error>(()); // we are shutting down
+                                    }
+                                }
+
+                                tx = mempool.message() => {
+                                    let tx = tx?;
+                                    if let Some(tx) = tx {
+                                        tracing::info!("{}", tx.height);
+                                        if account == 0 { continue }
+                                        let tx = parse_raw_tx(&c, &c.network, &connection, account, &tx).unwrap();
+                                        store_unconfirmed_tx(&connection, &tx)?;
+                                    }
+                                    else {
+                                        break;
+                                    }
                                 }
                             }
-                            else {
-                                break 'outer; // we are shutting down
-                            }
                         }
-
-                        tx = mempool.message() => {
-                            let tx = tx?;
-                            if let Some(tx) = tx {
-                                tracing::info!("{}", tx.height);
-                                if account == 0 { continue }
-                                let tx = parse_raw_tx(&coin, &coin.network, &connection, account, &tx).unwrap();
-                                store_unconfirmed_tx(&connection, &tx)?;
-                            }
-                            else {
-                                break;
-                            }
-                        }
+                        tracing::info!("mempool close");
+                        tracing::info!("Sleeping before new block");
+                        clear_unconfirmed_tx(&connection)?;
+                        tokio::time::sleep(Duration::from_secs(5)).await;
                     }
                 }
-                tracing::info!("mempool close");
-                tracing::info!("Sleeping before new block");
-                clear_unconfirmed_tx(&connection)?;
-                tokio::time::sleep(Duration::from_secs(5)).await;
+            };
+
+            loop {
+                match mempool_loop().await {
+                    Ok(_) => {
+                        break; // clean shutdown
+                    }
+                    Err(e) => {
+                        tracing::info!("mempool error: {}", e);
+                        tokio::time::sleep(Duration::from_secs(30)).await;
+                    }
+                }
             }
-            tracing::info!("mempool quit");
-            Ok::<_, anyhow::Error>(())
         });
         Ok(tx)
     }
@@ -127,8 +146,11 @@ pub fn mempool_run(coin: &CoinDef) -> Result<()> {
 
 #[c_export]
 pub async fn mempool_set_account(coin: &CoinDef, account: u32) -> Result<()> {
+    tracing::info!("ms 1");
     if let Some(tx) = coin.mempool_tx.as_ref() {
+        tracing::info!("ms 2");
         let _ = tx.send(MempoolMsg::Account(account)).await;
     };
+    tracing::info!("ms 3");
     Ok(())
 }
