@@ -92,6 +92,15 @@ pub struct TransparentTx {
 }
 
 #[derive(Debug)]
+pub struct STXO {
+    pub account: u32,
+    pub txid: Hash,
+    pub vout: u32,
+    pub address: String,
+    pub value: u64,
+}
+
+#[derive(Debug)]
 pub struct UTXO {
     pub is_new: bool,
     pub id: u32,

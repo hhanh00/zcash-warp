@@ -4,7 +4,7 @@ use crate::{
     utils::ContextExt,
     warp::{
         sync::{IdSpent, PlainNote, ReceivedNote, ReceivedTx, TxValueUpdate},
-        BlockHeader, OutPoint, Witness, UTXO,
+        BlockHeader, OutPoint, Witness, STXO, UTXO,
     },
     Hash,
 };
@@ -359,6 +359,36 @@ pub fn list_all_utxos(connection: &Connection) -> Result<Vec<UTXO>> {
     Ok(utxos)
 }
 
+// List the unconfirmed and spent tx outputs
+pub fn list_pending_stxos(connection: &Connection, account: u32) -> Result<Vec<STXO>> {
+    let mut s = connection.prepare(
+        &("SELECT u.txid, u.vout, u.value, s.address FROM utxos u
+        JOIN t_accounts t ON u.account = t.account
+        JOIN t_addresses s ON t.account = s.account
+            AND u.external = s.external
+            AND u.addr_index = s.addr_index
+        WHERE u.spent IS NULL
+        AND u.expiration IS NOT NULL
+        AND u.account = ?1"),
+    )?;
+    let rows = s.query_map([account], |r| {
+        let txid = r.get::<_, Vec<u8>>(0)?;
+        let vout = r.get::<_, u32>(1)?;
+        let value = r.get::<_, u64>(2)?;
+        let address = r.get::<_, String>(3)?;
+        Ok(STXO {
+            account,
+            txid: txid.try_into().unwrap(),
+            vout,
+            value,
+            address,
+        })
+    })?;
+    let stxos = rows.collect::<Result<Vec<_>, _>>()?;
+
+    Ok(stxos)
+}
+
 pub fn list_utxos(
     connection: &Connection,
     account: u32,
@@ -370,9 +400,9 @@ pub fn list_utxos(
         &("SELECT u.id_utxo, u.account, u.external, u.addr_index, u.height, u.external, u.txid, u.vout, s.address,
         u.value FROM utxos u
         JOIN t_accounts t ON u.account = t.account
-        JOIN t_addresses s ON s.account = t.account
-            AND s.external = u.external
-            AND s.addr_index = u.addr_index
+        JOIN t_addresses s ON t.account = s.account
+            AND u.external = s.external
+            AND u.addr_index = s.addr_index
         WHERE u.height <= ?1 AND (u.spent IS NULL OR u.spent > ?1)
         AND u.expiration IS NULL
         AND u.account = ?2 ORDER BY u.height DESC"),

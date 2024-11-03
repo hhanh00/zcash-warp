@@ -24,13 +24,13 @@ use crate::{
     db::{
         account::{get_account_info, list_account_transparent_addresses},
         messages::store_message,
-        notes::{get_note_by_nf, list_utxos},
+        notes::{get_note_by_nf, list_pending_stxos},
         tx::{get_tx, list_new_txids, store_tx_details, update_tx_primary_address_memo},
     },
     fb_unwrap,
     lwd::{get_transaction, get_txin_coins},
     network::Network,
-    types::{Addresses, CheckpointHeight, PoolMask},
+    types::{Addresses, PoolMask},
     utils::ua::ua_of_orchard,
     warp::{
         sync::{FullPlainNote, PlainNote, ReceivedTx, TransparentNote},
@@ -147,14 +147,16 @@ pub fn analyze_raw_transaction(
     let txid: Hash = tx.txid().as_ref().clone();
     let data = tx.into_data();
     let zip212_enforcement = zip212_enforcement(network, height.into());
-    let utxos = list_utxos(connection, account, CheckpointHeight(height))?;
+    let stxos = list_pending_stxos(connection, account)?;
     let account_addresses = list_account_transparent_addresses(connection, account)?;
 
     let mut tins = vec![];
     let mut touts = vec![];
     if let Some(b) = data.transparent_bundle() {
         for vin in b.vin.iter() {
-            let prev_utxo = utxos
+            // transparent inputs do not come with an address, so we have
+            // to lookup if we know them from our utxos
+            let prev_utxo = stxos
                 .iter()
                 .find(|&utxo| &utxo.txid == vin.prevout.hash() && utxo.vout == vin.prevout.n());
             let note = prev_utxo.map(|n| TransparentNote {
