@@ -178,3 +178,29 @@ pub fn list_checkpoints(connection: &Connection) -> Result<Vec<CheckpointT>> {
     }
     Ok(checkpoints)
 }
+
+pub fn delete_checkpoint(connection: &mut Connection, height: u32) -> Result<()> {
+    let db_tx = connection.transaction()?;
+    {
+        db_tx.execute("DELETE FROM blcks WHERE height = ?1", [height])?;
+        db_tx.execute("DELETE FROM witnesses WHERE height = ?1", [height])?;
+    }
+    db_tx.commit()?;
+    Ok(())
+}
+
+#[c_export]
+pub fn purge_checkpoints(connection: &mut Connection, min_height: u32) -> Result<()> {
+    let heights = {
+        let mut s = connection.prepare(
+        "WITH checkpoints(height, day) AS (SELECT MIN(height) AS height, timestamp/86400 AS day FROM blcks GROUP BY day ORDER BY day)
+        SELECT b.height FROM blcks b LEFT JOIN checkpoints c ON c.height = b.height WHERE c.height IS NULL AND b.height <= ?1")?;
+        let rows = s.query_map([min_height], |r| r.get::<_, u32>(0))?;
+        rows.collect::<Result<Vec<_>, _>>()?
+    };
+
+    for h in heights {
+        delete_checkpoint(connection, h)?;
+    }
+    Ok(())
+}

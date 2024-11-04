@@ -124,6 +124,8 @@ struct CResult_u8 c_rewind(uint8_t coin, uint32_t height);
 
 struct CResult______u8 c_list_checkpoints(uint8_t coin);
 
+struct CResult_u8 c_purge_checkpoints(uint8_t coin, uint32_t min_height);
+
 struct CResult_u32 c_store_contact(uint8_t coin, struct CParam contact);
 
 struct CResult______u8 c_list_contact_cards(uint8_t coin);
