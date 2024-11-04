@@ -1,8 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use anyhow::Result;
-use tokio::sync::Mutex;
 use rusqlite::Connection;
+use tokio::sync::Mutex;
 use tokio::{
     runtime::Runtime,
     sync::mpsc::{self, Sender},

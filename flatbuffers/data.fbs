@@ -286,6 +286,11 @@ table SwapList {
   items: [Swap];
 }
 
+table Spendable {
+  total: uint64;
+  unconfirmed: uint64;
+  immature: uint64;
+}
 
 /* Lists
 Spendings

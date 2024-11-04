@@ -9676,4 +9676,199 @@ pub mod fb {
             SwapList::create(_fbb, &SwapListArgs { items })
         }
     }
+    pub enum SpendableOffset {}
+    #[derive(Copy, Clone, PartialEq)]
+
+    pub struct Spendable<'a> {
+        pub _tab: flatbuffers::Table<'a>,
+    }
+
+    impl<'a> flatbuffers::Follow<'a> for Spendable<'a> {
+        type Inner = Spendable<'a>;
+        #[inline]
+        unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+            Self {
+                _tab: flatbuffers::Table::new(buf, loc),
+            }
+        }
+    }
+
+    impl<'a> Spendable<'a> {
+        pub const VT_TOTAL: flatbuffers::VOffsetT = 4;
+        pub const VT_UNCONFIRMED: flatbuffers::VOffsetT = 6;
+        pub const VT_IMMATURE: flatbuffers::VOffsetT = 8;
+
+        #[inline]
+        pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+            Spendable { _tab: table }
+        }
+        #[allow(unused_mut)]
+        pub fn create<
+            'bldr: 'args,
+            'args: 'mut_bldr,
+            'mut_bldr,
+            A: flatbuffers::Allocator + 'bldr,
+        >(
+            _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr, A>,
+            args: &'args SpendableArgs,
+        ) -> flatbuffers::WIPOffset<Spendable<'bldr>> {
+            let mut builder = SpendableBuilder::new(_fbb);
+            builder.add_immature(args.immature);
+            builder.add_unconfirmed(args.unconfirmed);
+            builder.add_total(args.total);
+            builder.finish()
+        }
+
+        pub fn unpack(&self) -> SpendableT {
+            let total = self.total();
+            let unconfirmed = self.unconfirmed();
+            let immature = self.immature();
+            SpendableT {
+                total,
+                unconfirmed,
+                immature,
+            }
+        }
+
+        #[inline]
+        pub fn total(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe { self._tab.get::<u64>(Spendable::VT_TOTAL, Some(0)).unwrap() }
+        }
+        #[inline]
+        pub fn unconfirmed(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(Spendable::VT_UNCONFIRMED, Some(0))
+                    .unwrap()
+            }
+        }
+        #[inline]
+        pub fn immature(&self) -> u64 {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<u64>(Spendable::VT_IMMATURE, Some(0))
+                    .unwrap()
+            }
+        }
+    }
+
+    impl flatbuffers::Verifiable for Spendable<'_> {
+        #[inline]
+        fn run_verifier(
+            v: &mut flatbuffers::Verifier,
+            pos: usize,
+        ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+            use self::flatbuffers::Verifiable;
+            v.visit_table(pos)?
+                .visit_field::<u64>("total", Self::VT_TOTAL, false)?
+                .visit_field::<u64>("unconfirmed", Self::VT_UNCONFIRMED, false)?
+                .visit_field::<u64>("immature", Self::VT_IMMATURE, false)?
+                .finish();
+            Ok(())
+        }
+    }
+    pub struct SpendableArgs {
+        pub total: u64,
+        pub unconfirmed: u64,
+        pub immature: u64,
+    }
+    impl<'a> Default for SpendableArgs {
+        #[inline]
+        fn default() -> Self {
+            SpendableArgs {
+                total: 0,
+                unconfirmed: 0,
+                immature: 0,
+            }
+        }
+    }
+
+    pub struct SpendableBuilder<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> {
+        fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+    }
+    impl<'a: 'b, 'b, A: flatbuffers::Allocator + 'a> SpendableBuilder<'a, 'b, A> {
+        #[inline]
+        pub fn add_total(&mut self, total: u64) {
+            self.fbb_.push_slot::<u64>(Spendable::VT_TOTAL, total, 0);
+        }
+        #[inline]
+        pub fn add_unconfirmed(&mut self, unconfirmed: u64) {
+            self.fbb_
+                .push_slot::<u64>(Spendable::VT_UNCONFIRMED, unconfirmed, 0);
+        }
+        #[inline]
+        pub fn add_immature(&mut self, immature: u64) {
+            self.fbb_
+                .push_slot::<u64>(Spendable::VT_IMMATURE, immature, 0);
+        }
+        #[inline]
+        pub fn new(
+            _fbb: &'b mut flatbuffers::FlatBufferBuilder<'a, A>,
+        ) -> SpendableBuilder<'a, 'b, A> {
+            let start = _fbb.start_table();
+            SpendableBuilder {
+                fbb_: _fbb,
+                start_: start,
+            }
+        }
+        #[inline]
+        pub fn finish(self) -> flatbuffers::WIPOffset<Spendable<'a>> {
+            let o = self.fbb_.end_table(self.start_);
+            flatbuffers::WIPOffset::new(o.value())
+        }
+    }
+
+    impl core::fmt::Debug for Spendable<'_> {
+        fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            let mut ds = f.debug_struct("Spendable");
+            ds.field("total", &self.total());
+            ds.field("unconfirmed", &self.unconfirmed());
+            ds.field("immature", &self.immature());
+            ds.finish()
+        }
+    }
+    #[non_exhaustive]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+    pub struct SpendableT {
+        pub total: u64,
+        pub unconfirmed: u64,
+        pub immature: u64,
+    }
+    impl Default for SpendableT {
+        fn default() -> Self {
+            Self {
+                total: 0,
+                unconfirmed: 0,
+                immature: 0,
+            }
+        }
+    }
+    impl SpendableT {
+        pub fn pack<'b, A: flatbuffers::Allocator + 'b>(
+            &self,
+            _fbb: &mut flatbuffers::FlatBufferBuilder<'b, A>,
+        ) -> flatbuffers::WIPOffset<Spendable<'b>> {
+            let total = self.total;
+            let unconfirmed = self.unconfirmed;
+            let immature = self.immature;
+            Spendable::create(
+                _fbb,
+                &SpendableArgs {
+                    total,
+                    unconfirmed,
+                    immature,
+                },
+            )
+        }
+    }
 } // pub mod fb

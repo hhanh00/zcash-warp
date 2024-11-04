@@ -1,3 +1,5 @@
+use std::u32;
+
 use anyhow::Result;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use rusqlite::{params, Connection, OptionalExtension as _};
@@ -13,7 +15,7 @@ use zcash_primitives::legacy::TransparentAddress;
 use crate::account::contacts::recipient_contains;
 use crate::coin::CoinDef;
 use crate::data::fb::{
-    AccountNameListT, AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendingT,
+    AccountNameListT, AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendableT, SpendingT,
     TransparentAddressT,
 };
 use crate::db::contacts::list_contacts;
@@ -310,6 +312,8 @@ pub fn list_account_tsk(
 
 #[c_export]
 pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result<BalanceT> {
+    // includes spent but not confirmed
+    // for display on the balance page
     let height = if height == 0 { u32::MAX } else { height };
     let transparent = connection
         .query_row(
@@ -451,4 +455,49 @@ pub fn get_spendings(
         });
     }
     Ok(spendings)
+}
+
+pub fn get_unconfirmed_spent(connection: &Connection, account: u32) -> Result<u64> {
+    let spent = connection.query_row(
+        "WITH n(value, account, spent, expiration) AS (
+	SELECT value, account, spent, expiration FROM notes UNION ALL
+	SELECT value, account, spent, expiration FROM utxos )
+    SELECT SUM(value) FROM n WHERE account = ?1 AND expiration IS NOT NULL AND spent IS NULL",
+        [account],
+        |r| r.get::<_, Option<u64>>(0),
+    )?;
+    Ok(spent.unwrap_or_default())
+}
+
+pub fn get_unspent_before(connection: &Connection, account: u32, height: u32) -> Result<u64> {
+    let spent = connection.query_row(
+        "WITH n(value, account, height, spent, expiration) AS (
+	SELECT value, account, height, spent, expiration FROM notes UNION ALL
+	SELECT value, account, height, spent, expiration FROM utxos )
+    SELECT SUM(value) FROM n WHERE account = ?1 AND height <= ?2
+    AND expiration IS NULL AND spent IS NULL",
+        [account, height],
+        |r| r.get::<_, Option<u64>>(0),
+    )?;
+    Ok(spent.unwrap_or_default())
+}
+
+#[c_export]
+pub fn get_spendable(connection: &Connection, account: u32, height: u32) -> Result<SpendableT> {
+    let unconfirmed = get_unconfirmed_spent(connection, account)?;
+    let total = get_unspent_before(connection, account, u32::MAX)?;
+    let spendable = get_unspent_before(connection, account, height)?;
+    let immature = total - spendable;
+    let sp = SpendableT {
+        total,
+        unconfirmed,
+        immature,
+    };
+    Ok(sp)
+}
+
+impl BalanceT {
+    pub fn total(&self) -> u64 {
+        self.transparent + self.sapling + self.orchard
+    }
 }

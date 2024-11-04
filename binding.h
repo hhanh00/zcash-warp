@@ -90,6 +90,8 @@ struct CResult_u8 c_set_account_property(uint8_t coin,
 
 struct CResult______u8 c_get_spendings(uint8_t coin, uint32_t account, uint32_t timestamp);
 
+struct CResult______u8 c_get_spendable(uint8_t coin, uint32_t account, uint32_t height);
+
 struct CResult_bool c_is_valid_key(uint8_t coin, char *key);
 
 struct CResult_u32 c_create_new_account(uint8_t coin,
