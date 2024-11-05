@@ -47,6 +47,8 @@ impl Drop for CoinDef {
 #[derive(Clone, Debug)]
 pub struct TokioRuntime(pub Option<Arc<Runtime>>);
 
+const TIMEOUT_SEC: u64 = 5;
+
 impl CoinDef {
     pub fn from_network(coin: u8, network: Network) -> Self {
         Self {
@@ -71,7 +73,9 @@ impl CoinDef {
                 .iter()
                 .map(|s| {
                     let ep = Endpoint::from_str(&s).unwrap();
-                    ep.tls_config(tls.clone()).unwrap()
+                    ep.tls_config(tls.clone())
+                        .unwrap()
+                        .connect_timeout(Duration::from_secs(TIMEOUT_SEC))
                 })
                 .collect::<Vec<_>>();
             let (channel, tx) = Channel::balance_channel_with_executor(16, self.runtime.clone());

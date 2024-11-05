@@ -127,12 +127,15 @@ pub fn get_tx_details_account(
 pub fn get_tx_details(
     network: &Network,
     connection: &Connection,
+    account: u32,
     txid: &[u8],
 ) -> Result<TransactionInfoExtendedT> {
     let tx_bin = connection
-        .query_row("SELECT data FROM txdetails WHERE txid = ?1", [txid], |r| {
-            r.get::<_, Vec<u8>>(0)
-        })
+        .query_row(
+            "SELECT data FROM txdetails WHERE account = ?1 AND txid = ?2",
+            params![account, txid],
+            |r| r.get::<_, Vec<u8>>(0),
+        )
         .with_file_line(|| format!("No txdetails {}", hex::encode(txid)))?;
     let tx: TransactionDetails = bincode::deserialize_from(&*tx_bin)?;
     let etx = tx.to_transaction_info_ext(network);

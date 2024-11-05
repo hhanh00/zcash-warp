@@ -8,7 +8,7 @@ use rusqlite::Connection;
 use sapling_crypto::{note_encryption::SaplingDomain, PaymentAddress};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use zcash_client_backend::encoding::AddressCodec as _;
-use zcash_note_encryption::try_note_decryption;
+use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 use zcash_primitives::{
     memo::Memo,
     transaction::{components::sapling::zip212_enforcement, Transaction as ZTransaction},
@@ -200,11 +200,13 @@ pub fn analyze_raw_transaction(
             touts.push(tout);
         }
     }
+
     let mut sins = vec![];
     let mut souts = vec![];
     if let Some(b) = data.sapling_bundle() {
         if let Some(si) = ai.sapling.as_ref() {
             let ivk = sapling_crypto::keys::PreparedIncomingViewingKey::new(&si.vk.fvk().vk.ivk());
+            let ovk = &si.vk.fvk().ovk;
             for sin in b.shielded_spends() {
                 let spend = get_note_by_nf(connection, account, &sin.nullifier().0)?;
                 sins.push(ShieldedInput {
@@ -214,8 +216,19 @@ pub fn analyze_raw_transaction(
             }
             for sout in b.shielded_outputs() {
                 let domain = SaplingDomain::new(zip212_enforcement);
-                let fnote =
-                    try_note_decryption(&domain, &ivk, sout).map(|(n, p, m)| FullPlainNote {
+                let fnote = try_note_decryption(&domain, &ivk, sout)
+                    .map(|(n, p, m)| (n, p, m, true))
+                    .or_else(|| {
+                        try_output_recovery_with_ovk(
+                            &domain,
+                            ovk,
+                            sout,
+                            sout.cv(),
+                            sout.out_ciphertext(),
+                        )
+                        .map(|(n, p, m)| (n, p, m, false))
+                    })
+                    .map(|(n, p, m, incoming)| FullPlainNote {
                         note: PlainNote {
                             id: 0,
                             address: p.to_bytes(),
@@ -224,7 +237,7 @@ pub fn analyze_raw_transaction(
                             rho: None,
                         },
                         memo: CompressedMemo(m.as_slice().to_vec()),
-                        incoming: true,
+                        incoming,
                     });
                 let cmx = sout.cmu().to_bytes();
                 let output = ShieldedOutput { cmx, note: fnote };
@@ -238,6 +251,7 @@ pub fn analyze_raw_transaction(
         if let Some(orchard) = ai.orchard.as_ref() {
             let ivk =
                 orchard::keys::PreparedIncomingViewingKey::new(&orchard.vk.to_ivk(Scope::External));
+            let ovk = &orchard.vk.to_ovk(Scope::External);
             for a in b.actions() {
                 let spend = get_note_by_nf(connection, account, &a.nullifier().to_bytes())?;
                 oins.push(ShieldedInput {
@@ -246,8 +260,19 @@ pub fn analyze_raw_transaction(
                 });
 
                 let domain = OrchardDomain::for_rho(&a.rho());
-                let fnote =
-                    try_note_decryption(&domain, &ivk, a).map(|(n, addr, m)| FullPlainNote {
+                let fnote = try_note_decryption(&domain, &ivk, a)
+                    .map(|(n, p, m)| (n, p, m, true))
+                    .or_else(|| {
+                        try_output_recovery_with_ovk(
+                            &domain,
+                            ovk,
+                            a,
+                            a.cv_net(),
+                            &a.encrypted_note().out_ciphertext,
+                        )
+                        .map(|(n, p, m)| (n, p, m, false))
+                    })
+                    .map(|(n, addr, m, incoming)| FullPlainNote {
                         note: PlainNote {
                             id: 0,
                             address: addr.to_raw_address_bytes(),
@@ -256,7 +281,7 @@ pub fn analyze_raw_transaction(
                             rho: Some(a.nullifier().to_bytes()),
                         },
                         memo: CompressedMemo(m.to_vec()),
-                        incoming: true,
+                        incoming,
                     });
                 let cmx = a.cmx();
                 let cmx = cmx.to_bytes();
@@ -304,11 +329,10 @@ pub fn analyze_raw_transaction(
         .sum::<i64>();
     let sout_value = souts
         .iter()
-        .map(|sout| {
+        .filter_map(|sout| {
             sout.note
                 .as_ref()
-                .map(|n| n.note.value as i64)
-                .unwrap_or_default()
+                .map(|n| if n.incoming { n.note.value as i64 } else { 0 })
         })
         .sum::<i64>();
     let oin_value = oins
@@ -325,7 +349,7 @@ pub fn analyze_raw_transaction(
         .map(|sout| {
             sout.note
                 .as_ref()
-                .map(|n| n.note.value as i64)
+                .map(|n| if n.incoming { n.note.value as i64 } else { 0 })
                 .unwrap_or_default()
         })
         .sum::<i64>();
