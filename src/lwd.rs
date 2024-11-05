@@ -194,7 +194,7 @@ pub async fn get_transparent(
             external,
             addr_index,
             address: taddr.clone(),
-            timestamp: 0, // TODO: Resolve timestamp from block header
+            timestamp: 0,
             txid: tx.txid().as_ref().clone().try_into().unwrap(),
             vins,
             vouts,

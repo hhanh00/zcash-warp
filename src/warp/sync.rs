@@ -273,13 +273,10 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
     }
 
     tracing::info!("Shielded Sync...");
-    let heights = trp_dec
-        .txs
-        .iter()
-        .map(|(tx, _, _)| tx.height)
-        .collect::<Vec<_>>();
+    let heights = &trp_dec.heights;
     let mut header_dec = BlockHeaderStore::new();
-    header_dec.add_heights(&heights)?;
+    tracing::info!("BH {:?}", heights);
+    header_dec.add_heights(heights.iter())?;
 
     let bh = get_block_header(&connection, start.into())?;
     let mut prev_hash = bh.hash;
@@ -500,7 +497,9 @@ pub async fn transparent_scan(
 
     // fetch the missing heights
     let heights = list_unknown_height_timestamps(&db_tx)?;
+    tracing::info!("list_unknown_height_timestamps");
     for h in heights {
+        tracing::info!("{h}");
         let cb = get_compact_block(client, h).await?;
         let timestamp = cb.time;
         store_block_time(&db_tx, h, timestamp)?;

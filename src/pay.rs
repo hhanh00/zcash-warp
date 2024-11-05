@@ -186,7 +186,7 @@ pub struct UnsignedTransaction {
     pub roots: [Hash; 2],
     pub edges: [AuthPath; 2],
     pub fees: FeeManager,
-    pub redirect: Option<String>,
+    pub message: Option<String>,
 }
 
 impl UnsignedTransaction {
@@ -244,7 +244,7 @@ impl UnsignedTransaction {
             num_outputs: Some(self.fees.num_outputs.to_vec()),
             privacy_level,
             data: Some(data),
-            redirect: self.redirect.clone(),
+            message: self.message.clone(),
         })
     }
 }

@@ -5091,7 +5091,7 @@ pub mod fb {
         pub const VT_NUM_INPUTS: flatbuffers::VOffsetT = 18;
         pub const VT_NUM_OUTPUTS: flatbuffers::VOffsetT = 20;
         pub const VT_DATA: flatbuffers::VOffsetT = 22;
-        pub const VT_REDIRECT: flatbuffers::VOffsetT = 24;
+        pub const VT_MESSAGE: flatbuffers::VOffsetT = 24;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -5112,8 +5112,8 @@ pub mod fb {
             builder.add_orchard_net(args.orchard_net);
             builder.add_sapling_net(args.sapling_net);
             builder.add_transparent_ins(args.transparent_ins);
-            if let Some(x) = args.redirect {
-                builder.add_redirect(x);
+            if let Some(x) = args.message {
+                builder.add_message(x);
             }
             if let Some(x) = args.data {
                 builder.add_data(x);
@@ -5145,7 +5145,7 @@ pub mod fb {
             let num_inputs = self.num_inputs().map(|x| x.into_iter().collect());
             let num_outputs = self.num_outputs().map(|x| x.into_iter().collect());
             let data = self.data().map(|x| x.into_iter().collect());
-            let redirect = self.redirect().map(|x| x.to_string());
+            let message = self.message().map(|x| x.to_string());
             TransactionSummaryT {
                 height,
                 recipients,
@@ -5157,7 +5157,7 @@ pub mod fb {
                 num_inputs,
                 num_outputs,
                 data,
-                redirect,
+                message,
             }
         }
 
@@ -5281,15 +5281,13 @@ pub mod fb {
             }
         }
         #[inline]
-        pub fn redirect(&self) -> Option<&'a str> {
+        pub fn message(&self) -> Option<&'a str> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
-                self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(
-                    TransactionSummary::VT_REDIRECT,
-                    None,
-                )
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(TransactionSummary::VT_MESSAGE, None)
             }
         }
     }
@@ -5327,8 +5325,8 @@ pub mod fb {
                     false,
                 )?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
-                    "redirect",
-                    Self::VT_REDIRECT,
+                    "message",
+                    Self::VT_MESSAGE,
                     false,
                 )?
                 .finish();
@@ -5350,7 +5348,7 @@ pub mod fb {
         pub num_inputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub num_outputs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
-        pub redirect: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub message: Option<flatbuffers::WIPOffset<&'a str>>,
     }
     impl<'a> Default for TransactionSummaryArgs<'a> {
         #[inline]
@@ -5366,7 +5364,7 @@ pub mod fb {
                 num_inputs: None,
                 num_outputs: None,
                 data: None,
-                redirect: None,
+                message: None,
             }
         }
     }
@@ -5444,10 +5442,10 @@ pub mod fb {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionSummary::VT_DATA, data);
         }
         #[inline]
-        pub fn add_redirect(&mut self, redirect: flatbuffers::WIPOffset<&'b str>) {
+        pub fn add_message(&mut self, message: flatbuffers::WIPOffset<&'b str>) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
-                TransactionSummary::VT_REDIRECT,
-                redirect,
+                TransactionSummary::VT_MESSAGE,
+                message,
             );
         }
         #[inline]
@@ -5480,7 +5478,7 @@ pub mod fb {
             ds.field("num_inputs", &self.num_inputs());
             ds.field("num_outputs", &self.num_outputs());
             ds.field("data", &self.data());
-            ds.field("redirect", &self.redirect());
+            ds.field("message", &self.message());
             ds.finish()
         }
     }
@@ -5497,7 +5495,7 @@ pub mod fb {
         pub num_inputs: Option<Vec<u8>>,
         pub num_outputs: Option<Vec<u8>>,
         pub data: Option<Vec<u8>>,
-        pub redirect: Option<String>,
+        pub message: Option<String>,
     }
     impl Default for TransactionSummaryT {
         fn default() -> Self {
@@ -5512,7 +5510,7 @@ pub mod fb {
                 num_inputs: None,
                 num_outputs: None,
                 data: None,
-                redirect: None,
+                message: None,
             }
         }
     }
@@ -5534,7 +5532,7 @@ pub mod fb {
             let num_inputs = self.num_inputs.as_ref().map(|x| _fbb.create_vector(x));
             let num_outputs = self.num_outputs.as_ref().map(|x| _fbb.create_vector(x));
             let data = self.data.as_ref().map(|x| _fbb.create_vector(x));
-            let redirect = self.redirect.as_ref().map(|x| _fbb.create_string(x));
+            let message = self.message.as_ref().map(|x| _fbb.create_string(x));
             TransactionSummary::create(
                 _fbb,
                 &TransactionSummaryArgs {
@@ -5548,7 +5546,7 @@ pub mod fb {
                     num_inputs,
                     num_outputs,
                     data,
-                    redirect,
+                    message,
                 },
             )
         }
@@ -8641,7 +8639,7 @@ pub mod fb {
     impl<'a> TransactionBytes<'a> {
         pub const VT_NOTES: flatbuffers::VOffsetT = 4;
         pub const VT_DATA: flatbuffers::VOffsetT = 6;
-        pub const VT_REDIRECT: flatbuffers::VOffsetT = 8;
+        pub const VT_MESSAGE: flatbuffers::VOffsetT = 8;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -8658,8 +8656,8 @@ pub mod fb {
             args: &'args TransactionBytesArgs<'args>,
         ) -> flatbuffers::WIPOffset<TransactionBytes<'bldr>> {
             let mut builder = TransactionBytesBuilder::new(_fbb);
-            if let Some(x) = args.redirect {
-                builder.add_redirect(x);
+            if let Some(x) = args.message {
+                builder.add_message(x);
             }
             if let Some(x) = args.data {
                 builder.add_data(x);
@@ -8673,11 +8671,11 @@ pub mod fb {
         pub fn unpack(&self) -> TransactionBytesT {
             let notes = self.notes().map(|x| x.iter().map(|t| t.unpack()).collect());
             let data = self.data().map(|x| x.into_iter().collect());
-            let redirect = self.redirect().map(|x| x.to_string());
+            let message = self.message().map(|x| x.to_string());
             TransactionBytesT {
                 notes,
                 data,
-                redirect,
+                message,
             }
         }
 
@@ -8708,13 +8706,13 @@ pub mod fb {
             }
         }
         #[inline]
-        pub fn redirect(&self) -> Option<&'a str> {
+        pub fn message(&self) -> Option<&'a str> {
             // Safety:
             // Created from valid Table for this object
             // which contains a valid value in this slot
             unsafe {
                 self._tab
-                    .get::<flatbuffers::ForwardsUOffset<&str>>(TransactionBytes::VT_REDIRECT, None)
+                    .get::<flatbuffers::ForwardsUOffset<&str>>(TransactionBytes::VT_MESSAGE, None)
             }
         }
     }
@@ -8738,8 +8736,8 @@ pub mod fb {
                     false,
                 )?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>(
-                    "redirect",
-                    Self::VT_REDIRECT,
+                    "message",
+                    Self::VT_MESSAGE,
                     false,
                 )?
                 .finish();
@@ -8749,7 +8747,7 @@ pub mod fb {
     pub struct TransactionBytesArgs<'a> {
         pub notes: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, IdNote>>>,
         pub data: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
-        pub redirect: Option<flatbuffers::WIPOffset<&'a str>>,
+        pub message: Option<flatbuffers::WIPOffset<&'a str>>,
     }
     impl<'a> Default for TransactionBytesArgs<'a> {
         #[inline]
@@ -8757,7 +8755,7 @@ pub mod fb {
             TransactionBytesArgs {
                 notes: None,
                 data: None,
-                redirect: None,
+                message: None,
             }
         }
     }
@@ -8781,10 +8779,10 @@ pub mod fb {
                 .push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionBytes::VT_DATA, data);
         }
         #[inline]
-        pub fn add_redirect(&mut self, redirect: flatbuffers::WIPOffset<&'b str>) {
+        pub fn add_message(&mut self, message: flatbuffers::WIPOffset<&'b str>) {
             self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(
-                TransactionBytes::VT_REDIRECT,
-                redirect,
+                TransactionBytes::VT_MESSAGE,
+                message,
             );
         }
         #[inline]
@@ -8809,7 +8807,7 @@ pub mod fb {
             let mut ds = f.debug_struct("TransactionBytes");
             ds.field("notes", &self.notes());
             ds.field("data", &self.data());
-            ds.field("redirect", &self.redirect());
+            ds.field("message", &self.message());
             ds.finish()
         }
     }
@@ -8818,14 +8816,14 @@ pub mod fb {
     pub struct TransactionBytesT {
         pub notes: Option<Vec<IdNoteT>>,
         pub data: Option<Vec<u8>>,
-        pub redirect: Option<String>,
+        pub message: Option<String>,
     }
     impl Default for TransactionBytesT {
         fn default() -> Self {
             Self {
                 notes: None,
                 data: None,
-                redirect: None,
+                message: None,
             }
         }
     }
@@ -8839,13 +8837,13 @@ pub mod fb {
                 _fbb.create_vector(&w)
             });
             let data = self.data.as_ref().map(|x| _fbb.create_vector(x));
-            let redirect = self.redirect.as_ref().map(|x| _fbb.create_string(x));
+            let message = self.message.as_ref().map(|x| _fbb.create_string(x));
             TransactionBytes::create(
                 _fbb,
                 &TransactionBytesArgs {
                     notes,
                     data,
-                    redirect,
+                    message,
                 },
             )
         }

@@ -113,7 +113,7 @@ pub fn get_tx_details_account(
     let (account, tx_bin) = connection
         .query_row(
             "SELECT t.account, d.data FROM txs t
-        JOIN txdetails d ON t.id_tx = d.id_tx 
+        JOIN txdetails d ON t.id_tx = d.id_tx
         WHERE t.id_tx = ?1",
             [id_tx],
             |r| Ok((r.get::<_, u32>(0)?, r.get::<_, Vec<u8>>(1)?)),
@@ -168,9 +168,16 @@ pub fn add_tx_value(connection: &Transaction, tx_value: &TxValueUpdate) -> Resul
         value: 0,
     };
     store_tx(connection, &tx)?;
-    let mut s_tx = connection
-        .prepare_cached("UPDATE txs SET value = value + ?3 WHERE txid = ?1 AND account = ?2")?;
-    s_tx.execute(params![tx_value.txid, tx_value.account, tx_value.value])?;
+    let mut s_tx = connection.prepare_cached(
+        "UPDATE txs SET value = value + ?3,
+            timestamp = ?4 WHERE txid = ?1 AND account = ?2",
+    )?;
+    s_tx.execute(params![
+        tx_value.txid,
+        tx_value.account,
+        tx_value.value,
+        tx_value.timestamp
+    ])?;
     Ok(())
 }
 
@@ -262,7 +269,7 @@ pub fn copy_block_times_from_tx(connection: &Connection) -> Result<()> {
 
 pub fn update_tx_time(connection: &Connection) -> Result<()> {
     connection.execute(
-        "INSERT INTO txs(id_tx, timestamp, account, txid, height, value) 
+        "INSERT INTO txs(id_tx, timestamp, account, txid, height, value)
         SELECT t.id_tx, b.timestamp, 0, x'', 0, 0 FROM txs t
         JOIN blck_times b ON t.height = b.height WHERE t.timestamp = 0
         ON CONFLICT (id_tx) DO UPDATE SET

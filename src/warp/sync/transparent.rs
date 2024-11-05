@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
 use rusqlite::{Connection, Transaction};
 use zcash_client_backend::encoding::AddressCodec;
@@ -22,6 +24,7 @@ pub struct TransparentSync {
     pub utxos: Vec<UTXO>,
     pub txs: Vec<(ReceivedTx, OutPoint, u64)>,
     pub tx_updates: Vec<(TxValueUpdate, IdSpent<OutPoint>)>,
+    pub heights: HashSet<u32>,
 }
 
 impl TransparentSync {
@@ -45,6 +48,7 @@ impl TransparentSync {
             utxos,
             txs: vec![],
             tx_updates: vec![],
+            heights: HashSet::new(),
         })
     }
 
@@ -74,6 +78,7 @@ impl TransparentSync {
                         timestamp: tx.timestamp,
                     };
                     self.tx_updates.push((tx_value, id_spent));
+                    self.heights.insert(tx.height);
                 }
             }
             for txout in tx.vouts.iter() {
@@ -110,6 +115,7 @@ impl TransparentSync {
                     value: txout.value,
                 };
                 self.utxos.push(utxo);
+                self.heights.insert(tx.height);
             }
         }
 

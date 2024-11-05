@@ -16,7 +16,7 @@ impl BlockHeaderStore {
         }
     }
 
-    pub fn add_heights(&mut self, heights: &[u32]) -> Result<()> {
+    pub fn add_heights<'a>(&mut self, heights: impl IntoIterator<Item = &'a u32>) -> Result<()> {
         for h in heights {
             self.heights.insert(*h, None);
         }
