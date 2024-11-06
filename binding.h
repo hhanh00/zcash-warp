@@ -118,7 +118,7 @@ struct CResult_u8 c_set_backup_reminder(uint8_t coin, uint32_t account, bool sav
 
 struct CResult_u8 c_downgrade_account(uint8_t coin, uint32_t account, struct CParam capabilities);
 
-struct CResult_u32 c_get_sync_height(uint8_t coin);
+struct CResult______u8 c_get_sync_height(uint8_t coin);
 
 struct CResult_u8 c_rewind(uint8_t coin, uint32_t height);
 

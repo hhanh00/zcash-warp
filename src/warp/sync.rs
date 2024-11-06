@@ -382,7 +382,7 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
 #[c_export]
 pub async fn warp_synchronize(coin: &CoinDef, end_height: u32) -> Result<()> {
     let mut connection = coin.connection()?;
-    let start_height = get_sync_height(&connection)?;
+    let start_height = get_sync_height(&connection)?.height;
     if start_height == 0 {
         let activation_height = get_activation_height(&coin.network)?;
         let mut client = coin.connect_lwd()?;

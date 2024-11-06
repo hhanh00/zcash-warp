@@ -721,7 +721,7 @@ async fn process_command(
             }
             let connection = zec.connection()?;
             let end_height = end_height.unwrap_or(bc_height - confirmations + 1);
-            let start_height = get_sync_height(&connection)?;
+            let start_height = get_sync_height(&connection)?.height;
             if start_height == 0 {
                 anyhow::bail!("no sync data. Have you run reset?");
             }
@@ -752,7 +752,7 @@ async fn process_command(
         }
         Command::Balance { account } => {
             let connection = zec.connection()?;
-            let height = get_sync_height(&connection)?;
+            let height = get_sync_height(&connection)?.height;
             let balance = get_balance(&connection, account, height)?;
             println!("Balance: {:?}", balance);
         }

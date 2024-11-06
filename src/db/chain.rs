@@ -54,10 +54,21 @@ pub fn store_block(connection: &Transaction, bh: &BlockHeader) -> Result<()> {
 }
 
 #[c_export]
-pub fn get_sync_height(connection: &Connection) -> Result<u32> {
-    let height = connection.query_row("SELECT MAX(height) FROM blcks", [], |r| {
-        r.get::<_, Option<u32>>(0)
-    })?;
+pub fn get_sync_height(connection: &Connection) -> Result<CheckpointT> {
+    let height = connection
+        .query_row(
+            "SELECT height, hash, timestamp FROM blcks
+        WHERE height = (SELECT MAX(height) FROM blcks)",
+            [],
+            |r| {
+                Ok(CheckpointT {
+                    height: r.get::<_, u32>(0)?,
+                    hash: Some(r.get::<_, Vec<u8>>(1)?),
+                    timestamp: r.get::<_, u32>(2)?,
+                })
+            },
+        )
+        .optional()?;
     Ok(height.unwrap_or_default())
 }
 
@@ -114,7 +125,7 @@ pub async fn rewind_checkpoint(
     connection: &mut Connection,
     client: &mut Client,
 ) -> Result<()> {
-    let checkpoint = get_sync_height(connection)?;
+    let checkpoint = get_sync_height(connection)?.height;
     if checkpoint > 0 {
         rewind(network, connection, client, checkpoint - 1).await?;
     }
