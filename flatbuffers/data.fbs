@@ -124,6 +124,7 @@ table AccountName {
   id: uint32;
   name: string;
   birth: uint32;
+  icon: [uint8];
   balance: uint64;
   hidden: bool;
 }

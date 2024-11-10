@@ -29,7 +29,7 @@ use warp_macros::c_export;
 #[c_export]
 pub fn list_accounts(coin: &CoinDef, connection: &Connection) -> Result<AccountNameListT> {
     let mut s = connection.prepare(
-        "SELECT id_account, name, birth, balance, hidden FROM accounts ORDER BY position",
+        "SELECT id_account, name, birth, balance, icon, hidden FROM accounts ORDER BY position",
     )?;
     let rows = s.query_map([], |r| {
         Ok((
@@ -37,17 +37,19 @@ pub fn list_accounts(coin: &CoinDef, connection: &Connection) -> Result<AccountN
             r.get::<_, String>(1)?,
             r.get::<_, u32>(2)?,
             r.get::<_, u64>(3)?,
-            r.get::<_, bool>(4)?,
+            r.get::<_, Option<Vec<u8>>>(4)?,
+            r.get::<_, bool>(5)?,
         ))
     })?;
     let mut accounts = vec![];
     for r in rows {
-        let (id, name, birth, balance, hidden) = r?;
+        let (id, name, birth, balance, icon, hidden) = r?;
         accounts.push(AccountNameT {
             coin: coin.coin,
             id,
             name: Some(name),
             birth,
+            icon,
             balance,
             hidden,
         });

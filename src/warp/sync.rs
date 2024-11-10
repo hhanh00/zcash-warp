@@ -359,7 +359,7 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
         update_tx_timestamp(&db_tx, header_dec.heights.values())?;
 
         store_block(&db_tx, &bh)?;
-        update_account_balances(&db_tx, bh.height)?;
+        update_account_balances(&db_tx)?;
 
         // Save block times
         header_dec.save(&db_tx)?;

@@ -4193,8 +4193,9 @@ pub mod fb {
         pub const VT_ID: flatbuffers::VOffsetT = 6;
         pub const VT_NAME: flatbuffers::VOffsetT = 8;
         pub const VT_BIRTH: flatbuffers::VOffsetT = 10;
-        pub const VT_BALANCE: flatbuffers::VOffsetT = 12;
-        pub const VT_HIDDEN: flatbuffers::VOffsetT = 14;
+        pub const VT_ICON: flatbuffers::VOffsetT = 12;
+        pub const VT_BALANCE: flatbuffers::VOffsetT = 14;
+        pub const VT_HIDDEN: flatbuffers::VOffsetT = 16;
 
         #[inline]
         pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -4212,6 +4213,9 @@ pub mod fb {
         ) -> flatbuffers::WIPOffset<AccountName<'bldr>> {
             let mut builder = AccountNameBuilder::new(_fbb);
             builder.add_balance(args.balance);
+            if let Some(x) = args.icon {
+                builder.add_icon(x);
+            }
             builder.add_birth(args.birth);
             if let Some(x) = args.name {
                 builder.add_name(x);
@@ -4227,6 +4231,7 @@ pub mod fb {
             let id = self.id();
             let name = self.name().map(|x| x.to_string());
             let birth = self.birth();
+            let icon = self.icon().map(|x| x.into_iter().collect());
             let balance = self.balance();
             let hidden = self.hidden();
             AccountNameT {
@@ -4234,6 +4239,7 @@ pub mod fb {
                 id,
                 name,
                 birth,
+                icon,
                 balance,
                 hidden,
             }
@@ -4275,6 +4281,19 @@ pub mod fb {
             }
         }
         #[inline]
+        pub fn icon(&self) -> Option<flatbuffers::Vector<'a, u8>> {
+            // Safety:
+            // Created from valid Table for this object
+            // which contains a valid value in this slot
+            unsafe {
+                self._tab
+                    .get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(
+                        AccountName::VT_ICON,
+                        None,
+                    )
+            }
+        }
+        #[inline]
         pub fn balance(&self) -> u64 {
             // Safety:
             // Created from valid Table for this object
@@ -4310,6 +4329,11 @@ pub mod fb {
                 .visit_field::<u32>("id", Self::VT_ID, false)?
                 .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
                 .visit_field::<u32>("birth", Self::VT_BIRTH, false)?
+                .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>(
+                    "icon",
+                    Self::VT_ICON,
+                    false,
+                )?
                 .visit_field::<u64>("balance", Self::VT_BALANCE, false)?
                 .visit_field::<bool>("hidden", Self::VT_HIDDEN, false)?
                 .finish();
@@ -4321,6 +4345,7 @@ pub mod fb {
         pub id: u32,
         pub name: Option<flatbuffers::WIPOffset<&'a str>>,
         pub birth: u32,
+        pub icon: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
         pub balance: u64,
         pub hidden: bool,
     }
@@ -4332,6 +4357,7 @@ pub mod fb {
                 id: 0,
                 name: None,
                 birth: 0,
+                icon: None,
                 balance: 0,
                 hidden: false,
             }
@@ -4359,6 +4385,11 @@ pub mod fb {
         #[inline]
         pub fn add_birth(&mut self, birth: u32) {
             self.fbb_.push_slot::<u32>(AccountName::VT_BIRTH, birth, 0);
+        }
+        #[inline]
+        pub fn add_icon(&mut self, icon: flatbuffers::WIPOffset<flatbuffers::Vector<'b, u8>>) {
+            self.fbb_
+                .push_slot_always::<flatbuffers::WIPOffset<_>>(AccountName::VT_ICON, icon);
         }
         #[inline]
         pub fn add_balance(&mut self, balance: u64) {
@@ -4394,6 +4425,7 @@ pub mod fb {
             ds.field("id", &self.id());
             ds.field("name", &self.name());
             ds.field("birth", &self.birth());
+            ds.field("icon", &self.icon());
             ds.field("balance", &self.balance());
             ds.field("hidden", &self.hidden());
             ds.finish()
@@ -4406,6 +4438,7 @@ pub mod fb {
         pub id: u32,
         pub name: Option<String>,
         pub birth: u32,
+        pub icon: Option<Vec<u8>>,
         pub balance: u64,
         pub hidden: bool,
     }
@@ -4416,6 +4449,7 @@ pub mod fb {
                 id: 0,
                 name: None,
                 birth: 0,
+                icon: None,
                 balance: 0,
                 hidden: false,
             }
@@ -4430,6 +4464,7 @@ pub mod fb {
             let id = self.id;
             let name = self.name.as_ref().map(|x| _fbb.create_string(x));
             let birth = self.birth;
+            let icon = self.icon.as_ref().map(|x| _fbb.create_vector(x));
             let balance = self.balance;
             let hidden = self.hidden;
             AccountName::create(
@@ -4439,6 +4474,7 @@ pub mod fb {
                     id,
                     name,
                     birth,
+                    icon,
                     balance,
                     hidden,
                 },

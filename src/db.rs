@@ -38,6 +38,7 @@ pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> 
         aindex INTEGER NOT NULL,
         dindex INTEGER NOT NULL,
         birth INTEGER NOT NULL,
+        icon BLOB,
         balance INTEGER NOT NULL,
         saved BOOL NOT NULL,
         hidden BOOL NOT NULL)",

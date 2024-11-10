@@ -410,6 +410,15 @@ pub fn create_orchard_account(
     Ok(())
 }
 
+#[c_export]
+pub fn edit_account_icon(connection: &Connection, account: u32, image: &[u8]) -> Result<()> {
+    connection.execute(
+        "UPDATE accounts SET icon = ?2 WHERE id_account = ?1",
+        params![account, image],
+    )?;
+    Ok(())
+}
+
 pub fn get_account_by_name(connection: &Connection, name: &str) -> Result<Option<u32>> {
     let account = connection
         .query_row(

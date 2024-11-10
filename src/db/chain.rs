@@ -114,7 +114,7 @@ pub fn reset_scan(
     db_tx.execute("UPDATE notes SET expiration = NULL", [])?;
     db_tx.execute("UPDATE utxos SET spent = NULL WHERE spent >= ?1", [height])?;
     db_tx.execute("UPDATE utxos SET expiration = NULL", [])?;
-    update_account_balances(&db_tx, height)?;
+    update_account_balances(&db_tx)?;
     db_tx.commit()?;
 
     Ok(height)
@@ -163,7 +163,7 @@ pub async fn rewind(
         db_tx.execute("UPDATE notes SET expiration = NULL", [])?;
         db_tx.execute("UPDATE utxos SET spent = NULL WHERE spent > ?1", [height])?;
         db_tx.execute("UPDATE utxos SET expiration = NULL", [])?;
-        update_account_balances(&db_tx, height)?;
+        update_account_balances(&db_tx)?;
         db_tx.commit()?;
     } else {
         reset_chain(network, connection, client, 0).await?;

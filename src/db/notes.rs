@@ -458,16 +458,17 @@ pub fn update_tx_timestamp<'a, I: IntoIterator<Item = &'a Option<BlockHeader>>>(
     Ok(())
 }
 
-pub fn update_account_balances(connection: &Transaction, height: u32) -> Result<()> {
+pub fn update_account_balances(connection: &Transaction) -> Result<()> {
     connection.execute(
-        "UPDATE accounts SET balance = coins.balance FROM
-        (WITH coins AS
-        (SELECT account, value, spent FROM notes UNION ALL
-        SELECT account, value, spent FROM utxos)
-        SELECT account, SUM(value) AS balance FROM coins
-        WHERE spent IS NULL OR spent > ?1 GROUP BY account)
-        AS coins WHERE coins.account = accounts.id_account",
-        [height],
+        "UPDATE accounts SET balance = balances.balance FROM
+        (WITH 
+            coins AS (SELECT account, value, spent FROM notes UNION ALL
+                SELECT account, value, spent FROM utxos),
+            unspent AS (SELECT account, SUM(value) AS balance , spent FROM coins WHERE spent IS NULL GROUP BY account)
+		SELECT id_account, COALESCE(u.balance, 0) AS balance FROM accounts a
+		LEFT JOIN unspent u ON a.id_account = u.account) AS balances
+        WHERE balances.id_account = accounts.id_account",
+        [],
     )?;
     Ok(())
 }
