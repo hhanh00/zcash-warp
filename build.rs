@@ -6,7 +6,7 @@ fn main() {
 fn tonic_build() {
     tonic_build::configure()
         .out_dir("src/generated")
-        .compile(
+        .compile_protos(
             &["proto/service.proto", "proto/compact_formats.proto"],
             &["proto"],
         )

@@ -80,7 +80,9 @@ impl Mempool {
                                         tracing::info!("{}", tx.height);
                                         if account == 0 { continue }
                                         let tx = parse_raw_tx(&c, &c.network, &connection, account, &tx).unwrap();
-                                        store_unconfirmed_tx(&connection, &tx)?;
+                                        if tx.value != 0 {
+                                            store_unconfirmed_tx(&connection, &tx)?;
+                                        }
                                     }
                                     else {
                                         break;
