@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 use crate::{
     data::fb::{IdNoteT, TransactionBytesT},
@@ -345,6 +345,15 @@ impl UnsignedTransaction {
 #[c_export]
 pub fn init_sapling_prover(spend: &[u8], output: &[u8]) -> Result<()> {
     let prover = LocalTxProver::from_bytes(spend, output);
+    *PROVER.lock() = Some(prover);
+    Ok(())
+}
+
+pub fn init_sapling_prover_with_location(directory: &Path) -> Result<()> {
+    let prover = LocalTxProver::new(
+        &directory.join("sapling-spend.params"),
+        &directory.join("sapling-output.params"),
+    );
     *PROVER.lock() = Some(prover);
     Ok(())
 }

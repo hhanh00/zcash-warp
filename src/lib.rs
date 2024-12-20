@@ -4,7 +4,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use tonic::transport::Channel;
 
 #[path = "./generated/data_generated.rs"]
-mod data;
+pub mod data;
 
 pub mod account;
 pub mod cli;
