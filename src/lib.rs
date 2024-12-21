@@ -30,3 +30,4 @@ pub const EXPIRATION_HEIGHT_DELTA: u32 = 50;
 // pub use coin::{CoinDef, COINS};
 // pub use keys::{generate_random_mnemonic_phrase, TSKStore};
 pub use cli::cli_main;
+pub use zcash_proofs::download_sapling_parameters;
