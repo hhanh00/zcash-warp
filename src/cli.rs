@@ -93,7 +93,7 @@ pub enum AccountCommand {
         key: String,
         name: Option<String>,
         birth: Option<u32>,
-        transparent_only: u8,
+        pools: u8,
     },
     EditName {
         account: u32,
@@ -398,7 +398,7 @@ async fn process_command(
                     key,
                     name,
                     birth,
-                    transparent_only,
+                    pools,
                 } => {
                     let birth = match birth {
                         Some(b) => b,
@@ -417,7 +417,7 @@ async fn process_command(
                         &key,
                         0,
                         birth,
-                        transparent_only != 0,
+                        pools,
                         false,
                     )?;
                 }

@@ -200,7 +200,7 @@ pub fn create_new_account(
     key: &str,
     acc_index: u32,
     birth: u32,
-    transparent_only: bool,
+    pools: u8,
     is_new: bool,
 ) -> Result<u32> {
     let ak = detect_key(network, &key, acc_index)?;
@@ -215,25 +215,26 @@ pub fn create_new_account(
         birth,
         is_new,
     )?;
-    if let Some(ti) = ak.to_transparent() {
-        create_transparent_account(network, &db_tx, account, &ti)?;
-        // this is not merged in the 'if' below to keep the addresses
-        // in this order in the db (it looks nicer)
-        if ti.vk.is_some() && dindex != 0 {
-            create_transparent_address(network, &db_tx, account, 0, 0, &ti)?;
-        }
-        create_transparent_address(network, &db_tx, account, 0, dindex, &ti)?;
-        if ti.vk.is_some() {
-            create_transparent_address(network, &db_tx, account, 1, 0, &ti)?; // change
-        }
-    } else if transparent_only {
-        anyhow::bail!("Must have a transparent key");
+    if pools & 1 != 0 {
+        if let Some(ti) = ak.to_transparent() {
+            create_transparent_account(network, &db_tx, account, &ti)?;
+            // this is not merged in the 'if' below to keep the addresses
+            // in this order in the db (it looks nicer)
+            if ti.vk.is_some() && dindex != 0 {
+                create_transparent_address(network, &db_tx, account, 0, 0, &ti)?;
+            }
+            create_transparent_address(network, &db_tx, account, 0, dindex, &ti)?;
+            if ti.vk.is_some() {
+                create_transparent_address(network, &db_tx, account, 1, 0, &ti)?; // change
+            }
+        } 
     }
-
-    if !transparent_only {
+    if pools & 2 != 0 {
         if let Some(si) = ak.to_sapling() {
             create_sapling_account(network, &db_tx, account, &si)?;
         }
+    }
+    if pools & 4 != 0 {
         if let Some(oi) = ak.to_orchard() {
             create_orchard_account(network, &db_tx, account, &oi)?;
         }
