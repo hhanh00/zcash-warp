@@ -99,7 +99,7 @@ struct CResult_u32 c_create_new_account(uint8_t coin,
                                         char *key,
                                         uint32_t acc_index,
                                         uint32_t birth,
-                                        bool transparent_only,
+                                        uint8_t pools,
                                         bool is_new);
 
 struct CResult_u8 c_hide_account(uint8_t coin, uint32_t account, bool hidden);

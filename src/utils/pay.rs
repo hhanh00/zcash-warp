@@ -4,19 +4,12 @@ use rusqlite::Connection;
 use zcash_protocol::memo::{Memo, MemoBytes};
 
 use crate::{
-    account::contacts::commit_unsaved_contacts,
-    data::fb::{
+    account::contacts::commit_unsaved_contacts, coin::CoinDef, data::fb::{
         PaymentRequest, PaymentRequestT, RecipientT, TransactionBytes, TransactionBytesT,
         TransactionSummary, TransactionSummaryT,
-    },
-    db::{
+    }, db::{
         account::get_account_info, chain::snap_to_checkpoint, notes::mark_notes_unconfirmed_spent,
-    },
-    fb_unwrap,
-    lwd::{broadcast, get_last_height, get_tree_state},
-    network::Network,
-    pay::{make_payment, UnsignedTransaction},
-    Client, EXPIRATION_HEIGHT_DELTA,
+    }, fb_unwrap, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{make_payment, UnsignedTransaction}, Client, PooledSQLConnection, EXPIRATION_HEIGHT_DELTA
 };
 
 use warp_macros::c_export;
@@ -25,8 +18,21 @@ pub(crate) const COST_PER_ACTION: u64 = 5_000;
 
 #[c_export]
 pub async fn prepare_payment(
+    coin: &CoinDef,
+    account: u32,
+    payment: &PaymentRequestT,
+    redirect: &str,
+) -> Result<TransactionSummaryT> {
+    let connection = coin.connection()?;
+    let mut client = coin.connect_lwd()?;
+    prepare_payment_inner(&coin.network, connection, &mut client, account,
+        payment, redirect,
+    ).await
+}
+
+pub async fn prepare_payment_inner(
     network: &Network,
-    connection: &Connection,
+    connection: PooledSQLConnection,
     client: &mut Client,
     account: u32,
     payment: &PaymentRequestT,
