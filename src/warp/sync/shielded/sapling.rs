@@ -56,7 +56,7 @@ impl ShieldedProtocol for SaplingProtocol {
         time: u32,
         ivtx: u32,
         vout: u32,
-        output: &Self::Output,
+        output: Self::Output,
         sender: &mut std::sync::mpsc::Sender<crate::warp::sync::ReceivedNote>,
     ) -> Result<()> {
         try_sapling_decrypt(

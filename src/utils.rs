@@ -1,6 +1,6 @@
 use crate::{
     coin::CoinDef,
-    data::fb::{Config, ConfigT},
+    data::fb::ConfigT,
     Hash,
 };
 use anyhow::{Context, Result};
@@ -12,7 +12,6 @@ use tracing_subscriber::{
 };
 
 use crate::coin::COINS;
-use warp_macros::c_export;
 
 pub mod chain;
 pub mod data_split;
@@ -130,7 +129,6 @@ pub fn to_txid_str(txid: &Hash) -> String {
     hex::encode(&txid)
 }
 
-#[c_export]
 pub async fn configure(coin: &CoinDef, config: &ConfigT) -> Result<()> {
     tracing::info!("{:?}", config);
     let mut coin_def = COINS[coin.coin as usize].lock();

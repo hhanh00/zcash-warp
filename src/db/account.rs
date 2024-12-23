@@ -24,9 +24,7 @@ use crate::network::Network;
 use crate::types::{AccountInfo, OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInfo};
 use crate::utils::ContextExt;
 use crate::warp::TransparentSK;
-use warp_macros::c_export;
 
-#[c_export]
 pub fn list_accounts(coin: &CoinDef, connection: &Connection) -> Result<AccountNameListT> {
     let mut s = connection.prepare(
         "SELECT id_account, name, birth, balance, icon, hidden FROM accounts ORDER BY position",
@@ -60,7 +58,6 @@ pub fn list_accounts(coin: &CoinDef, connection: &Connection) -> Result<AccountN
     Ok(accounts)
 }
 
-#[c_export]
 pub fn list_account_transparent_addresses(
     connection: &Connection,
     account: u32,
@@ -251,7 +248,6 @@ pub fn get_account_info(
     Ok(ai)
 }
 
-#[c_export]
 pub fn change_account_dindex(
     network: &Network,
     connection: &Connection,
@@ -312,7 +308,6 @@ pub fn list_account_tsk(
     Ok(tsks)
 }
 
-#[c_export]
 pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result<BalanceT> {
     // includes spent but not confirmed
     // for display on the balance page
@@ -351,7 +346,6 @@ pub fn get_balance(connection: &Connection, account: u32, height: u32) -> Result
     Ok(b)
 }
 
-#[c_export]
 pub fn get_account_signing_capabilities(
     network: &Network,
     connection: &Connection,
@@ -396,7 +390,6 @@ pub fn get_account_signing_capabilities(
     Ok(account_caps)
 }
 
-#[c_export]
 pub fn get_account_property(connection: &Connection, account: u32, name: &str) -> Result<Vec<u8>> {
     let value = connection
         .query_row(
@@ -408,7 +401,6 @@ pub fn get_account_property(connection: &Connection, account: u32, name: &str) -
     Ok(value.unwrap_or_default())
 }
 
-#[c_export]
 pub fn set_account_property(
     connection: &Connection,
     account: u32,
@@ -424,7 +416,6 @@ pub fn set_account_property(
     Ok(())
 }
 
-#[c_export]
 pub fn get_spendings(
     network: &Network,
     connection: &Connection,
@@ -484,7 +475,6 @@ pub fn get_unspent_before(connection: &Connection, account: u32, height: u32) ->
     Ok(spent.unwrap_or_default())
 }
 
-#[c_export]
 pub fn get_spendable(connection: &Connection, account: u32, height: u32) -> Result<SpendableT> {
     let unconfirmed = get_unconfirmed_spent(connection, account)?;
     let total = get_unspent_before(connection, account, u32::MAX)?;

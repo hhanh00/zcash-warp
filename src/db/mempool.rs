@@ -1,11 +1,8 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
 
-use warp_macros::c_export;
-
 use crate::{data::fb::UnconfirmedTxT, warp::sync::ReceivedTx};
 
-#[c_export]
 pub fn list_unconfirmed_txs(connection: &Connection, account: u32) -> Result<Vec<UnconfirmedTxT>> {
     let mut s = connection.prepare("SELECT txid, value FROM mempool_txs WHERE account = ?1")?;
     let rows = s.query_map([account], |r| {
@@ -21,7 +18,6 @@ pub fn list_unconfirmed_txs(connection: &Connection, account: u32) -> Result<Vec
     Ok(txs)
 }
 
-#[c_export]
 pub fn get_unconfirmed_balance(connection: &Connection, account: u32) -> Result<i64> {
     let balance = connection.query_row(
         "SELECT SUM(value) FROM mempool_txs

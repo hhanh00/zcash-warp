@@ -21,7 +21,6 @@ use crate::{
 };
 
 use crate::coin::COINS;
-use warp_macros::c_export;
 
 use super::sync::ReceivedTx;
 
@@ -139,14 +138,12 @@ fn parse_raw_tx(
     Ok(tx)
 }
 
-#[c_export]
 pub fn mempool_run(coin: &CoinDef) -> Result<()> {
     let mut coin_def = COINS[coin.coin as usize].lock();
     coin_def.run_mempool()?;
     Ok(())
 }
 
-#[c_export]
 pub async fn mempool_set_account(coin: &CoinDef, account: u32) -> Result<()> {
     tracing::info!("ms 1");
     if let Some(tx) = coin.mempool_tx.as_ref() {

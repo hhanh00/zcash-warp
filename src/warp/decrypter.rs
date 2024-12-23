@@ -19,15 +19,16 @@ use group::{ff::PrimeField as _, Curve as _, GroupEncoding};
 use halo2_proofs::pasta::{pallas::Point, Fq};
 use orchard::{
     keys::IncomingViewingKey,
-    note::{ExtractedNoteCommitment, Rho},
-    note_encryption::OrchardDomain,
+    note::{ExtractedNoteCommitment, Nullifier},
+    note_encryption::{CompactAction, OrchardDomain},
 };
 use sapling_crypto::{
     note_encryption::{plaintext_version_is_valid, SaplingDomain, KDF_SAPLING_PERSONALIZATION},
     SaplingIvk,
 };
-use zcash_note_encryption::COMPACT_NOTE_SIZE;
+use zcash_note_encryption::{EphemeralKeyBytes, COMPACT_NOTE_SIZE};
 use zcash_primitives::transaction::components::sapling::zip212_enforcement;
+use zcash_note_encryption::ShieldedOutput as _;
 
 pub fn try_sapling_decrypt(
     network: &Network,
@@ -36,7 +37,7 @@ pub fn try_sapling_decrypt(
     timestamp: u32,
     ivtx: u32,
     vout: u32,
-    co: &CompactSaplingOutput,
+    co: CompactSaplingOutput,
     sender: &mut Sender<ReceivedNote>,
 ) -> Result<()> {
     let epkb = &*co.epk;
@@ -111,27 +112,37 @@ pub fn try_orchard_decrypt(
     timestamp: u32,
     ivtx: u32,
     vout: u32,
-    ca: &CompactOrchardAction,
+    ca: CompactOrchardAction,
     sender: &mut Sender<ReceivedNote>,
 ) -> Result<()> {
+    let CompactOrchardAction { nullifier, cmx, ephemeral_key, ciphertext } = ca;
+
+    let nullifier = Nullifier::from_bytes(&nullifier.try_into().unwrap()).unwrap();
+    let ca2 = CompactAction::from_parts(
+        nullifier,
+        ExtractedNoteCommitment::from_bytes(&cmx.try_into().unwrap()).unwrap(), 
+        EphemeralKeyBytes(ephemeral_key.try_into().unwrap()), 
+        ciphertext.try_into().unwrap());
+    let d = OrchardDomain::for_compact_action(&ca2);
+    let epk = Point::from_bytes(&ca2.ephemeral_key().0)
+    .unwrap()
+    .to_affine();
+
     let zip212_enforcement = zip212_enforcement(network, height.into());
     for (account, ivk) in ivks {
         let bb = ivk.to_bytes();
         let ivk_fq = Fq::from_repr(bb[32..64].try_into().unwrap()).unwrap();
 
-        let epk = Point::from_bytes(&ca.ephemeral_key.clone().try_into().unwrap())
-            .unwrap()
-            .to_affine();
         let ka = epk * ivk_fq;
         let key = Params::new()
             .hash_length(32)
             .personal(KDF_ORCHARD_PERSONALIZATION)
             .to_state()
             .update(&ka.to_bytes())
-            .update(&ca.ephemeral_key)
+            .update(&ca2.ephemeral_key().0)
             .finalize();
         let mut plaintext = [0; COMPACT_NOTE_SIZE];
-        plaintext.copy_from_slice(&ca.ciphertext);
+        plaintext.copy_from_slice(ca2.enc_ciphertext());
         let mut keystream = ChaCha20::new(key.as_ref().into(), [0u8; 12][..].into());
         keystream.seek(64);
         keystream.apply_keystream(&mut plaintext);
@@ -141,14 +152,12 @@ pub fn try_orchard_decrypt(
         {
             use zcash_note_encryption::Domain;
             let pivk = orchard::keys::PreparedIncomingViewingKey::new(&ivk);
-            let rho = Rho::from_bytes(&ca.nullifier.clone().try_into().unwrap()).unwrap();
-            let d = OrchardDomain::for_rho(&rho);
             if let Some((note, recipient)) =
                 d.parse_note_plaintext_without_memo_ivk(&pivk, &plaintext)
             {
-                let cmx = ExtractedNoteCommitment::from(note.commitment());
+                let cmx2 = ExtractedNoteCommitment::from(note.commitment());
                 let value = note.value().inner();
-                if &cmx.to_bytes() == &*ca.cmx {
+                if cmx2 == ca2.cmx() {
                     let note = ReceivedNote {
                         is_new: true,
                         id: 0,
@@ -158,7 +167,7 @@ pub fn try_orchard_decrypt(
                         address: recipient.to_raw_address_bytes(),
                         value,
                         rcm: note.rseed().as_bytes().clone(),
-                        rho: Some(rho.to_bytes()),
+                        rho: Some(ca2.nullifier().to_bytes()),
                         tx: ReceivedTx {
                             id: 0,
                             account: *account,

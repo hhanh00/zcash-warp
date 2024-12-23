@@ -3,11 +3,9 @@ use raptorq::{Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation};
 
 use crate::data::fb::{PacketT, Packets, PacketsT};
 use crate::fb_unwrap;
-use warp_macros::c_export;
 
 const QR_DATA_SIZE: u16 = 256;
 
-#[c_export]
 pub fn split(data: &[u8], threshold: u32) -> Result<Vec<PacketT>> {
     let length = data.len();
     let config = ObjectTransmissionInformation::with_defaults(length as u64, QR_DATA_SIZE);
@@ -23,7 +21,6 @@ pub fn split(data: &[u8], threshold: u32) -> Result<Vec<PacketT>> {
     Ok(packets)
 }
 
-#[c_export]
 pub fn merge(parts: &PacketsT) -> Result<Vec<u8>> {
     let packets = fb_unwrap!(parts.packets);
     if packets.is_empty() {

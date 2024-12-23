@@ -15,9 +15,6 @@ use rusqlite::Connection;
 use tracing::Level;
 use zcash_client_backend::encoding::AddressCodec as _;
 
-use warp_macros::c_export;
-
-#[c_export]
 pub async fn scan_transparent_addresses(
     network: &Network,
     connection: &mut Connection,

@@ -9,8 +9,6 @@ use crate::{
 use anyhow::Result;
 use rusqlite::{params, Connection, Transaction};
 
-use warp_macros::c_export;
-
 use super::contacts::address_to_bytes;
 
 pub fn list_new_txids(connection: &Connection) -> Result<Vec<(u32, u32, u32, Hash)>> {
@@ -123,7 +121,6 @@ pub fn get_tx_details_account(
     Ok((account, tx))
 }
 
-#[c_export]
 pub fn get_tx_details(
     network: &Network,
     connection: &Connection,

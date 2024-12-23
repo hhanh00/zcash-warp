@@ -1,6 +1,5 @@
 use anyhow::Result;
 use rusqlite::Connection;
-use warp_macros::c_export;
 
 use crate::utils::ContextExt;
 
@@ -15,7 +14,6 @@ pub mod swap;
 pub mod tx;
 pub mod witnesses;
 
-#[c_export]
 pub fn create_schema(connection: &mut Connection, _version: &str) -> Result<()> {
     connection
         .execute(

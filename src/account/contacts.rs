@@ -24,9 +24,6 @@ use crate::{
     warp::legacy::CommitmentTreeFrontier,
 };
 
-use warp_macros::c_export;
-
-#[c_export]
 pub fn add_contact(
     network: &Network,
     connection: &Connection,

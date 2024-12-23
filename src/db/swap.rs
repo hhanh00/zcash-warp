@@ -2,9 +2,7 @@ use anyhow::Result;
 use rusqlite::{params, Connection};
 
 use crate::data::fb::{Swap, SwapListT, SwapT};
-use warp_macros::c_export;
 
-#[c_export]
 pub fn store_swap(connection: &Connection, account: u32, swap: &SwapT) -> Result<()> {
     let SwapT {
         provider,
@@ -54,7 +52,6 @@ pub fn store_swap(connection: &Connection, account: u32, swap: &SwapT) -> Result
     Ok(())
 }
 
-#[c_export]
 pub fn list_swaps(connection: &Connection, account: u32) -> Result<SwapListT> {
     let mut s = connection.prepare(
         "SELECT 
@@ -103,7 +100,6 @@ pub fn list_swaps(connection: &Connection, account: u32) -> Result<SwapListT> {
     Ok(swaps)
 }
 
-#[c_export]
 pub fn clear_swap_history(connection: &Connection, account: u32) -> Result<()> {
     connection.execute("DELETE FROM swaps WHERE account = ?1", [account])?;
     Ok(())

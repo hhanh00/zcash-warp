@@ -10,8 +10,6 @@ use crate::utils::ContextExt;
 use crate::{data::fb::CheckpointT, warp::BlockHeader};
 use crate::{Client, Hash};
 
-use warp_macros::c_export;
-
 pub fn snap_to_checkpoint(connection: &Connection, height: u32) -> Result<CheckpointHeight> {
     let height = connection.query_row(
         "SELECT MAX(height) FROM blcks WHERE height <= ?1",
@@ -53,7 +51,6 @@ pub fn store_block(connection: &Transaction, bh: &BlockHeader) -> Result<()> {
     Ok(())
 }
 
-#[c_export]
 pub fn get_sync_height(connection: &Connection) -> Result<CheckpointT> {
     let height = connection
         .query_row(
@@ -132,7 +129,6 @@ pub async fn rewind_checkpoint(
     Ok(())
 }
 
-#[c_export]
 pub async fn rewind(
     network: &Network,
     connection: &mut Connection,
@@ -172,7 +168,6 @@ pub async fn rewind(
     Ok(())
 }
 
-#[c_export]
 pub fn list_checkpoints(connection: &Connection) -> Result<Vec<CheckpointT>> {
     let mut s = connection.prepare("SELECT height, hash, timestamp FROM blcks ORDER BY height")?;
     let rows = s.query_map([], |r| -> Result<(u32, Hash, u32), _> {
@@ -200,7 +195,6 @@ pub fn delete_checkpoint(connection: &mut Connection, height: u32) -> Result<()>
     Ok(())
 }
 
-#[c_export]
 pub fn purge_checkpoints(connection: &mut Connection, min_height: u32) -> Result<()> {
     let heights = {
         let mut s = connection.prepare(

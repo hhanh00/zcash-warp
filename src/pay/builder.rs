@@ -41,7 +41,6 @@ use zcash_primitives::{
 use zcash_proofs::prover::LocalTxProver;
 
 use crate::network::Network;
-use warp_macros::c_export;
 
 const DUST: u64 = 54;
 
@@ -342,7 +341,6 @@ impl UnsignedTransaction {
     }
 }
 
-#[c_export]
 pub fn init_sapling_prover(spend: &[u8], output: &[u8]) -> Result<()> {
     let prover = LocalTxProver::from_bytes(spend, output);
     *PROVER.lock() = Some(prover);

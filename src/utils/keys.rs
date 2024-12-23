@@ -15,9 +15,7 @@ use crate::{
     network::Network,
     types::TransparentAccountInfo,
 };
-use warp_macros::c_export;
 
-#[c_export]
 pub fn derive_zip32_keys(
     network: &Network,
     connection: &Connection,

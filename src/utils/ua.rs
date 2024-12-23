@@ -10,8 +10,6 @@ use zcash_primitives::legacy::TransparentAddress;
 
 use crate::{data::fb::UAReceiversT, types::PoolMask};
 
-use warp_macros::c_export;
-
 pub fn split_address(
     network: &Network,
     address: &str,
@@ -42,7 +40,6 @@ pub fn split_address(
     Ok(receivers)
 }
 
-#[c_export]
 pub fn decode_address(network: &Network, address: &str) -> Result<UAReceiversT> {
     let (t, s, o, tex) = split_address(network, address)?;
     let ua = UAReceiversT {
@@ -54,7 +51,6 @@ pub fn decode_address(network: &Network, address: &str) -> Result<UAReceiversT> 
     Ok(ua)
 }
 
-#[c_export]
 pub fn filter_address(network: &Network, address: &str, pool_mask: u8) -> Result<String> {
     let (t, s, o, _) = split_address(network, address)?;
     let t = t.filter(|_| pool_mask & 1 != 0);

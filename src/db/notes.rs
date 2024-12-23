@@ -11,8 +11,6 @@ use crate::{
 use anyhow::{Error, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 
-use warp_macros::c_export;
-
 use super::tx::{add_tx_value, store_tx};
 
 pub fn get_note_by_nf(
@@ -473,7 +471,6 @@ pub fn update_account_balances(connection: &Transaction) -> Result<()> {
     Ok(())
 }
 
-#[c_export]
 pub fn get_unspent_notes(
     connection: &Connection,
     account: u32,
@@ -512,7 +509,6 @@ pub fn get_unspent_notes(
     Ok(notes)
 }
 
-#[c_export]
 pub fn get_unspent_utxos(
     connection: &Connection,
     account: u32,
@@ -531,7 +527,6 @@ pub fn get_unspent_utxos(
     Ok(utxos)
 }
 
-#[c_export]
 pub fn exclude_note(connection: &Connection, id: u32, reverse: bool) -> Result<()> {
     connection.execute(
         "UPDATE notes SET excluded = ?2 WHERE id_note = ?1",
@@ -540,7 +535,6 @@ pub fn exclude_note(connection: &Connection, id: u32, reverse: bool) -> Result<(
     Ok(())
 }
 
-#[c_export]
 pub fn reverse_note_exclusion(connection: &Connection, account: u32) -> Result<()> {
     connection.execute(
         "UPDATE notes SET excluded = NOT excluded WHERE account = ?1",

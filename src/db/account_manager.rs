@@ -29,8 +29,6 @@ use crate::{
     utils::{keys::find_address_index, ContextExt},
 };
 
-use warp_macros::c_export;
-
 use super::account::get_account_info;
 
 pub fn parse_seed_phrase(phrase: &str) -> Result<Seed> {
@@ -186,13 +184,11 @@ pub fn detect_key(network: &Network, key: &str, acc_index: u32) -> Result<Accoun
     Ok(ak)
 }
 
-#[c_export]
 pub fn is_valid_key(network: &Network, key: &str) -> Result<bool> {
     let valid = detect_key(network, key, 0).is_ok();
     Ok(valid)
 }
 
-#[c_export]
 pub fn create_new_account(
     network: &Network,
     connection: &mut Connection,
@@ -264,7 +260,6 @@ pub fn create_account(
     Ok(account as u32)
 }
 
-#[c_export]
 pub fn hide_account(connection: &Connection, account: u32, hidden: bool) -> Result<()> {
     connection.execute(
         "UPDATE accounts SET hidden = ?2 WHERE id_account = ?1",
@@ -273,7 +268,6 @@ pub fn hide_account(connection: &Connection, account: u32, hidden: bool) -> Resu
     Ok(())
 }
 
-#[c_export]
 pub fn reorder_account(
     network: &Network,
     connection: &mut Connection,
@@ -411,7 +405,6 @@ pub fn create_orchard_account(
     Ok(())
 }
 
-#[c_export]
 pub fn edit_account_icon(connection: &Connection, account: u32, image: &[u8]) -> Result<()> {
     connection.execute(
         "UPDATE accounts SET icon = ?2 WHERE id_account = ?1",
@@ -444,7 +437,6 @@ pub fn get_account_seed(connection: &Connection, account: u32) -> Result<(Seed, 
     Ok((seed, aindex))
 }
 
-#[c_export]
 pub fn new_transparent_address(
     network: &Network,
     connection: &Connection,
@@ -542,7 +534,6 @@ pub fn extend_transparent_addresses(
     Ok(())
 }
 
-#[c_export]
 pub fn edit_account_name(connection: &Connection, account: u32, name: &str) -> Result<()> {
     connection.execute(
         "UPDATE accounts SET name = ?2 where id_account = ?1",
@@ -551,7 +542,6 @@ pub fn edit_account_name(connection: &Connection, account: u32, name: &str) -> R
     Ok(())
 }
 
-#[c_export]
 pub fn edit_account_birth(connection: &Connection, account: u32, birth: u32) -> Result<()> {
     connection.execute(
         "UPDATE accounts SET birth = ?2 where id_account = ?1",
@@ -560,7 +550,6 @@ pub fn edit_account_birth(connection: &Connection, account: u32, birth: u32) -> 
     Ok(())
 }
 
-#[c_export]
 pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     connection.execute("DELETE FROM notes WHERE account = ?1", params![account])?;
     connection.execute("DELETE FROM utxos WHERE account = ?1", params![account])?;
@@ -601,7 +590,6 @@ pub fn delete_account(connection: &Connection, account: u32) -> Result<()> {
     Ok(())
 }
 
-#[c_export]
 pub fn set_backup_reminder(connection: &Connection, account: u32, saved: bool) -> Result<()> {
     connection.execute(
         "UPDATE accounts SET saved = ?2 WHERE id_account = ?1",
@@ -610,7 +598,6 @@ pub fn set_backup_reminder(connection: &Connection, account: u32, saved: bool) -
     Ok(())
 }
 
-#[c_export]
 pub fn downgrade_account(
     connection: &Connection,
     account: u32,

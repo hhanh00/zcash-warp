@@ -56,8 +56,6 @@ use zip::unstable::{LittleEndianReadExt, LittleEndianWriteExt};
 
 use super::Witness;
 
-use warp_macros::c_export;
-
 pub mod builder;
 mod header;
 mod shielded;
@@ -161,7 +159,6 @@ pub struct ReceivedNote {
 pub type SaplingSync = Synchronizer<shielded::sapling::SaplingProtocol>;
 pub type OrchardSync = Synchronizer<shielded::orchard::OrchardProtocol>;
 
-#[c_export]
 pub async fn download_warp_blocks(
     network: &Network,
     warp_url: &str,
@@ -379,7 +376,6 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
     Ok(())
 }
 
-#[c_export]
 pub async fn warp_synchronize(coin: &CoinDef, end_height: u32) -> Result<()> {
     let mut connection = coin.connection()?;
     let start_height = get_sync_height(&connection)?.height;
@@ -436,7 +432,6 @@ impl CompactBlockSource for FileCompactBlockSource {
     }
 }
 
-#[c_export]
 pub async fn warp_synchronize_from_file(coin: &CoinDef, file: &str) -> Result<()> {
     let source = FileCompactBlockSource {
         file: file.to_string(),
@@ -457,7 +452,6 @@ pub async fn warp_synchronize_from_file(coin: &CoinDef, file: &str) -> Result<()
     Ok(())
 }
 
-#[c_export]
 pub async fn transparent_scan(
     network: &Network,
     connection: &mut Connection,

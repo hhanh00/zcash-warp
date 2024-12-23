@@ -29,7 +29,7 @@ pub trait ShieldedProtocol {
     type Hasher: Hasher;
     type IVK: Sync;
     type Spend;
-    type Output: Sync;
+    type Output: Clone + Sync;
 
     fn is_orchard() -> bool;
 
@@ -48,7 +48,7 @@ pub trait ShieldedProtocol {
         time: u32,
         ivtx: u32,
         vout: u32,
-        output: &Self::Output,
+        output: Self::Output,
         sender: &mut Sender<ReceivedNote>,
     ) -> Result<()>;
     fn finalize_received_note(txid: Hash, note: &mut ReceivedNote, ai: &AccountInfo) -> Result<()>;
@@ -132,7 +132,7 @@ impl<P: ShieldedProtocol> Synchronizer<P> {
                     time,
                     ivtx as u32,
                     vout as u32,
-                    o,
+                    o.clone(),
                     sender,
                 )
                 .unwrap();

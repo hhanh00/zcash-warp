@@ -8,11 +8,9 @@ use zcash_protocol::memo::Memo;
 use zcash_protocol::{memo::MemoBytes, value::Zatoshis};
 
 use crate::data::fb::{PaymentRequest, PaymentRequestT, RecipientT};
-use warp_macros::c_export;
 
 use super::ua::{decode_address, filter_address};
 
-#[c_export]
 pub fn make_payment_uri(network: &Network, payment: &PaymentRequestT) -> Result<String> {
     let payments = payment
         .recipients
@@ -41,7 +39,6 @@ pub fn make_payment_uri(network: &Network, payment: &PaymentRequestT) -> Result<
     Ok(uri)
 }
 
-#[c_export]
 pub fn parse_payment_uri(
     #[allow(unused_variables)] network: &Network,
     uri: &str,
@@ -89,7 +86,6 @@ pub fn parse_payment_uri(
     Ok(p)
 }
 
-#[c_export]
 pub fn is_valid_address_or_uri(network: &Network, s: &str) -> Result<u8> {
     let res = if decode_address(network, s).is_ok() {
         1

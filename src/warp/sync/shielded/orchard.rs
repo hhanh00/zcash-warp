@@ -63,7 +63,7 @@ impl ShieldedProtocol for OrchardProtocol {
         time: u32,
         ivtx: u32,
         vout: u32,
-        output: &Self::Output,
+        output: Self::Output,
         sender: &mut Sender<ReceivedNote>,
     ) -> Result<()> {
         try_orchard_decrypt(network, ivks, height, time, ivtx, vout, output, sender)

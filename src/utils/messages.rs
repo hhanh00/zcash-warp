@@ -9,7 +9,6 @@ use crate::{
 };
 
 use std::str::FromStr as _;
-use warp_macros::c_export;
 
 pub fn navigate_message(
     connection: &Connection,
@@ -24,7 +23,6 @@ pub fn navigate_message(
     return navigate_message_by_height(connection, account, height, reverse);
 }
 
-#[c_export]
 pub fn prev_message(
     connection: &Connection,
     account: u32,
@@ -33,7 +31,6 @@ pub fn prev_message(
     navigate_message(connection, account, height, None, true).map(|m| m.unwrap_or_default())
 }
 
-#[c_export]
 pub fn next_message(
     connection: &Connection,
     account: u32,
@@ -42,7 +39,6 @@ pub fn next_message(
     navigate_message(connection, account, height, None, false).map(|m| m.unwrap_or_default())
 }
 
-#[c_export]
 pub fn prev_message_thread(
     connection: &Connection,
     account: u32,
@@ -53,7 +49,6 @@ pub fn prev_message_thread(
         .map(|m| m.unwrap_or_default())
 }
 
-#[c_export]
 pub fn next_message_thread(
     connection: &Connection,
     account: u32,

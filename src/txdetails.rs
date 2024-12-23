@@ -39,8 +39,6 @@ use crate::{
     Hash,
 };
 
-use warp_macros::c_export;
-
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct TransparentInput {
     pub out_point: OutPoint,
@@ -259,7 +257,7 @@ pub fn analyze_raw_transaction(
                     nf: a.nullifier().to_bytes(),
                 });
 
-                let domain = OrchardDomain::for_rho(&a.rho());
+                let domain = OrchardDomain::for_action(&a);
                 let fnote = try_note_decryption(&domain, &ivk, a)
                     .map(|(n, p, m)| (n, p, m, true))
                     .or_else(|| {
@@ -372,7 +370,6 @@ pub fn analyze_raw_transaction(
     Ok(tx)
 }
 
-#[c_export]
 pub async fn retrieve_tx_details(
     coin: &CoinDef,
     network: &Network,

@@ -24,12 +24,9 @@ use crate::{
     Client,
 };
 
-use warp_macros::c_export;
-
 #[path = "./generated/cash.z.wallet.sdk.rpc.rs"]
 pub mod rpc;
 
-#[c_export]
 pub async fn get_last_height(client: &mut Client) -> Result<u32> {
     let r = client
         .get_lightd_info(Request::new(Empty {}))
@@ -308,7 +305,6 @@ pub async fn get_utxos(
     Ok(utxos)
 }
 
-#[c_export]
 pub async fn ping(#[allow(unused_variables)] network: &Network, lwd_url: &str) -> Result<u64> {
     let start = Instant::now();
     let mut client = connect_lwd(lwd_url).await?;

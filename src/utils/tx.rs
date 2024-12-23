@@ -9,9 +9,7 @@ use crate::{
     txdetails::analyze_raw_transaction,
 };
 
-use warp_macros::c_export;
 
-#[c_export]
 pub async fn fetch_tx_details(
     coin: &CoinDef,
     network: &Network,

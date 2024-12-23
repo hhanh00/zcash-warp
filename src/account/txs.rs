@@ -2,9 +2,6 @@ use crate::{data::fb::TransactionInfoT, db::tx::list_txs};
 use anyhow::Result;
 use rusqlite::Connection;
 
-use warp_macros::c_export;
-
-#[c_export]
 pub fn get_txs(
     connection: &Connection,
     account: u32,

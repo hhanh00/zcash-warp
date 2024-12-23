@@ -9,9 +9,7 @@ use crate::{
     data::fb::{ContactCard, ContactCardT},
     types::Contact,
 };
-use warp_macros::c_export;
 
-#[c_export]
 pub fn store_contact(
     network: &Network,
     connection: &Connection,
@@ -34,7 +32,6 @@ pub fn store_contact(
     Ok(id)
 }
 
-#[c_export]
 pub fn list_contact_cards(connection: &Connection) -> Result<Vec<ContactCardT>> {
     let mut s = connection
         .prepare("SELECT id_contact, account, name, address, saved FROM contacts ORDER BY name")?;
@@ -88,7 +85,6 @@ pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Resul
     Ok(contact)
 }
 
-#[c_export]
 pub fn get_contact_card(connection: &Connection, id: u32) -> Result<ContactCardT> {
     let mut s = connection
         .prepare(
@@ -114,7 +110,6 @@ pub fn get_contact_card(connection: &Connection, id: u32) -> Result<ContactCardT
     Ok(card)
 }
 
-#[c_export]
 pub fn edit_contact_name(connection: &Connection, id: u32, name: &str) -> Result<()> {
     connection.execute(
         "UPDATE contacts SET name = ?2 WHERE id_contact = ?1",
@@ -136,7 +131,6 @@ pub fn address_to_bytes(network: &Network, address: &str) -> Result<Vec<u8>> {
     }
 }
 
-#[c_export]
 pub fn edit_contact_address(
     network: &Network,
     connection: &Connection,
@@ -195,7 +189,6 @@ pub fn upsert_contact_receivers(
     Ok(())
 }
 
-#[c_export]
 pub fn delete_contact(connection: &Connection, id: u32) -> Result<()> {
     connection.execute("DELETE FROM contacts WHERE id_contact = ?1", [id])?;
     Ok(())
@@ -228,7 +221,6 @@ pub fn get_unsaved_contacts(connection: &Connection, account: u32) -> Result<Vec
     Ok(cards)
 }
 
-#[c_export]
 pub fn on_contacts_saved(connection: &Connection, account: u32) -> Result<()> {
     connection.execute(
         "UPDATE contacts SET saved = TRUE WHERE account = ?1",

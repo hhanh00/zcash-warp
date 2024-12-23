@@ -9,8 +9,6 @@ use crate::{
     utils::ContextExt,
 };
 
-use warp_macros::c_export;
-
 use super::contacts::address_to_bytes;
 
 pub fn navigate_message_by_height(
@@ -131,7 +129,6 @@ pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT>
     Ok(msg)
 }
 
-#[c_export]
 pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<ShieldedMessageT>> {
     let mut s = connection.prepare(
         "SELECT m.id_msg, m.account, m.height, m.timestamp, m.txid, m.nout, m.incoming, m.sender, 
@@ -261,7 +258,6 @@ pub fn store_message(
     Ok(())
 }
 
-#[c_export]
 pub fn mark_all_read(connection: &Connection, account: u32, reverse: bool) -> Result<()> {
     connection.execute(
         "UPDATE msgs SET read = ?2 WHERE account = ?1",
@@ -270,7 +266,6 @@ pub fn mark_all_read(connection: &Connection, account: u32, reverse: bool) -> Re
     Ok(())
 }
 
-#[c_export]
 pub fn mark_read(connection: &Connection, id: u32, reverse: bool) -> Result<()> {
     connection.execute(
         "UPDATE msgs SET read = ?2 WHERE id = ?1",

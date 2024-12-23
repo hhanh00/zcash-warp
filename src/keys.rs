@@ -24,7 +24,6 @@ use crate::types::{OrchardAccountInfo, SaplingAccountInfo, TransparentAccountInf
 
 use crate::network::Network;
 use std::str::FromStr;
-use warp_macros::c_export;
 
 #[derive(Debug)]
 pub struct AccountKeys {
@@ -142,7 +141,6 @@ pub fn generate_random_mnemonic_phrase<R: RngCore + CryptoRng>(mut rng: R) -> St
         .into_phrase()
 }
 
-#[c_export]
 pub fn generate_random_mnemonic_phrase_os_rng() -> Result<String> {
     Ok(generate_random_mnemonic_phrase(OsRng))
 }

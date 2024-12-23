@@ -11,9 +11,7 @@ use crate::{
     ffi::{map_result, CResult},
 };
 use std::ffi::{c_char, CStr};
-use warp_macros::c_export;
 
-#[c_export]
 pub fn check_db_password(path: &str, password: &str) -> Result<u8> {
     let connection = Connection::open(path)?;
     let _ = connection
@@ -26,7 +24,6 @@ pub fn check_db_password(path: &str, password: &str) -> Result<u8> {
     Ok(r)
 }
 
-#[c_export]
 pub fn encrypt_db(connection: &Connection, password: &str, new_db_path: &str) -> Result<()> {
     connection.execute(
         "ATTACH DATABASE ?1 AS encrypted_db KEY ?2",
@@ -37,14 +34,12 @@ pub fn encrypt_db(connection: &Connection, password: &str, new_db_path: &str) ->
     Ok(())
 }
 
-#[c_export]
 pub fn create_backup(network: &Network, connection: &Connection, account: u32) -> Result<BackupT> {
     let ai = get_account_info(network, &connection, account)?;
     let backup = ai.to_backup(network);
     Ok(backup)
 }
 
-#[c_export]
 pub fn get_address(
     network: &Network,
     connection: &Connection,
@@ -82,7 +77,6 @@ pub extern "C" fn c_schema_version() -> u32 {
     2
 }
 
-#[c_export]
 pub fn create_db(path: &str, password: &str, version: &str) -> Result<()> {
     let mut connection = open_with_password(path, password)?;
     create_schema(&mut connection, version)?;

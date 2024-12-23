@@ -12,11 +12,8 @@ use crate::{
     }, fb_unwrap, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{make_payment, UnsignedTransaction}, Client, PooledSQLConnection, EXPIRATION_HEIGHT_DELTA
 };
 
-use warp_macros::c_export;
-
 pub(crate) const COST_PER_ACTION: u64 = 5_000;
 
-#[c_export]
 pub async fn prepare_payment(
     coin: &CoinDef,
     account: u32,
@@ -74,7 +71,6 @@ pub async fn prepare_payment_inner(
     Ok(summary)
 }
 
-#[c_export]
 pub fn can_sign(
     network: &Network,
     connection: &Connection,
@@ -117,7 +113,6 @@ pub fn can_sign(
     Ok(can_sign)
 }
 
-#[c_export]
 pub fn sign(
     network: &Network,
     connection: &Connection,
@@ -131,7 +126,6 @@ pub fn sign(
     Ok(txb)
 }
 
-#[c_export]
 pub async fn tx_broadcast(
     connection: &Connection,
     client: &mut Client,
@@ -145,7 +139,6 @@ pub async fn tx_broadcast(
     Ok(id)
 }
 
-#[c_export]
 pub async fn save_contacts(
     network: &Network,
     connection: &Connection,
