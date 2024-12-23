@@ -9,7 +9,7 @@ use zcash_protocol::consensus::NetworkConstants;
 use zip32::DiversifierIndex;
 
 use crate::{
-    data::fb::ZIP32KeysT,
+    data::ZIP32KeysT,
     db::account::get_account_info,
     keys::{export_sk_bip38, AccountKeys},
     network::Network,
@@ -41,11 +41,11 @@ pub fn derive_zip32_keys(
     let zip32 = ZIP32KeysT {
         aindex: acc_index,
         addr_index,
-        tsk,
-        taddress,
+        tsk: tsk.unwrap_or_default(),
+        taddress: taddress.unwrap_or_default(),
         zsk: ak.ssk.as_ref().map(|sk| {
             encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)
-        }),
+        }).unwrap_or_default(),
         zaddress: ak.svk.as_ref().and_then(|vk| {
             if use_default {
                 let pa = vk.default_address().1;
@@ -58,7 +58,7 @@ pub fn derive_zip32_keys(
                 vk.address(di)
                     .map(|pa| encode_payment_address(network.hrp_sapling_payment_address(), &pa))
             }
-        }),
+        }).unwrap_or_default(),
     };
     Ok(zip32)
 }

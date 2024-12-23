@@ -1,4 +1,4 @@
-use crate::{data::fb::TransactionInfoT, db::tx::list_txs};
+use crate::{data::TransactionInfoT, db::tx::list_txs};
 use anyhow::Result;
 use rusqlite::Connection;
 
@@ -13,14 +13,14 @@ pub fn get_txs(
         let rtx = &ertx.rtx;
         let ti = TransactionInfoT {
             id: rtx.id,
-            txid: Some(rtx.txid.to_vec()),
+            txid: rtx.txid.to_vec(),
             height: rtx.height,
             confirmations: bc_height - rtx.height + 1,
             timestamp: rtx.timestamp,
             amount: rtx.value,
-            address: ertx.address,
-            contact: ertx.contact,
-            memo: ertx.memo,
+            address: ertx.address.unwrap_or_default(),
+            contact: ertx.contact.unwrap_or_default(),
+            memo: ertx.memo.unwrap_or_default(),
         };
         tis.push(ti);
     }

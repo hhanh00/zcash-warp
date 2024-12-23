@@ -7,7 +7,7 @@ use crate::network::Network;
 use crate::types::CheckpointHeight;
 use crate::utils::chain::reset_chain;
 use crate::utils::ContextExt;
-use crate::{data::fb::CheckpointT, warp::BlockHeader};
+use crate::{data::CheckpointT, warp::BlockHeader};
 use crate::{Client, Hash};
 
 pub fn snap_to_checkpoint(connection: &Connection, height: u32) -> Result<CheckpointHeight> {
@@ -51,7 +51,7 @@ pub fn store_block(connection: &Transaction, bh: &BlockHeader) -> Result<()> {
     Ok(())
 }
 
-pub fn get_sync_height(connection: &Connection) -> Result<CheckpointT> {
+pub fn get_sync_height(connection: &Connection) -> Result<Option<CheckpointT>> {
     let height = connection
         .query_row(
             "SELECT height, hash, timestamp FROM blcks
@@ -60,13 +60,13 @@ pub fn get_sync_height(connection: &Connection) -> Result<CheckpointT> {
             |r| {
                 Ok(CheckpointT {
                     height: r.get::<_, u32>(0)?,
-                    hash: Some(r.get::<_, Vec<u8>>(1)?),
+                    hash: r.get::<_, Vec<u8>>(1)?,
                     timestamp: r.get::<_, u32>(2)?,
                 })
             },
         )
         .optional()?;
-    Ok(height.unwrap_or_default())
+    Ok(height)
 }
 
 pub fn truncate_scan(connection: &Connection) -> Result<()> {
@@ -122,8 +122,8 @@ pub async fn rewind_checkpoint(
     connection: &mut Connection,
     client: &mut Client,
 ) -> Result<()> {
-    let checkpoint = get_sync_height(connection)?.height;
-    if checkpoint > 0 {
+    let checkpoint = get_sync_height(connection)?.map(|cp| cp.height);
+    if let Some(checkpoint) = checkpoint {
         rewind(network, connection, client, checkpoint - 1).await?;
     }
     Ok(())
@@ -178,7 +178,7 @@ pub fn list_checkpoints(connection: &Connection) -> Result<Vec<CheckpointT>> {
         let (height, hash, timestamp) = r?;
         checkpoints.push(CheckpointT {
             height,
-            hash: Some(hash.to_vec()),
+            hash: hash.to_vec(),
             timestamp,
         })
     }

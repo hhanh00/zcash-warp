@@ -10,8 +10,7 @@ use age::{secrecy::ExposeSecret as _, Decryptor};
 use anyhow::Result;
 use zip::write::FileOptions;
 
-use crate::data::fb::{AGEKeysT, ZipDbConfig, ZipDbConfigT};
-use crate::fb_unwrap;
+use crate::data::{AGEKeysT, ZipDbConfigT};
 use rusqlite::{backup::Backup, Connection};
 
 pub fn encrypt_zip_database_files(zip_db_config: &ZipDbConfigT) -> Result<()> {
@@ -22,7 +21,7 @@ pub fn encrypt_zip_database_files(zip_db_config: &ZipDbConfigT) -> Result<()> {
         public_key,
     } = zip_db_config.clone();
 
-    let directory = PathBuf::from(fb_unwrap!(directory));
+    let directory = PathBuf::from(&directory);
     let mut zip_directory = directory.clone();
     zip_directory.push(".tmp");
     let _ = fs::create_dir(zip_directory.clone());
@@ -31,8 +30,7 @@ pub fn encrypt_zip_database_files(zip_db_config: &ZipDbConfigT) -> Result<()> {
     let buff = Cursor::new(zip_data);
     let mut zip_writer = zip::ZipWriter::new(buff);
 
-    let files = fb_unwrap!(file_list);
-    for db_name in files.iter() {
+    for db_name in file_list.iter() {
         {
             let p = directory.join(db_name);
             tracing::info!("Backup {:?}...", p);
@@ -53,10 +51,8 @@ pub fn encrypt_zip_database_files(zip_db_config: &ZipDbConfigT) -> Result<()> {
     let buffer = zip_writer.finish()?;
     let zip_data = buffer.into_inner();
 
-    let target_path = fb_unwrap!(target_path);
-    let public_key = fb_unwrap!(public_key);
     tracing::info!("Encrypting {target_path}...");
-    let public_key = age::x25519::Recipient::from_str(public_key).map_err(anyhow::Error::msg)?;
+    let public_key = age::x25519::Recipient::from_str(&public_key).map_err(anyhow::Error::msg)?;
 
     let mut encrypted_file = File::create(target_path)?;
     {
@@ -113,8 +109,8 @@ pub fn generate_zip_database_keys() -> Result<AGEKeysT> {
     let secret_key = key.to_string().expose_secret().clone();
     let public_key = key.to_public().to_string();
     let keys = AGEKeysT {
-        public_key: Some(public_key),
-        secret_key: Some(secret_key),
+        public_key,
+        secret_key,
     };
     Ok(keys)
 }

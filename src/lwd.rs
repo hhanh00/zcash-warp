@@ -16,7 +16,7 @@ use zcash_primitives::{
 
 use crate::{
     coin::{connect_lwd, CoinDef},
-    data::fb::TransactionBytesT,
+    data::TransactionBytesT,
     network::Network,
     types::CheckpointHeight,
     utils::ContextExt as _,
@@ -203,10 +203,10 @@ pub async fn get_transparent(
 }
 
 pub async fn broadcast(client: &mut Client, height: u32, tx: &TransactionBytesT) -> Result<String> {
-    let bb = tx.data.as_ref();
+    let bb = &tx.data;
     let res = client
         .send_transaction(Request::new(RawTransaction {
-            data: bb.cloned().unwrap_or_default(),
+            data: bb.clone(),
             height: height as u64,
         }))
         .await?

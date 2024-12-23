@@ -1,5 +1,5 @@
 use crate::{
-    data::fb::{IdNoteT, InputTransparentT, ShieldedNoteT},
+    data::{IdNoteT, InputTransparentT, ShieldedNoteT},
     types::CheckpointHeight,
     utils::ContextExt,
     warp::{
@@ -518,9 +518,9 @@ pub fn get_unspent_utxos(
     let utxos = utxos
         .into_iter()
         .map(|u| InputTransparentT {
-            txid: Some(u.txid.to_vec()),
+            txid: u.txid.to_vec(),
             vout: u.vout,
-            address: Some(u.address),
+            address: u.address,
             value: u.value,
         })
         .collect::<Vec<_>>();

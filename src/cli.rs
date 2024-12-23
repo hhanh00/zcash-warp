@@ -5,12 +5,10 @@ use std::{
 
 use crate::{
     account::address::get_diversified_address,
-    data::fb::{Packet, TransactionBytesT, ZipDbConfigT},
+    data::{PacketT, TransactionBytesT, ZipDbConfigT},
     db::{
-        account::{get_account_info, list_account_transparent_addresses},
-        notes::list_utxos,
+        account::{get_account_info, list_account_transparent_addresses}, messages::{navigate_message_by_height, navigate_message_by_subject}, notes::list_utxos
     },
-    fb_unwrap,
     network::{Network, _regtest},
     pay::sweep::scan_transparent_addresses,
     types::PoolMask,
@@ -45,7 +43,7 @@ use crate::{
         txs::get_txs,
     },
     coin::CoinDef,
-    data::fb::{ConfigT, PacketsT, PaymentRequestT, RecipientT, TransactionSummaryT},
+    data::{ConfigT, PacketsT, PaymentRequestT, RecipientT, TransactionSummaryT},
     db::{
         account::{get_account_property, get_balance, list_accounts, set_account_property},
         account_manager::{
@@ -69,7 +67,6 @@ use crate::{
         chain::{get_activation_date, get_height_by_time},
         data_split::{merge, split},
         db::{create_backup, encrypt_db, get_address},
-        messages::navigate_message,
         pay::{prepare_payment, sign},
         ua::decode_address,
         uri::{make_payment_uri, parse_payment_uri},
@@ -363,7 +360,7 @@ impl_fb_from_str!(ZipDbConfigT);
 fn display_tx(
     network: &Network,
     connection: &Connection,
-    mut summary: TransactionSummaryT,
+    summary: TransactionSummaryT,
 ) -> Result<TransactionBytesT> {
     let txb = sign(
         network,
@@ -371,7 +368,6 @@ fn display_tx(
         &summary,
         summary.height + EXPIRATION_HEIGHT_DELTA,
     )?;
-    summary.detach();
     println!("{}", serde_json::to_string_pretty(&summary).unwrap());
     Ok(txb)
 }
@@ -531,7 +527,7 @@ async fn process_command(
                 ChainCommand::Download { filename } => {
                     download_warp_blocks(
                         network,
-                        zec.config.warp_url.as_deref().unwrap(),
+                        &zec.config.warp_url,
                         zec.config.warp_end_height,
                         &filename,
                     )
@@ -547,21 +543,21 @@ async fn process_command(
             let message = match message_command.command {
                 MessageCommand::Prev { id } => {
                     let m = get_message(&connection, id)?;
-                    navigate_message(&connection, m.account, m.height, None, true)
+                    navigate_message_by_height(&connection, m.account, m.height, true).map(Some)
                 }
                 MessageCommand::Next { id } => {
                     let m = get_message(&connection, id)?;
-                    navigate_message(&connection, m.account, m.height, None, false)
+                    navigate_message_by_height(&connection, m.account, m.height, false).map(Some)
                 }
                 MessageCommand::PrevInThread { id } => {
                     let m = get_message(&connection, id)?;
-                    let subject = m.memo.as_ref().and_then(|m| m.subject.clone());
-                    navigate_message(&connection, m.account, m.height, subject, true)
+                    let subject = m.memo.subject.clone();
+                    navigate_message_by_subject(&connection, m.account, m.height, &subject, true).map(Some)
                 }
                 MessageCommand::NextInThread { id } => {
                     let m = get_message(&connection, id)?;
-                    let subject = m.memo.as_ref().and_then(|m| m.subject.clone());
-                    navigate_message(&connection, m.account, m.height, subject, false)
+                    let subject = m.memo.subject.clone();
+                    navigate_message_by_subject(&connection, m.account, m.height, &subject, false).map(Some)
                 }
                 MessageCommand::List { account } => {
                     let msgs = list_messages(&connection, account)?;
@@ -649,19 +645,21 @@ async fn process_command(
                 let data = hex::decode(&data)?;
                 let packets = split(&data, threshold)?;
                 for p in packets {
-                    println!("{} {}", data.len(), hex::encode(fb_unwrap!(p.data)));
+                    println!("{} {}", data.len(), hex::encode(p.data));
                 }
             }
             QRDataCommand::Merge { parts } => {
                 let mut packets = vec![];
                 for p in parts.split(" ") {
                     let h = hex::decode(&p)?;
-                    let packet = flatbuffers::root::<Packet>(&*h)?;
-                    packets.push(packet.unpack());
+                    let packet = PacketT { 
+                        len: h.len() as u32, 
+                        data: h, };
+                    packets.push(packet);
                 }
 
                 let packets = PacketsT {
-                    packets: Some(packets),
+                    packets,
                 };
                 let data = merge(&packets)?;
                 println!("{:?}", hex::encode(&data));
@@ -721,7 +719,7 @@ async fn process_command(
             }
             let connection = zec.connection()?;
             let end_height = end_height.unwrap_or(bc_height - confirmations + 1);
-            let start_height = get_sync_height(&connection)?.height;
+            let start_height = get_sync_height(&connection)?.map(|cp| cp.height).unwrap_or_default();
             if start_height == 0 {
                 anyhow::bail!("no sync data. Have you run reset?");
             }
@@ -752,7 +750,7 @@ async fn process_command(
         }
         Command::Balance { account } => {
             let connection = zec.connection()?;
-            let height = get_sync_height(&connection)?.height;
+            let height = get_sync_height(&connection)?.map(|cp| cp.height).unwrap_or_default();
             let balance = get_balance(&connection, account, height)?;
             println!("Balance: {:?}", balance);
         }
@@ -769,14 +767,14 @@ async fn process_command(
             let bc_height = get_last_height(&mut client).await?;
             let connection = zec.connection()?;
             let recipient = RecipientT {
-                address: Some(address.clone()),
+                address,
                 amount,
                 pools: to_pools,
                 memo: None,
-                memo_bytes: None,
+                memo_bytes: vec![],
             };
             let payment = PaymentRequestT {
-                recipients: Some(vec![recipient]),
+                recipients: vec![recipient],
                 src_pools: from_pools,
                 sender_pay_fees: fee_paid_by_sender != 0,
                 use_change: use_change != 0,
@@ -852,13 +850,12 @@ async fn process_command(
         Command::BroadcastLatest { clear } => {
             let clear = clear.unwrap_or(1);
             if clear != 0 {
-                if let Some(tx_bytes) = txbytes.data.as_ref() {
-                    tracing::info!("{}", hex::encode(tx_bytes));
-                    let mut client = zec.connect_lwd()?;
-                    let bc_height = get_last_height(&mut client).await?;
-                    let r = broadcast(&mut client, bc_height, txbytes).await?;
-                    println!("{}", r);
-                }
+                let tx_bytes = &txbytes.data;
+                tracing::info!("{}", hex::encode(tx_bytes));
+                let mut client = zec.connect_lwd()?;
+                let bc_height = get_last_height(&mut client).await?;
+                let r = broadcast(&mut client, bc_height, txbytes).await?;
+                println!("{}", r);
             }
         }
     }
@@ -875,7 +872,7 @@ pub fn cli_main(config: &ConfigT) -> Result<()> {
         },
     );
     zec.set_config(config)?;
-    zec.set_path_password(config.db_path.as_deref().unwrap(), "")?;
+    zec.set_path_password(&config.db_path, "")?;
     zec.run_mempool()?;
 
     let prompt = DefaultPrompt {

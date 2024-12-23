@@ -17,7 +17,7 @@ use crate::network::Network;
 
 use crate::warp::mempool::{Mempool, MempoolMsg};
 use crate::{
-    data::fb::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client,
+    data::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client,
 };
 
 type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
@@ -65,26 +65,25 @@ impl CoinDef {
 
     pub fn set_config(&mut self, config: &ConfigT) -> Result<()> {
         self.config.merge(config);
-        if let Some(servers) = self.config.servers.as_ref() {
-            let pem = include_bytes!("ca.pem");
-            let ca = Certificate::from_pem(pem);
-            let tls = ClientTlsConfig::new().ca_certificate(ca);
-            let endpoints = servers
-                .iter()
-                .map(|s| {
-                    let ep = Endpoint::from_str(&s).unwrap();
-                    ep.tls_config(tls.clone())
-                        .unwrap()
-                        .connect_timeout(Duration::from_secs(TIMEOUT_SEC))
-                })
-                .collect::<Vec<_>>();
-            let (channel, tx) = Channel::balance_channel_with_executor(16, self.runtime.clone());
-            endpoints.into_iter().for_each(|endpoint| {
-                tx.try_send(Change::Insert(endpoint.uri().clone(), endpoint))
-                    .unwrap();
-            });
-            self.channel = Some(channel);
-        }
+        let servers = &self.config.servers;
+        let pem = include_bytes!("ca.pem");
+        let ca = Certificate::from_pem(pem);
+        let tls = ClientTlsConfig::new().ca_certificate(ca);
+        let endpoints = servers
+            .iter()
+            .map(|s| {
+                let ep = Endpoint::from_str(&s).unwrap();
+                ep.tls_config(tls.clone())
+                    .unwrap()
+                    .connect_timeout(Duration::from_secs(TIMEOUT_SEC))
+            })
+            .collect::<Vec<_>>();
+        let (channel, tx) = Channel::balance_channel_with_executor(16, self.runtime.clone());
+        endpoints.into_iter().for_each(|endpoint| {
+            tx.try_send(Change::Insert(endpoint.uri().clone(), endpoint))
+                .unwrap();
+        });
+        self.channel = Some(channel);
         Ok(())
     }
 

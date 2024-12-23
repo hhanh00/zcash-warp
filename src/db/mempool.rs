@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
 
-use crate::{data::fb::UnconfirmedTxT, warp::sync::ReceivedTx};
+use crate::{data::UnconfirmedTxT, warp::sync::ReceivedTx};
 
 pub fn list_unconfirmed_txs(connection: &Connection, account: u32) -> Result<Vec<UnconfirmedTxT>> {
     let mut s = connection.prepare("SELECT txid, value FROM mempool_txs WHERE account = ?1")?;
@@ -10,7 +10,7 @@ pub fn list_unconfirmed_txs(connection: &Connection, account: u32) -> Result<Vec
         let value = r.get::<_, i64>(1)?;
         Ok(UnconfirmedTxT {
             account,
-            txid: Some(txid),
+            txid,
             value,
         })
     })?;

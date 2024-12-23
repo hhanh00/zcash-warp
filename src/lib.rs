@@ -3,7 +3,6 @@ use r2d2::PooledConnection;
 use r2d2_sqlite::SqliteConnectionManager;
 use tonic::transport::Channel;
 
-#[path = "./generated/data_generated.rs"]
 pub mod data;
 
 pub mod account;

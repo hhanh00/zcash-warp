@@ -83,7 +83,7 @@ impl<P: ShieldedProtocol> Synchronizer<P> {
         position: u32,
         tree_state: Edge,
     ) -> Result<Self> {
-        let accounts = list_accounts(coin, connection)?.items.unwrap();
+        let accounts = list_accounts(coin, connection)?.items;
         let mut account_infos = vec![];
         for a in accounts {
             let ai = get_account_info(network, connection, a.id)?;

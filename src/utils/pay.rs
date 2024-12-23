@@ -4,12 +4,12 @@ use rusqlite::Connection;
 use zcash_protocol::memo::{Memo, MemoBytes};
 
 use crate::{
-    account::contacts::commit_unsaved_contacts, coin::CoinDef, data::fb::{
-        PaymentRequest, PaymentRequestT, RecipientT, TransactionBytes, TransactionBytesT,
-        TransactionSummary, TransactionSummaryT,
+    account::contacts::commit_unsaved_contacts, coin::CoinDef, data::{
+        PaymentRequestT, RecipientT, TransactionBytesT,
+        TransactionSummaryT,
     }, db::{
         account::get_account_info, chain::snap_to_checkpoint, notes::mark_notes_unconfirmed_spent,
-    }, fb_unwrap, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{make_payment, UnsignedTransaction}, Client, PooledSQLConnection, EXPIRATION_HEIGHT_DELTA
+    }, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{make_payment, UnsignedTransaction}, Client, PooledSQLConnection, EXPIRATION_HEIGHT_DELTA
 };
 
 pub(crate) const COST_PER_ACTION: u64 = 5_000;
@@ -40,13 +40,11 @@ pub async fn prepare_payment_inner(
     let (s_tree, o_tree) = get_tree_state(client, cp_height).await?;
     let recipients = payment
         .recipients
-        .as_ref()
-        .unwrap()
         .iter()
         .map(|r| r.normalize_memo())
         .collect::<Result<Vec<_>>>()?;
     let payment = PaymentRequestT {
-        recipients: Some(recipients),
+        recipients,
         src_pools: payment.src_pools,
         sender_pay_fees: payment.sender_pay_fees,
         use_change: payment.use_change,
@@ -77,7 +75,7 @@ pub fn can_sign(
     account: u32,
     summary: &TransactionSummaryT,
 ) -> Result<bool> {
-    let utx = fb_unwrap!(summary.data);
+    let utx = &summary.data;
     let utx = bincode::deserialize_from::<_, UnsignedTransaction>(&utx[..])?;
     let ai = get_account_info(network, connection, account)?;
     let mut pools_required = 0;
@@ -119,10 +117,10 @@ pub fn sign(
     summary: &TransactionSummaryT,
     expiration_height: u32,
 ) -> Result<TransactionBytesT> {
-    let data = fb_unwrap!(summary.data);
+    let data = &summary.data;
     let unsigned_tx = bincode::deserialize_from::<_, UnsignedTransaction>(&data[..])?;
     let txb = unsigned_tx.build(network, connection, expiration_height, OsRng)?;
-    tracing::info!("TXBLen {}", txb.data.as_ref().unwrap().len());
+    tracing::info!("TXBLen {}", txb.data.len());
     Ok(txb)
 }
 
@@ -132,9 +130,8 @@ pub async fn tx_broadcast(
     txbytes: &TransactionBytesT,
 ) -> Result<String> {
     let bc_height = get_last_height(client).await?;
-    if let Some(id_notes) = txbytes.notes.as_deref() {
-        mark_notes_unconfirmed_spent(connection, id_notes, bc_height + EXPIRATION_HEIGHT_DELTA)?;
-    }
+    let id_notes = &txbytes.notes;
+    mark_notes_unconfirmed_spent(connection, id_notes, bc_height + EXPIRATION_HEIGHT_DELTA)?;
     let id = broadcast(client, bc_height, txbytes).await?;
     Ok(id)
 }
@@ -165,11 +162,7 @@ pub async fn save_contacts(
 impl RecipientT {
     pub fn normalize_memo(&self) -> Result<Self> {
         let memo = self.memo.clone().map(|m| m.to_memo()).transpose()?;
-        let memo2 = self
-            .memo_bytes
-            .as_ref()
-            .map(|mb| Memo::from_bytes(mb))
-            .transpose()?;
+        let memo2 = Memo::from_bytes(&self.memo_bytes).ok();
         let memo = memo.or(memo2).unwrap_or(Memo::Empty);
         let memo = MemoBytes::from(&memo);
         let r = RecipientT {
@@ -177,7 +170,7 @@ impl RecipientT {
             amount: self.amount,
             pools: self.pools,
             memo: None,
-            memo_bytes: Some(memo.as_slice().to_vec()),
+            memo_bytes: memo.as_slice().to_vec(),
         };
         Ok(r)
     }

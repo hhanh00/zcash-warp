@@ -1,5 +1,5 @@
 use crate::{
-    data::fb::TransactionInfoExtendedT,
+    data::TransactionInfoExtendedT,
     network::Network,
     txdetails::TransactionDetails,
     utils::ContextExt,

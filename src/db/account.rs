@@ -14,7 +14,7 @@ use zcash_primitives::legacy::TransparentAddress;
 
 use crate::account::contacts::recipient_contains;
 use crate::coin::CoinDef;
-use crate::data::fb::{
+use crate::data::{
     AccountNameListT, AccountNameT, AccountSigningCapabilitiesT, BalanceT, SpendableT, SpendingT,
     TransparentAddressT,
 };
@@ -45,15 +45,15 @@ pub fn list_accounts(coin: &CoinDef, connection: &Connection) -> Result<AccountN
         accounts.push(AccountNameT {
             coin: coin.coin,
             id,
-            name: Some(name),
+            name,
             birth,
-            icon,
+            icon: icon.unwrap_or_default(),
             balance,
             hidden,
         });
     }
     let accounts = AccountNameListT {
-        items: Some(accounts),
+        items: accounts,
     };
     Ok(accounts)
 }
@@ -87,7 +87,7 @@ pub fn list_account_transparent_addresses(
             account,
             external,
             addr_index,
-            address: Some(address),
+            address,
             amount: value.unwrap_or_default(),
         });
     }
@@ -438,12 +438,12 @@ pub fn get_spendings(
             let ra = RecipientAddress::decode(network, a).unwrap();
             for c in contacts.iter() {
                 if recipient_contains(&c.address, &ra)? {
-                    address = c.card.name.clone();
+                    address = Some(c.card.name.clone());
                 }
             }
         }
         spendings.push(SpendingT {
-            recipient: address,
+            recipient: address.unwrap_or_default(),
             amount: value,
         });
     }

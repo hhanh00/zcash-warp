@@ -4,7 +4,7 @@ use anyhow::Result;
 use rusqlite::{Connection, OptionalExtension as _};
 
 use crate::account::address::get_diversified_address;
-use crate::{data::fb::BackupT, db::account::get_account_info, types::PoolMask};
+use crate::{data::BackupT, db::account::get_account_info, types::PoolMask};
 
 use crate::{
     coin::COINS,

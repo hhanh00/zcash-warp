@@ -2,8 +2,7 @@ use anyhow::Result;
 use rusqlite::{params, Connection, OptionalExtension as _, Row};
 
 use crate::{
-    data::fb::{ShieldedMessageT, UserMemoT},
-    fb_unwrap,
+    data::{ShieldedMessageT, UserMemoT},
     network::Network,
     txdetails::TransactionDetails,
     utils::ContextExt,
@@ -107,23 +106,23 @@ pub fn get_message(connection: &Connection, id: u32) -> Result<ShieldedMessageT>
     ) = r;
     let memo = UserMemoT {
         reply_to: false,
-        sender,
-        recipient,
-        subject: Some(subject),
-        body: Some(body),
+        sender: sender.unwrap_or_default(),
+        recipient: recipient.unwrap_or_default(),
+        subject,
+        body,
     };
 
     let msg = ShieldedMessageT {
         id_msg,
         account,
         id_tx,
-        txid: Some(txid),
+        txid,
         height,
         timestamp,
         incoming,
         nout,
-        contact,
-        memo: Some(Box::new(memo)),
+        contact: contact.unwrap_or_default(),
+        memo,
         read,
     };
     Ok(msg)
@@ -160,23 +159,23 @@ pub fn list_messages(connection: &Connection, account: u32) -> Result<Vec<Shield
 
         let memo = UserMemoT {
             reply_to: false,
-            sender,
-            recipient,
-            subject: Some(subject),
-            body: Some(body),
+            sender: sender.unwrap_or_default(),
+            recipient: recipient.unwrap_or_default(),
+            subject,
+            body,
         };
 
         let msg = ShieldedMessageT {
             id_msg,
             account,
             id_tx,
-            txid: Some(txid),
+            txid,
             height,
             timestamp,
             incoming,
             nout,
-            contact,
-            memo: Some(Box::new(memo)),
+            contact: contact.unwrap_or_default(),
+            memo,
             read,
         };
         msgs.push(msg);
@@ -235,13 +234,13 @@ pub fn store_message(
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, false)
         ON CONFLICT DO NOTHING",
     )?;
-    let memo = fb_unwrap!(message.memo);
+    let memo = &message.memo;
     let r = if message.incoming {
         memo.sender.clone()
     } else {
         memo.recipient.clone()
     };
-    let r = r.map(|r| address_to_bytes(network, &r).unwrap());
+    let r = address_to_bytes(network, &r)?;
     s.execute(params![
         account,
         tx.height,

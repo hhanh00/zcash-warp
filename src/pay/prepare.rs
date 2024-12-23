@@ -8,12 +8,11 @@ use zcash_keys::address::Address as RecipientAddress;
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    data::fb::RecipientT,
+    data::RecipientT,
     db::{
         account::get_account_info,
         notes::{list_received_notes, list_utxos},
     },
-    fb_unwrap,
     network::Network,
     types::{CheckpointHeight, PoolMask},
     utils::{pay::COST_PER_ACTION, ua::single_receiver_address},
@@ -114,7 +113,7 @@ impl PaymentBuilder {
 
         let has_tex = self.outputs.iter().any(|o| {
             let address = &o.recipient.address;
-            let address = RecipientAddress::decode(&self.network, fb_unwrap!(address)).unwrap();
+            let address = RecipientAddress::decode(&self.network, &address).unwrap();
             if let RecipientAddress::Tex(_) = address {
                 true
             } else {
@@ -294,11 +293,11 @@ impl PaymentBuilder {
             tracing::info!("Change {change_address}");
             let mut change = ExtendedRecipient {
                 recipient: RecipientT {
-                    address: Some(change_address),
+                    address: change_address,
                     amount: 0,
                     pools: 1 << change_pool,
                     memo: None,
-                    memo_bytes: None,
+                    memo_bytes: vec![],
                 },
                 amount: 0,
                 remaining: 0,
@@ -330,9 +329,8 @@ impl PaymentBuilder {
                 ..
             } = pi;
             tracing::info!("{:?}", address);
-            let address = single_receiver_address(&self.network, fb_unwrap!(address), n.pool_mask)?;
-            let memo = memo_bytes.map(|memo| MemoBytes::from_bytes(&memo).unwrap());
-            let memo = memo.unwrap_or(MemoBytes::empty());
+            let address = single_receiver_address(&self.network, &address, n.pool_mask)?;
+            let memo = MemoBytes::from_bytes(&memo_bytes).unwrap_or(MemoBytes::empty());
             let note = OutputNote::from_address(&self.network, &address, memo)?;
             tx_outputs.push(TxOutput {
                 address_string: address,

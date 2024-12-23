@@ -14,7 +14,7 @@ use zcash_primitives::{
 };
 
 use crate::{
-    data::fb::{ContactCardT, PaymentRequestT, RecipientT},
+    data::{ContactCardT, PaymentRequestT, RecipientT},
     db::{
         account::get_account_info,
         contacts::{get_unsaved_contacts, store_contact},
@@ -35,8 +35,8 @@ pub fn add_contact(
     let contact = ContactCardT {
         id: 0,
         account,
-        name: Some(name.to_string()),
-        address: Some(address.to_string()),
+        name: name.to_string(),
+        address: address.to_string(),
         saved,
     };
     store_contact(network, connection, &contact)?;
@@ -83,8 +83,8 @@ pub fn commit_unsaved_contacts(
         .into_iter()
         .map(|c| ContactV1 {
             id: 0,
-            name: c.name.unwrap(),
-            address: c.address.unwrap(),
+            name: c.name,
+            address: c.address,
         })
         .collect::<Vec<_>>();
     let memos = serialize_contacts(&contacts)?;
@@ -93,16 +93,16 @@ pub fn commit_unsaved_contacts(
         .map(|m| {
             let memo = MemoBytes::from(m);
             RecipientT {
-                address: Some(address.clone()),
+                address: address.clone(),
                 amount: MIN_AMOUNT,
                 memo: None,
                 pools: 7,
-                memo_bytes: Some(memo.as_slice().to_vec()),
+                memo_bytes: memo.as_slice().to_vec(),
             }
         })
         .collect::<Vec<_>>();
     let payment = PaymentRequestT {
-        recipients: Some(recipients),
+        recipients,
         src_pools,
         sender_pay_fees: true,
         use_change: true,

@@ -1,6 +1,6 @@
 use crate::{
     coin::CoinDef,
-    data::fb::ConfigT,
+    data::ConfigT,
     Hash,
 };
 use anyhow::{Context, Result};
@@ -96,13 +96,6 @@ pub extern "C" fn c_setup() {
 }
 
 #[macro_export]
-macro_rules! fb_unwrap {
-    ($v: expr) => {
-        $v.as_ref().unwrap()
-    };
-}
-
-#[macro_export]
 macro_rules! fb_vec_to_bytes {
     ($vs: ident, $T: ident) => {{
         let mut builder = FlatBufferBuilder::new();
@@ -138,10 +131,10 @@ pub async fn configure(coin: &CoinDef, config: &ConfigT) -> Result<()> {
 
 impl ConfigT {
     pub fn merge(&mut self, other: &ConfigT) {
-        if other.servers.is_some() {
+        if !other.servers.is_empty() {
             self.servers = other.servers.clone();
         }
-        if other.warp_url.is_some() {
+        if !other.warp_url.is_empty() {
             self.warp_url = other.warp_url.clone();
         }
         if other.confirmations > 0 {

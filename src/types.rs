@@ -24,7 +24,7 @@ use zcash_primitives::{
 };
 
 use crate::{
-    data::fb::{BackupT, ContactCardT},
+    data::{BackupT, ContactCardT},
     keys::{export_sk_bip38, to_extended_full_viewing_key, AccountKeys},
     network::Network,
     utils::ua::ua_of_orchard,
@@ -289,17 +289,17 @@ impl AccountInfo {
         let taddr = self.transparent.as_ref().map(|ti| ti.addr.encode(network));
 
         BackupT {
-            name: Some(self.name.clone()),
-            seed: self.seed.clone(),
+            name: self.name.clone(),
+            seed: self.seed.clone().unwrap_or_default(),
             index: self.aindex,
             birth: self.birth,
-            sk,
-            fvk,
-            uvk,
-            tsk,
-            txsk,
-            tvk,
-            taddr,
+            sk: sk.unwrap_or_default(),
+            fvk: fvk.unwrap_or_default(),
+            uvk: uvk.unwrap_or_default(),
+            tsk: tsk.unwrap_or_default(),
+            txsk: txsk.unwrap_or_default(),
+            tvk: tvk.unwrap_or_default(),
+            taddr: taddr.unwrap_or_default(),
             saved: self.saved,
         }
     }

@@ -18,7 +18,7 @@ use zcash_primitives::{
 };
 
 use crate::{
-    data::fb::{AccountSigningCapabilities, AccountSigningCapabilitiesT},
+    data::AccountSigningCapabilitiesT,
     db::account::change_account_dindex,
     keys::{
         decode_extended_private_key, decode_extended_public_key, export_sk_bip38, import_sk_bip38,

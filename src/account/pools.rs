@@ -4,7 +4,7 @@ use rusqlite::Connection;
 use zcash_primitives::memo::MemoBytes;
 
 use crate::{
-    data::fb::{RecipientT, TransactionBytesT},
+    data::{RecipientT, TransactionBytesT},
     db::{account::get_account_info, chain::snap_to_checkpoint},
     network::Network,
     pay::PaymentBuilder,
@@ -39,11 +39,11 @@ pub fn transfer_pools<R: RngCore + CryptoRng>(
     while amount > 0 {
         let a = amount.min(split_amount);
         let p = RecipientT {
-            address: Some(to_address.clone()),
+            address: to_address.clone(),
             amount: a,
             pools: 7,
             memo: None,
-            memo_bytes: memo.clone(),
+            memo_bytes: memo.clone().unwrap_or_default(),
         };
         recipients.push(p);
         amount -= a;

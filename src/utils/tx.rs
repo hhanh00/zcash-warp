@@ -3,7 +3,7 @@ use anyhow::Result;
 use rusqlite::Connection;
 
 use crate::{
-    data::fb::TransactionInfoExtendedT,
+    data::TransactionInfoExtendedT,
     db::tx::{get_txid, store_tx_details},
     lwd::get_transaction,
     txdetails::analyze_raw_transaction,

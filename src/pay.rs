@@ -11,8 +11,7 @@ use zcash_proofs::prover::LocalTxProver;
 
 use self::conv::MemoBytesProxy;
 use crate::{
-    data::fb::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT},
-    fb_unwrap,
+    data::{PaymentRequestT, RecipientT, TransactionRecipientT, TransactionSummaryT},
     network::Network,
     types::{AccountInfo, CheckpointHeight, PoolMask},
     warp::{legacy::CommitmentTreeFrontier, AuthPath, Edge, Witness, UTXO},
@@ -58,7 +57,7 @@ impl ExtendedRecipient {
     }
 
     fn to_extended(network: &Network, recipient: RecipientT) -> Result<Self> {
-        let ua = RecipientAddress::decode(network, &fb_unwrap!(recipient.address))
+        let ua = RecipientAddress::decode(network, &recipient.address)
             .ok_or(anyhow::anyhow!("Invalid Address"))?;
         let pools = match ua {
             RecipientAddress::Sapling(_) => 2,
@@ -196,7 +195,7 @@ impl UnsignedTransaction {
             .iter()
             .filter_map(|o| {
                 Some(TransactionRecipientT {
-                    address: Some(o.address_string.clone()),
+                    address: o.address_string.clone(),
                     amount: o.amount,
                     change: o.is_change,
                 })
@@ -235,24 +234,17 @@ impl UnsignedTransaction {
 
         Ok(TransactionSummaryT {
             height: self.height,
-            recipients: Some(recipients),
+            recipients,
             transparent_ins: ins.0 as u64,
             sapling_net: net.1,
             orchard_net: net.2,
             fee,
-            num_inputs: Some(self.fees.num_inputs.to_vec()),
-            num_outputs: Some(self.fees.num_outputs.to_vec()),
+            num_inputs: self.fees.num_inputs.to_vec(),
+            num_outputs: self.fees.num_outputs.to_vec(),
             privacy_level,
-            data: Some(data),
-            message: self.message.clone(),
+            data,
+            message: self.message.clone().unwrap_or_default(),
         })
-    }
-}
-
-impl TransactionSummaryT {
-    pub fn detach(&mut self) -> Vec<u8> {
-        let data = self.data.take();
-        data.unwrap()
     }
 }
 
@@ -300,7 +292,7 @@ pub fn make_payment(
         connection,
         account,
         CheckpointHeight(payment.height),
-        fb_unwrap!(payment.recipients),
+        &payment.recipients,
         PoolMask(payment.src_pools),
         s_tree,
         o_tree,

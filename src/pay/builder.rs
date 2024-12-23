@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::Path};
 
 use crate::{
-    data::fb::{IdNoteT, TransactionBytesT},
+    data::{IdNoteT, TransactionBytesT},
     db::{account::get_account_info, account_manager::get_account_by_name},
     keys::sk_to_address,
     types::TransparentAccountInfo,
@@ -333,9 +333,9 @@ impl UnsignedTransaction {
         tx.write(&mut tx_bytes).unwrap();
 
         let tx_bytes = TransactionBytesT {
-            notes: Some(id_notes),
-            data: Some(tx_bytes),
-            message: self.message.clone(),
+            notes: id_notes,
+            data: tx_bytes,
+            message: self.message.clone().unwrap_or_default(),
         };
         Ok(tx_bytes)
     }

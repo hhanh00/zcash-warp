@@ -1,8 +1,7 @@
 use anyhow::Result;
 use raptorq::{Decoder, Encoder, EncodingPacket, ObjectTransmissionInformation};
 
-use crate::data::fb::{PacketT, Packets, PacketsT};
-use crate::fb_unwrap;
+use crate::data::{PacketT, PacketsT};
 
 const QR_DATA_SIZE: u16 = 256;
 
@@ -14,7 +13,7 @@ pub fn split(data: &[u8], threshold: u32) -> Result<Vec<PacketT>> {
     let packets = packets
         .iter()
         .map(|p| PacketT {
-            data: Some(p.serialize()),
+            data: p.serialize(),
             len: length as u32,
         })
         .collect::<Vec<_>>();
@@ -22,16 +21,16 @@ pub fn split(data: &[u8], threshold: u32) -> Result<Vec<PacketT>> {
 }
 
 pub fn merge(parts: &PacketsT) -> Result<Vec<u8>> {
-    let packets = fb_unwrap!(parts.packets);
+    let packets = &parts.packets;
     if packets.is_empty() {
         return Ok(vec![]);
     }
     let length = packets.first().unwrap().len;
     tracing::info!("{length}");
     let config = ObjectTransmissionInformation::with_defaults(length as u64, QR_DATA_SIZE);
-    let packets = fb_unwrap!(parts.packets)
+    let packets = packets
         .iter()
-        .map(|p| EncodingPacket::deserialize(fb_unwrap!(p.data)))
+        .map(|p| EncodingPacket::deserialize(&p.data))
         .collect::<Vec<_>>();
     let mut decoder = Decoder::new(config);
     for packet in packets {

@@ -18,7 +18,6 @@ use crate::{
             list_unknown_height_timestamps, store_block_time, update_tx_time, update_tx_values,
         },
     },
-    fb_unwrap,
     lwd::{
         get_compact_block, get_compact_block_range, get_transparent, get_tree_state,
         rpc::CompactBlock,
@@ -363,7 +362,7 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
         copy_block_times_from_tx(&db_tx)?;
 
         let accounts = list_accounts(coin, &db_tx)?;
-        for a in accounts.items.unwrap() {
+        for a in accounts.items {
             extend_transparent_addresses(&coin.network, &db_tx, a.id, 0)?;
             extend_transparent_addresses(&coin.network, &db_tx, a.id, 1)?;
         }
@@ -378,7 +377,7 @@ pub async fn warp_sync<BS: CompactBlockSource + 'static>(
 
 pub async fn warp_synchronize(coin: &CoinDef, end_height: u32) -> Result<()> {
     let mut connection = coin.connection()?;
-    let start_height = get_sync_height(&connection)?.height;
+    let start_height = get_sync_height(&connection)?.map(|cp| cp.height).unwrap_or_default();
     if start_height == 0 {
         let activation_height = get_activation_height(&coin.network)?;
         let mut client = coin.connect_lwd()?;
@@ -393,12 +392,12 @@ pub async fn warp_synchronize(coin: &CoinDef, end_height: u32) -> Result<()> {
     if start_height < end_height {
         let end_height = (start_height + 100_000).min(end_height);
         let channel = if end_height < coin.config.warp_end_height {
-            let url = fb_unwrap!(coin.config.warp_url);
+            let url = &coin.config.warp_url;
             tracing::info!("Using Warp block server @ {}", url);
             let ep = Channel::from_shared(url.clone()).unwrap();
             ep.connect().await?
         } else {
-            fb_unwrap!(coin.channel).clone()
+            coin.channel.clone().unwrap()
         };
         let bs = LWDCompactBlockSource::new(channel)?;
         warp_sync(&coin, CheckpointHeight(start_height), end_height, bs).await?;
@@ -468,7 +467,7 @@ pub async fn transparent_scan(
     }
     let db_tx = connection.transaction()?;
     for a in addresses {
-        let taddr = a.address.as_deref().unwrap();
+        let taddr = &a.address;
         let address = TransparentAddress::decode(network, taddr)?;
         let txs = get_transparent(
             network,

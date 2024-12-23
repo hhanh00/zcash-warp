@@ -8,7 +8,7 @@ use zcash_keys::{
 };
 use zcash_primitives::legacy::TransparentAddress;
 
-use crate::{data::fb::UAReceiversT, types::PoolMask};
+use crate::{data::UAReceiversT, types::PoolMask};
 
 pub fn split_address(
     network: &Network,
@@ -44,9 +44,9 @@ pub fn decode_address(network: &Network, address: &str) -> Result<UAReceiversT> 
     let (t, s, o, tex) = split_address(network, address)?;
     let ua = UAReceiversT {
         tex,
-        transparent: t.map(|t| t.encode(network)),
-        sapling: s.map(|s| s.encode(network)),
-        orchard: o.map(|o| ua_of_orchard(&o).encode(network)),
+        transparent: t.map(|t| t.encode(network)).unwrap_or_default(),
+        sapling: s.map(|s| s.encode(network)).unwrap_or_default(),
+        orchard: o.map(|o| ua_of_orchard(&o).encode(network)).unwrap_or_default(),
     };
     Ok(ua)
 }

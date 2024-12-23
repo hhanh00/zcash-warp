@@ -1,12 +1,11 @@
 use crate::network::Network;
 use crate::utils::ua::split_address;
-use crate::{fb_unwrap, utils::ContextExt};
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use zcash_keys::address::Address as RecipientAddress;
 
 use crate::{
-    data::fb::{ContactCard, ContactCardT},
+    data::ContactCardT,
     types::Contact,
 };
 
@@ -28,7 +27,7 @@ pub fn store_contact(
         ],
         |r| r.get::<_, u32>(0),
     )?;
-    upsert_contact_receivers(network, connection, id, contact.address.as_deref().unwrap())?;
+    upsert_contact_receivers(network, connection, id, &contact.address)?;
     Ok(id)
 }
 
@@ -50,8 +49,8 @@ pub fn list_contact_cards(connection: &Connection) -> Result<Vec<ContactCardT>> 
         let card = ContactCardT {
             id,
             account,
-            name: Some(name),
-            address: Some(address),
+            name,
+            address,
             saved,
         };
         cards.push(card);
@@ -64,7 +63,7 @@ pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<C
     let contacts = cards
         .iter()
         .map(|card| {
-            let recipient = RecipientAddress::decode(network, fb_unwrap!(card.address)).unwrap();
+            let recipient = RecipientAddress::decode(network, &card.address).unwrap();
             let contact = Contact {
                 card: card.clone(),
                 address: recipient,
@@ -77,7 +76,7 @@ pub fn list_contacts(network: &Network, connection: &Connection) -> Result<Vec<C
 
 pub fn get_contact(network: &Network, connection: &Connection, id: u32) -> Result<Contact> {
     let card = get_contact_card(connection, id)?;
-    let recipient = RecipientAddress::decode(network, fb_unwrap!(card.address)).unwrap();
+    let recipient = RecipientAddress::decode(network, &card.address).unwrap();
     let contact = Contact {
         card,
         address: recipient,
@@ -90,8 +89,7 @@ pub fn get_contact_card(connection: &Connection, id: u32) -> Result<ContactCardT
         .prepare(
             "SELECT account, name, address,
         saved FROM contacts WHERE id_contact = ?1",
-        )
-        .with_file_line(|| format!("No contact {id}"))?;
+        )?;
     let (account, name, address, saved) = s.query_row([id], |r| {
         Ok((
             r.get::<_, u32>(0)?,
@@ -103,8 +101,8 @@ pub fn get_contact_card(connection: &Connection, id: u32) -> Result<ContactCardT
     let card = ContactCardT {
         id,
         account,
-        name: Some(name),
-        address: Some(address),
+        name,
+        address,
         saved,
     };
     Ok(card)
@@ -119,6 +117,7 @@ pub fn edit_contact_name(connection: &Connection, id: u32, name: &str) -> Result
 }
 
 pub fn address_to_bytes(network: &Network, address: &str) -> Result<Vec<u8>> {
+    if address.is_empty() { return Ok(vec![]) }
     let (t, s, o, _) = split_address(network, address)?;
     if let Some(t) = t {
         Ok(t.script().0.to_vec())
@@ -156,8 +155,7 @@ pub fn upsert_contact_receivers(
             "SELECT account FROM contacts WHERE id_contact = ?1",
             [id],
             |r| r.get::<_, u32>(0),
-        )
-        .with_file_line(|| format!("No contact {id}"))?;
+        )?;
 
     let (t, s, o, _) = split_address(network, address)?;
     connection.execute("DELETE FROM contact_receivers WHERE contact = ?1", [id])?;
@@ -212,8 +210,8 @@ pub fn get_unsaved_contacts(connection: &Connection, account: u32) -> Result<Vec
         let card = ContactCardT {
             id,
             account,
-            name: Some(name),
-            address: Some(address),
+            name,
+            address,
             saved: false,
         };
         cards.push(card);

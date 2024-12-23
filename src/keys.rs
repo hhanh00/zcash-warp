@@ -4,7 +4,7 @@ use bip32::{ExtendedPrivateKey, ExtendedPublicKey};
 use bip39::Mnemonic;
 use orchard::keys::{FullViewingKey, Scope, SpendingKey};
 use prost::bytes::BufMut as _;
-use rand::{rngs::OsRng, CryptoRng, RngCore};
+use rand::{CryptoRng, RngCore};
 use ripemd::{Digest as _, Ripemd160};
 use sapling_crypto::zip32::{
     DiversifiableFullViewingKey, ExtendedFullViewingKey, ExtendedSpendingKey,
@@ -139,10 +139,6 @@ pub fn generate_random_mnemonic_phrase<R: RngCore + CryptoRng>(mut rng: R) -> St
     Mnemonic::from_entropy(&entropy, bip39::Language::English)
         .unwrap()
         .into_phrase()
-}
-
-pub fn generate_random_mnemonic_phrase_os_rng() -> Result<String> {
-    Ok(generate_random_mnemonic_phrase(OsRng))
 }
 
 pub fn export_sk_bip38(sk: &SecretKey) -> String {

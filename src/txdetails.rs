@@ -17,7 +17,7 @@ use zcash_primitives::{
 use crate::{
     account::contacts::{add_contact, ChunkedContactV1, ChunkedMemoDecoder},
     coin::CoinDef,
-    data::fb::{
+    data::{
         InputShieldedT, InputTransparentT, OutputShieldedT, OutputTransparentT, ShieldedMessageT,
         TransactionInfoExtendedT, UserMemoT,
     },
@@ -27,7 +27,6 @@ use crate::{
         notes::{get_note_by_nf, list_pending_stxos},
         tx::{get_tx, list_new_txids, store_tx_details, update_tx_primary_address_memo},
     },
-    fb_unwrap,
     lwd::{get_transaction, get_txin_coins},
     network::Network,
     types::{Addresses, PoolMask},
@@ -178,13 +177,13 @@ pub fn analyze_raw_transaction(
             let note = address.as_ref().and_then(|a| {
                 let note = account_addresses
                     .iter()
-                    .find(|&ta| fb_unwrap!(ta.address) == a);
+                    .find(|&ta| &ta.address == a);
                 note
             });
             let value = vout.value.into();
             let note = note.map(|n| TransparentNote {
                 id: 0,
-                address: n.address.clone().unwrap(),
+                address: n.address.clone(),
                 value,
             });
             let tout = TransparentOutput {
@@ -537,13 +536,13 @@ fn parse_memo_text(
         id_msg: 0,
         account,
         id_tx,
-        txid: Some(txid.to_vec()),
+        txid: txid.to_vec(),
         nout,
         height,
         timestamp,
         incoming,
-        memo: Some(Box::new(memo)),
-        contact: None,
+        memo,
+        contact: String::new(),
         read: false,
     };
     Ok(msg)
@@ -626,9 +625,9 @@ impl TransactionDetails {
             .tins
             .into_iter()
             .map(|tin| InputTransparentT {
-                txid: Some(tin.out_point.txid.to_vec()),
+                txid: tin.out_point.txid.to_vec(),
                 vout: tin.out_point.vout,
-                address: tin.coin.address,
+                address: tin.coin.address.unwrap_or_default(),
                 value: tin.coin.value,
             })
             .collect::<Vec<_>>();
@@ -636,7 +635,7 @@ impl TransactionDetails {
             .touts
             .into_iter()
             .map(|tout| OutputTransparentT {
-                address: tout.coin.address,
+                address: tout.coin.address.unwrap_or_default(),
                 value: tout.coin.value,
             })
             .collect::<Vec<_>>();
@@ -647,15 +646,15 @@ impl TransactionDetails {
                 let note = sin.note.as_ref();
                 InputShieldedT {
                     orchard: false,
-                    nf: Some(sin.nf.to_vec()),
+                    nf: sin.nf.to_vec(),
                     address: note.map(|n| {
                         PaymentAddress::from_bytes(&n.address)
                             .unwrap()
                             .encode(network)
-                    }),
+                    }).unwrap_or_default(),
                     value: note.map(|n| n.value).unwrap_or_default(),
-                    rcm: note.map(|n| n.rcm.to_vec()),
-                    rho: None,
+                    rcm: note.map(|n| n.rcm.to_vec()).unwrap_or_default(),
+                    rho: vec![],
                 }
             })
             .collect::<Vec<_>>();
@@ -666,17 +665,17 @@ impl TransactionDetails {
                 let note = sout.note.as_ref();
                 OutputShieldedT {
                     orchard: false,
-                    cmx: Some(sout.cmx.to_vec()),
+                    cmx: sout.cmx.to_vec(),
                     incoming: note.map(|n| n.incoming).unwrap_or_default(),
                     address: note.map(|n| {
                         PaymentAddress::from_bytes(&n.note.address)
                             .unwrap()
                             .encode(network)
-                    }),
+                    }).unwrap_or_default(),
                     value: note.map(|n| n.note.value).unwrap_or_default(),
-                    rcm: note.map(|n| n.note.rcm.to_vec()),
-                    rho: note.map(|n| n.note.rho.map(|r| r.to_vec()).unwrap_or_default()),
-                    memo: note.map(|n| n.memo.to_string()),
+                    rcm: note.map(|n| n.note.rcm.to_vec()).unwrap_or_default(),
+                    rho: note.and_then(|n| n.note.rho.map(|r| r.to_vec())).unwrap_or_default(),
+                    memo: note.map(|n| n.memo.to_string()).unwrap_or_default(),
                 }
             })
             .collect::<Vec<_>>();
@@ -687,14 +686,14 @@ impl TransactionDetails {
                 let note = sin.note.as_ref();
                 InputShieldedT {
                     orchard: true,
-                    nf: Some(sin.nf.to_vec()),
+                    nf: sin.nf.to_vec(),
                     address: note.map(|n| {
                         ua_of_orchard(&Address::from_raw_address_bytes(&n.address).unwrap())
                             .encode(network)
-                    }),
+                    }).unwrap_or_default(),
                     value: note.map(|n| n.value).unwrap_or_default(),
-                    rcm: note.map(|n| n.rcm.to_vec()),
-                    rho: note.and_then(|n| n.rho.map(|r| r.to_vec())),
+                    rcm: note.map(|n| n.rcm.to_vec()).unwrap_or_default(),
+                    rho: note.and_then(|n| n.rho.map(|r| r.to_vec())).unwrap_or_default(),
                 }
             })
             .collect::<Vec<_>>();
@@ -705,16 +704,16 @@ impl TransactionDetails {
                 let note = sout.note.as_ref();
                 OutputShieldedT {
                     orchard: true,
-                    cmx: Some(sout.cmx.to_vec()),
+                    cmx: sout.cmx.to_vec(),
                     incoming: note.map(|n| n.incoming).unwrap_or_default(),
                     address: note.map(|n| {
                         ua_of_orchard(&Address::from_raw_address_bytes(&n.note.address).unwrap())
                             .encode(network)
-                    }),
+                    }).unwrap_or_default(),
                     value: note.map(|n| n.note.value).unwrap_or_default(),
-                    rcm: note.map(|n| n.note.rcm.to_vec()),
-                    rho: note.map(|n| n.note.rho.map(|r| r.to_vec()).unwrap_or_default()),
-                    memo: note.map(|n| n.memo.to_string()),
+                    rcm: note.map(|n| n.note.rcm.to_vec()).unwrap_or_default(),
+                    rho: note.and_then(|n| n.note.rho.map(|r| r.to_vec())).unwrap_or_default(),
+                    memo: note.map(|n| n.memo.to_string()).unwrap_or_default(),
                 }
             })
             .collect::<Vec<_>>();
@@ -722,13 +721,13 @@ impl TransactionDetails {
         let etx = TransactionInfoExtendedT {
             height: self.height,
             timestamp: self.timestamp,
-            txid: Some(self.txid.to_vec()),
-            tins: Some(tins),
-            touts: Some(touts),
-            sins: Some(sins),
-            souts: Some(souts),
-            oins: Some(oins),
-            oouts: Some(oouts),
+            txid: self.txid.to_vec(),
+            tins,
+            touts,
+            sins,
+            souts,
+            oins,
+            oouts,
         };
         etx
     }
