@@ -43,22 +43,31 @@ pub fn derive_zip32_keys(
         addr_index,
         tsk: tsk.unwrap_or_default(),
         taddress: taddress.unwrap_or_default(),
-        zsk: ak.ssk.as_ref().map(|sk| {
-            encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)
-        }).unwrap_or_default(),
-        zaddress: ak.svk.as_ref().and_then(|vk| {
-            if use_default {
-                let pa = vk.default_address().1;
-                Some(encode_payment_address(
-                    network.hrp_sapling_payment_address(),
-                    &pa,
-                ))
-            } else {
-                let di = DiversifierIndex::try_from(addr_index).unwrap();
-                vk.address(di)
-                    .map(|pa| encode_payment_address(network.hrp_sapling_payment_address(), &pa))
-            }
-        }).unwrap_or_default(),
+        zsk: ak
+            .ssk
+            .as_ref()
+            .map(|sk| {
+                encode_extended_spending_key(network.hrp_sapling_extended_spending_key(), &sk)
+            })
+            .unwrap_or_default(),
+        zaddress: ak
+            .svk
+            .as_ref()
+            .and_then(|vk| {
+                if use_default {
+                    let pa = vk.default_address().1;
+                    Some(encode_payment_address(
+                        network.hrp_sapling_payment_address(),
+                        &pa,
+                    ))
+                } else {
+                    let di = DiversifierIndex::try_from(addr_index).unwrap();
+                    vk.address(di).map(|pa| {
+                        encode_payment_address(network.hrp_sapling_payment_address(), &pa)
+                    })
+                }
+            })
+            .unwrap_or_default(),
     };
     Ok(zip32)
 }

@@ -16,9 +16,7 @@ use tower::discover::Change;
 use crate::network::Network;
 
 use crate::warp::mempool::{Mempool, MempoolMsg};
-use crate::{
-    data::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client,
-};
+use crate::{data::ConfigT, lwd::rpc::compact_tx_streamer_client::CompactTxStreamerClient, Client};
 
 type Connection = r2d2::PooledConnection<r2d2_sqlite::SqliteConnectionManager>;
 

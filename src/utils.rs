@@ -1,8 +1,4 @@
-use crate::{
-    coin::CoinDef,
-    data::ConfigT,
-    Hash,
-};
+use crate::{coin::CoinDef, data::ConfigT, Hash};
 use anyhow::{Context, Result};
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan},

@@ -40,13 +40,7 @@ pub fn next_message_thread(
     height: u32,
     subject: &str,
 ) -> Result<Option<ShieldedMessageT>> {
-    navigate_message_by_subject(
-        connection,
-        account,
-        height,
-        subject,
-        false,
-    )
+    navigate_message_by_subject(connection, account, height, subject, false)
 }
 
 impl UserMemoT {

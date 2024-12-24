@@ -26,9 +26,9 @@ use sapling_crypto::{
     note_encryption::{plaintext_version_is_valid, SaplingDomain, KDF_SAPLING_PERSONALIZATION},
     SaplingIvk,
 };
+use zcash_note_encryption::ShieldedOutput as _;
 use zcash_note_encryption::{EphemeralKeyBytes, COMPACT_NOTE_SIZE};
 use zcash_primitives::transaction::components::sapling::zip212_enforcement;
-use zcash_note_encryption::ShieldedOutput as _;
 
 pub fn try_sapling_decrypt(
     network: &Network,
@@ -115,18 +115,24 @@ pub fn try_orchard_decrypt(
     ca: CompactOrchardAction,
     sender: &mut Sender<ReceivedNote>,
 ) -> Result<()> {
-    let CompactOrchardAction { nullifier, cmx, ephemeral_key, ciphertext } = ca;
+    let CompactOrchardAction {
+        nullifier,
+        cmx,
+        ephemeral_key,
+        ciphertext,
+    } = ca;
 
     let nullifier = Nullifier::from_bytes(&nullifier.try_into().unwrap()).unwrap();
     let ca2 = CompactAction::from_parts(
         nullifier,
-        ExtractedNoteCommitment::from_bytes(&cmx.try_into().unwrap()).unwrap(), 
-        EphemeralKeyBytes(ephemeral_key.try_into().unwrap()), 
-        ciphertext.try_into().unwrap());
+        ExtractedNoteCommitment::from_bytes(&cmx.try_into().unwrap()).unwrap(),
+        EphemeralKeyBytes(ephemeral_key.try_into().unwrap()),
+        ciphertext.try_into().unwrap(),
+    );
     let d = OrchardDomain::for_compact_action(&ca2);
     let epk = Point::from_bytes(&ca2.ephemeral_key().0)
-    .unwrap()
-    .to_affine();
+        .unwrap()
+        .to_affine();
 
     let zip212_enforcement = zip212_enforcement(network, height.into());
     for (account, ivk) in ivks {

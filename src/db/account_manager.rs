@@ -221,9 +221,10 @@ pub fn create_new_account(
             }
             create_transparent_address(network, &db_tx, account, 0, dindex, &ti)?;
             if ti.vk.is_some() {
-                create_transparent_address(network, &db_tx, account, 1, 0, &ti)?; // change
+                create_transparent_address(network, &db_tx, account, 1, 0, &ti)?;
+                // change
             }
-        } 
+        }
     }
     if pools & 2 != 0 {
         if let Some(si) = ak.to_sapling() {
@@ -659,4 +660,36 @@ pub fn get_min_birth(connection: &Connection) -> Result<Option<u32>> {
         r.get::<_, Option<u32>>(0)
     })?;
     Ok(birth)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{coin::COINS, data::ConfigT, db::create_schema, lwd::get_last_height};
+    use anyhow::Result;
+
+    use super::create_account;
+
+    #[tokio::test]
+    async fn f() -> Result<()> {
+        {
+            let mut c = COINS[0].lock();
+            c.set_path_password("test.db", "")?;
+            c.set_config(&ConfigT {
+                servers: vec!["https://lwd1.zcash-infra.com:9067".to_string()],
+                ..ConfigT::default()
+            })?;
+        }
+
+        let c = COINS[0].lock().clone();
+        let mut connection = c.connection()?;
+        create_schema(&mut connection, "")?;
+        let id = create_account(&connection, "Test", None, 0, 0, 2700000, true)?;
+        println!("{id}");
+
+        let mut client = c.connect_lwd()?;
+        let height = get_last_height(&mut client).await?;
+        println!("{height}");
+
+        Ok(())
+    }
 }

@@ -4,12 +4,16 @@ use rusqlite::Connection;
 use zcash_protocol::memo::{Memo, MemoBytes};
 
 use crate::{
-    account::contacts::commit_unsaved_contacts, coin::CoinDef, data::{
-        PaymentRequestT, RecipientT, TransactionBytesT,
-        TransactionSummaryT,
-    }, db::{
+    account::contacts::commit_unsaved_contacts,
+    coin::CoinDef,
+    data::{PaymentRequestT, RecipientT, TransactionBytesT, TransactionSummaryT},
+    db::{
         account::get_account_info, chain::snap_to_checkpoint, notes::mark_notes_unconfirmed_spent,
-    }, lwd::{broadcast, get_last_height, get_tree_state}, network::Network, pay::{make_payment, UnsignedTransaction}, Client, PooledSQLConnection, EXPIRATION_HEIGHT_DELTA
+    },
+    lwd::{broadcast, get_last_height, get_tree_state},
+    network::Network,
+    pay::{make_payment, UnsignedTransaction},
+    Client, PooledSQLConnection, EXPIRATION_HEIGHT_DELTA,
 };
 
 pub(crate) const COST_PER_ACTION: u64 = 5_000;
@@ -22,9 +26,15 @@ pub async fn prepare_payment(
 ) -> Result<TransactionSummaryT> {
     let connection = coin.connection()?;
     let mut client = coin.connect_lwd()?;
-    prepare_payment_inner(&coin.network, connection, &mut client, account,
-        payment, redirect,
-    ).await
+    prepare_payment_inner(
+        &coin.network,
+        connection,
+        &mut client,
+        account,
+        payment,
+        redirect,
+    )
+    .await
 }
 
 pub async fn prepare_payment_inner(

@@ -46,7 +46,9 @@ pub fn decode_address(network: &Network, address: &str) -> Result<UAReceiversT> 
         tex,
         transparent: t.map(|t| t.encode(network)).unwrap_or_default(),
         sapling: s.map(|s| s.encode(network)).unwrap_or_default(),
-        orchard: o.map(|o| ua_of_orchard(&o).encode(network)).unwrap_or_default(),
+        orchard: o
+            .map(|o| ua_of_orchard(&o).encode(network))
+            .unwrap_or_default(),
     };
     Ok(ua)
 }

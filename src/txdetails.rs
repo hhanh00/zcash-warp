@@ -175,9 +175,7 @@ pub fn analyze_raw_transaction(
         for (n, vout) in b.vout.iter().enumerate() {
             let address = vout.recipient_address().map(|a| a.encode(network));
             let note = address.as_ref().and_then(|a| {
-                let note = account_addresses
-                    .iter()
-                    .find(|&ta| &ta.address == a);
+                let note = account_addresses.iter().find(|&ta| &ta.address == a);
                 note
             });
             let value = vout.value.into();
@@ -647,11 +645,13 @@ impl TransactionDetails {
                 InputShieldedT {
                     orchard: false,
                     nf: sin.nf.to_vec(),
-                    address: note.map(|n| {
-                        PaymentAddress::from_bytes(&n.address)
-                            .unwrap()
-                            .encode(network)
-                    }).unwrap_or_default(),
+                    address: note
+                        .map(|n| {
+                            PaymentAddress::from_bytes(&n.address)
+                                .unwrap()
+                                .encode(network)
+                        })
+                        .unwrap_or_default(),
                     value: note.map(|n| n.value).unwrap_or_default(),
                     rcm: note.map(|n| n.rcm.to_vec()).unwrap_or_default(),
                     rho: vec![],
@@ -667,14 +667,18 @@ impl TransactionDetails {
                     orchard: false,
                     cmx: sout.cmx.to_vec(),
                     incoming: note.map(|n| n.incoming).unwrap_or_default(),
-                    address: note.map(|n| {
-                        PaymentAddress::from_bytes(&n.note.address)
-                            .unwrap()
-                            .encode(network)
-                    }).unwrap_or_default(),
+                    address: note
+                        .map(|n| {
+                            PaymentAddress::from_bytes(&n.note.address)
+                                .unwrap()
+                                .encode(network)
+                        })
+                        .unwrap_or_default(),
                     value: note.map(|n| n.note.value).unwrap_or_default(),
                     rcm: note.map(|n| n.note.rcm.to_vec()).unwrap_or_default(),
-                    rho: note.and_then(|n| n.note.rho.map(|r| r.to_vec())).unwrap_or_default(),
+                    rho: note
+                        .and_then(|n| n.note.rho.map(|r| r.to_vec()))
+                        .unwrap_or_default(),
                     memo: note.map(|n| n.memo.to_string()).unwrap_or_default(),
                 }
             })
@@ -687,13 +691,17 @@ impl TransactionDetails {
                 InputShieldedT {
                     orchard: true,
                     nf: sin.nf.to_vec(),
-                    address: note.map(|n| {
-                        ua_of_orchard(&Address::from_raw_address_bytes(&n.address).unwrap())
-                            .encode(network)
-                    }).unwrap_or_default(),
+                    address: note
+                        .map(|n| {
+                            ua_of_orchard(&Address::from_raw_address_bytes(&n.address).unwrap())
+                                .encode(network)
+                        })
+                        .unwrap_or_default(),
                     value: note.map(|n| n.value).unwrap_or_default(),
                     rcm: note.map(|n| n.rcm.to_vec()).unwrap_or_default(),
-                    rho: note.and_then(|n| n.rho.map(|r| r.to_vec())).unwrap_or_default(),
+                    rho: note
+                        .and_then(|n| n.rho.map(|r| r.to_vec()))
+                        .unwrap_or_default(),
                 }
             })
             .collect::<Vec<_>>();
@@ -706,13 +714,19 @@ impl TransactionDetails {
                     orchard: true,
                     cmx: sout.cmx.to_vec(),
                     incoming: note.map(|n| n.incoming).unwrap_or_default(),
-                    address: note.map(|n| {
-                        ua_of_orchard(&Address::from_raw_address_bytes(&n.note.address).unwrap())
+                    address: note
+                        .map(|n| {
+                            ua_of_orchard(
+                                &Address::from_raw_address_bytes(&n.note.address).unwrap(),
+                            )
                             .encode(network)
-                    }).unwrap_or_default(),
+                        })
+                        .unwrap_or_default(),
                     value: note.map(|n| n.note.value).unwrap_or_default(),
                     rcm: note.map(|n| n.note.rcm.to_vec()).unwrap_or_default(),
-                    rho: note.and_then(|n| n.note.rho.map(|r| r.to_vec())).unwrap_or_default(),
+                    rho: note
+                        .and_then(|n| n.note.rho.map(|r| r.to_vec()))
+                        .unwrap_or_default(),
                     memo: note.map(|n| n.memo.to_string()).unwrap_or_default(),
                 }
             })

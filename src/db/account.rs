@@ -52,9 +52,7 @@ pub fn list_accounts(coin: &CoinDef, connection: &Connection) -> Result<AccountN
             hidden,
         });
     }
-    let accounts = AccountNameListT {
-        items: accounts,
-    };
+    let accounts = AccountNameListT { items: accounts };
     Ok(accounts)
 }
 

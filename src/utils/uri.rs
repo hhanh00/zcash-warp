@@ -53,14 +53,12 @@ pub fn parse_payment_uri(
                 _ => None,
             });
             let memo_text = memo_text.map(|t| t.to_string());
-            let user_memo = memo_text.map(|t| {
-                UserMemoT {
-                    reply_to: false,
-                    sender: String::new(),
-                    recipient: String::new(),
-                    subject: String::new(),
-                    body: t,
-                }
+            let user_memo = memo_text.map(|t| UserMemoT {
+                reply_to: false,
+                sender: String::new(),
+                recipient: String::new(),
+                subject: String::new(),
+                body: t,
             });
 
             RecipientT {
@@ -68,7 +66,11 @@ pub fn parse_payment_uri(
                 amount: p.amount().into(),
                 pools: 7,
                 memo: user_memo,
-                memo_bytes: p.memo().cloned().map(|m| m.as_slice().to_vec()).unwrap_or_default(),
+                memo_bytes: p
+                    .memo()
+                    .cloned()
+                    .map(|m| m.as_slice().to_vec())
+                    .unwrap_or_default(),
             }
         })
         .collect::<Vec<_>>();
